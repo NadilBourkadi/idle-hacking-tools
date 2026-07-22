@@ -1,0 +1,63 @@
+{
+  "schema": "idle-hacking-knowledge-summary-v1",
+  "preparedAt": "2026-07-22",
+  "player": "the player",
+  "latestCompleteExport": {
+    "path": "data/loadouts/current-loadout-and-candidates-2026-07-21-schema4.json",
+    "schemaVersion": 4,
+    "sourceVersion": "0.6.1",
+    "loadoutSlots": 8,
+    "candidates": 34,
+    "craftingSnapshots": 32
+  },
+  "intendedMainSet": [
+    "Enduring Payload of Armageddon",
+    "Brutal Firewall of Perpetuity",
+    "Aligned Analyzer of Light Speed",
+    "Overclocked Shell of the Monolith",
+    "Warmongering Driver of Extinction",
+    "Aligned Router of the Undying",
+    "Targeted Daemon of Quarantine",
+    "Hearty Kernel of Decay"
+  ],
+  "bottlenecks": [
+    "streak attrition",
+    "hit reliability/fight duration versus high-evasion targets",
+    "incoming burst in selected matchups"
+  ],
+  "empiricalVeto": {
+    "gain": [
+      "+11 Regeneration",
+      "+5.53% Max HP",
+      "+3.46% Evasion"
+    ],
+    "loss": [
+      "-7.46% Defense",
+      "-1.57% Accuracy",
+      "-2.09% Attack Speed",
+      "-4 Corruption"
+    ],
+    "result": "unfavourable in current build",
+    "confidence": "directional"
+  },
+  "crafting": {
+    "versionUpgradeSuccess": {
+      "T9_to_T8": 0.9,
+      "T8_to_T7": 0.8,
+      "T7_to_T6": 0.7,
+      "T6_to_T5": 0.6,
+      "T5_to_T4": 0.5,
+      "T4_to_T3": 0.4,
+      "T3_to_T2": 0.3,
+      "T2_to_T1": 0.2
+    },
+    "compilePerStabilityPercent": 0.5,
+    "defaultStabilityFloor": 8
+  },
+  "tooling": {
+    "latestObservedRuntime": "0.6.1",
+    "latestObservedSchema": 4,
+    "latestArchivedSource": "0.5.0",
+    "v061SourceAvailable": false
+  }
+}
