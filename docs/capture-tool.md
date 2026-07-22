@@ -1,6 +1,6 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v0.8.0)
+**Current source:** `tools/item-loadout-capture.user.js` (v0.8.1)
 **Export schema:** 4
 
 Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
@@ -8,7 +8,7 @@ Version history is tracked by git. Bump `@version` in the script header on **eve
 - v0.5 — last source archived in the original ChatGPT handover.
 - v0.6.1 — recovered from Tampermonkey on 22 July 2026 after the handover flagged it missing; added crafting snapshots and schema 4.
 - v0.7.0 — capture-hub integration: served to Tampermonkey from `http://localhost:8123`, "Send to workspace" button POSTs exports into `data/incoming/`. Switched `@grant none` → `GM_xmlhttpRequest` (script now runs in Tampermonkey's sandbox).
-- v0.8.0 — "Probe data sources" button: one-shot read-only inventory of where the game keeps client-side state (localStorage/sessionStorage key names+sizes+JSON shapes, IndexedDB layout+counts+sample field names, non-standard page globals via `unsafeWindow`, framework fingerprints). Structure only — stored values are never captured, so tokens cannot leak. Groundwork for bulk passive capture to replace per-item click-scraping; no synthetic clicks, nothing sent to any server.
+- v0.8.0–v0.8.1 — "Probe data sources" button: one-shot read-only inventory of where the game keeps client-side state (localStorage/sessionStorage key names+sizes+JSON shapes, IndexedDB layout+counts+sample field names, non-standard page globals via `unsafeWindow`, framework fingerprints). Structure only — stored values are never captured, so tokens cannot leak. Groundwork for bulk passive capture to replace per-item click-scraping; no synthetic clicks, nothing sent to any server.
 
 ## Local capture hub
 

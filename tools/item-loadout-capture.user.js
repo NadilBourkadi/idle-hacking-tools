@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      0.8.0
+// @version      0.8.1
 // @description  Passively captures equipped/candidate item tooltips plus user-opened Enhancing panels. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -16,7 +16,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "0.8.0";
+  const TOOL_VERSION = "0.8.1";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. With @grant active the script runs in the
@@ -2391,6 +2391,54 @@
     return result;
   }
 
+  // Globals whose names suggest game data get deeper structural
+  // description than utility/config globals.
+  const INTERESTING_GLOBAL_PATTERN =
+    /state|player|inventor|item|equip|loadout|craft|game|save|char|stat|resource|homelab|hack|zone|enemy|combat|streak/i;
+
+  function describeValue(value, depth) {
+    const type = typeof value;
+
+    if (value === null) return { type: "null" };
+    if (type === "string") return { type, chars: value.length };
+    if (type !== "object") return { type };
+
+    if (Array.isArray(value)) {
+      const out = { type: "array", length: value.length };
+      if (value.length > 0 && depth > 0) {
+        out.element = describeValue(value[0], depth - 1);
+      }
+      return out;
+    }
+
+    const out = { type: "object" };
+    let keys;
+    try {
+      out.constructorName = value.constructor?.name ?? null;
+      keys = Object.keys(value);
+    } catch {
+      return out;
+    }
+
+    out.keyCount = keys.length;
+    out.keys = keys.slice(0, 30);
+
+    if (depth > 0) {
+      out.children = {};
+      for (const key of out.keys) {
+        let child;
+        try {
+          child = value[key];
+        } catch {
+          continue;
+        }
+        out.children[key] = describeValue(child, depth - 1);
+      }
+    }
+
+    return out;
+  }
+
   function describePageGlobals() {
     let baseline;
     try {
@@ -2405,10 +2453,11 @@
       return { error: String(error) };
     }
 
-    const extras = [];
+    const functionNames = [];
+    const values = [];
 
     for (const name of Object.getOwnPropertyNames(pageWindow)) {
-      if (baseline.has(name) || extras.length >= 150) {
+      if (baseline.has(name) || /^\d+$/.test(name)) {
         continue;
       }
 
@@ -2419,21 +2468,26 @@
         continue;
       }
 
-      const entry = { name, type: typeof value };
-
-      if (value && typeof value === "object") {
-        try {
-          entry.constructorName = value.constructor?.name ?? null;
-          entry.keys = Object.keys(value).slice(0, 15);
-        } catch {
-          // Some page objects throw on inspection; name/type is enough.
+      if (typeof value === "function") {
+        if (functionNames.length < 600) {
+          functionNames.push(name);
         }
+        continue;
       }
 
-      extras.push(entry);
+      if (values.length >= 300) {
+        continue;
+      }
+
+      const interesting = INTERESTING_GLOBAL_PATTERN.test(name);
+      values.push({
+        name,
+        interesting,
+        ...describeValue(value, interesting ? 2 : 1),
+      });
     }
 
-    return extras;
+    return { functionNames, values };
   }
 
   function describeFrameworks() {
