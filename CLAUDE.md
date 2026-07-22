@@ -4,11 +4,11 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Source-of-truth order
 
-1. A newly supplied schema-4 export or combat log.
-2. `data/loadouts/current-loadout-and-candidates-2026-07-21-schema4.json` — latest complete baseline (8/8 equipped, 34 candidates, 32 crafting snapshots).
+1. A newly supplied full-state capture (`idle-hacking-state-capture-v1`) or combat log.
+2. `data/loadouts/full-state-2026-07-22.json` — latest complete baseline (8/8 equipped via internal slot names — see `docs/game-client-internals.md` for the mapping — plus all 70 inventory items with full crafting data).
 3. `docs/current-state.md` and `docs/decision-log.md`.
 4. `docs/mechanics.md` and `docs/crafting.md`.
-5. Older schema-3 snapshots and historical logs.
+5. Older schema-4/3 exports (`data/loadouts/current-loadout-and-candidates-*.json`) and historical logs.
 
 ## File map
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      0.9.0
+// @version      0.9.1
 // @description  Passively captures equipped/candidate item tooltips plus user-opened Enhancing panels. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -17,7 +17,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "0.9.0";
+  const TOOL_VERSION = "0.9.1";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. With @grant active the script runs in the
@@ -2571,6 +2571,7 @@
     "equipmentData",
     "inventoryData",
     "statsBreakdown",
+    "extendedStats",
     "recentLossStreaks",
   ];
 
