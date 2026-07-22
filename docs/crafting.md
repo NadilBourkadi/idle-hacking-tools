@@ -234,7 +234,14 @@ Every future recommendation should include:
 - expected resource classes and current displayed costs;
 - post-craft test plan.
 
-## 11. Current unresolved mechanics
+## 11. Cost model (resolved 22 July 2026)
+
+The full cost structure was decoded from the full-state capture — base-cost formula, exact 1.03^spent Credit-cost escalation, per-operation multiples and the Compile cost. See `static-analysis-2026-07-22.md` §2. Headline strategic additions to the rules above:
+
+- Stability spending compounds future Credit costs (Augment/Lock/Bias) at 3%/point — Augment early is also Augment cheap.
+- Compile's resource price rises 0.18× base_cost per preserved Stability point; the +4-6% Compile floor remains correct, but very high floors carry a real resource price.
+
+## 12. Current unresolved mechanics
 
 These remain unknown and must not silently become facts:
 
@@ -242,8 +249,7 @@ These remain unknown and must not silently become facts:
 - whether a successful Version Upgrade preserves relative roll position or rolls a new value in the new tier;
 - exact current Bias Reroll selection semantics and number of affected affixes;
 - whether Compile multiplies the implicit affix as well as explicit non-signature affixes;
-- exact resource-cost scaling formula by item level;
-- complete slot-specific affix pool and tier-weight distribution;
+- affix tier-weight distribution and unowned parts of the affix pool (observed pool: `affix-pool.md`);
 - Augment's tier distribution.
 
 A fresh before/after export can resolve the first three operationally.

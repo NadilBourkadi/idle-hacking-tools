@@ -116,7 +116,11 @@ Unknown:
 - affix weighting within the forced side;
 - whether item level or rarity affects the roll distribution beyond magnitude.
 
-### 6. Complete affix pool and slot constraints
+### 6. Complete affix pool and slot constraints — PARTIALLY RESOLVED 22 July 2026
+
+The full-state capture exposes `affix_id`/`group` per affix. Observed pool (56 affixes) is tabulated in `affix-pool.md` and grows with each capture. Still missing: unowned affixes, tier weighting, bias-category mapping.
+
+### (superseded original text)
 
 Need a durable table of:
 
@@ -166,6 +170,15 @@ Every top recommendation must include Augment outcomes, target tiers, maximum at
 
 
 ---
+
+## 22 July 2026 — static-analysis resolutions
+
+From the first full-state capture (see `static-analysis-2026-07-22.md`):
+
+- **Resource-cost scaling formula: RESOLVED.** `base_cost ≈ 1.586 × required_hack_level^1.765`; `stability_multiplier = 1.03^spent` (exact) applies to Credit costs only; per-operation multiples tabulated. Compile costs `0.18 × remaining Stability × base_cost`.
+- **Item-level stat weighting: RESOLVED.** `value = base_value × ((ilvl+125)/1125)^0.391` for percentage stats (base normalized to ilvl 1000); flat stats ≈ exponent 0.785.
+- **Version Upgrade chance table: re-confirmed** across 415 affix instances.
+- Affix pool: observed table now maintained in `affix-pool.md` (see item 6 above).
 
 ## 21 July 2026 confirmed test outcomes
 

@@ -191,6 +191,8 @@ An Epic item still has additional prefixes and suffixes that are not represented
 
 The exact generation formula and how Ratio should be weighted are not fully established. Ratio and Item Level should never override the actual affix package.
 
+**Update 22 July 2026:** the item-level → stat-magnitude relationship is now quantified — percentage affix values scale as `((ilvl+125)/1125)^0.391` around an ilvl-1000 reference, flat values more steeply (~0.785 exponent). See `static-analysis-2026-07-22.md` §1. Affix package still dominates, but the low-ilvl malus on the current Firewall (~-31%) is now a measurable, not rhetorical, replacement argument.
+
 ### Stability, enhancement and compilation — verified operational model
 
 The full operational reference is in `crafting.md`.
