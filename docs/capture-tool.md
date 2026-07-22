@@ -8,6 +8,7 @@ Version history is tracked by git. Bump `@version` in the script header on **eve
 - v0.5 — last source archived in the original ChatGPT handover.
 - v0.6.1 — recovered from Tampermonkey on 22 July 2026 after the handover flagged it missing; added crafting snapshots and schema 4.
 - v0.7.0 — capture-hub integration: served to Tampermonkey from `http://localhost:8123`, "Send to workspace" button POSTs exports into `data/incoming/`. Switched `@grant none` → `GM_xmlhttpRequest` (script now runs in Tampermonkey's sandbox).
+- v0.9.0 — "Capture all (full state)" button: reads the game's top-level state bindings (`currentPlayer`, `equipmentData`, `inventoryData`, `statsBreakdown`, `recentLossStreaks`) via a page-scope snippet (three CSP-fallback strategies: page `Function` constructor → inline script → `GM_addElement`) and sends everything to the hub as schema `idle-hacking-state-capture-v1`. Replaces per-item tooltip clicking and enhance-panel visits entirely; the snippet only reads bindings — it never calls game functions. See `game-client-internals.md`.
 - v0.8.0–v0.8.1 — "Probe data sources" button: one-shot read-only inventory of where the game keeps client-side state (localStorage/sessionStorage key names+sizes+JSON shapes, IndexedDB layout+counts+sample field names, non-standard page globals via `unsafeWindow`, framework fingerprints). Structure only — stored values are never captured, so tokens cannot leak. Groundwork for bulk passive capture to replace per-item click-scraping; no synthetic clicks, nothing sent to any server.
 
 ## Local capture hub

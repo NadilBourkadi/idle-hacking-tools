@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      0.8.1
+// @version      0.9.0
 // @description  Passively captures equipped/candidate item tooltips plus user-opened Enhancing panels. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -9,6 +9,7 @@
 // @updateURL    http://localhost:8123/item-loadout-capture.user.js
 // @downloadURL  http://localhost:8123/item-loadout-capture.user.js
 // @grant        GM_xmlhttpRequest
+// @grant        GM_addElement
 // @connect      localhost
 // @connect      127.0.0.1
 // ==/UserScript==
@@ -16,7 +17,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "0.8.1";
+  const TOOL_VERSION = "0.9.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. With @grant active the script runs in the
@@ -2556,6 +2557,160 @@
     );
   }
 
+  // ---- Full-state capture ----------------------------------------------
+  // The game keeps its client state in top-level let/const bindings
+  // (currentPlayer, equipmentData, inventoryData, ...), which are global
+  // lexical bindings, not window properties — invisible to the sandbox
+  // even via unsafeWindow. Reading them requires evaluating a small
+  // snippet in page scope. The snippet ONLY reads the named bindings and
+  // reports them back as JSON; it never calls game functions, dispatches
+  // input, or touches the network.
+
+  const GAME_STATE_BINDINGS = [
+    "currentPlayer",
+    "equipmentData",
+    "inventoryData",
+    "statsBreakdown",
+    "recentLossStreaks",
+  ];
+
+  function buildStateReaderBody(names) {
+    const grabs = names
+      .map(
+        (name) => `
+          try {
+            out[${JSON.stringify(name)}] =
+              typeof ${name} === "undefined" ? null : ${name};
+          } catch (error) {
+            errors[${JSON.stringify(name)}] = String(error);
+          }`,
+      )
+      .join("\n");
+
+    return `
+      const out = {};
+      const errors = {};
+      ${grabs}
+      let json;
+      try {
+        json = JSON.stringify({ bindings: out, errors });
+      } catch (error) {
+        json = JSON.stringify({
+          bindings: null,
+          errors: { serialize: String(error) },
+        });
+      }
+      return json;`;
+  }
+
+  function injectReaderAndListen(names, useGmAddElement) {
+    return new Promise((resolve, reject) => {
+      const eventName = `ih-state-read-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
+
+      const timer = setTimeout(() => {
+        document.removeEventListener(eventName, onEvent);
+        reject(new Error("page reader timed out"));
+      }, 2000);
+
+      const onEvent = (event) => {
+        clearTimeout(timer);
+        document.removeEventListener(eventName, onEvent);
+        try {
+          resolve(JSON.parse(event.detail));
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      document.addEventListener(eventName, onEvent);
+
+      const source = `(() => {
+        const read = () => { ${buildStateReaderBody(names)} };
+        document.dispatchEvent(
+          new CustomEvent(${JSON.stringify(eventName)}, { detail: read() }),
+        );
+      })();`;
+
+      let script;
+      if (useGmAddElement) {
+        if (typeof GM_addElement !== "function") {
+          clearTimeout(timer);
+          document.removeEventListener(eventName, onEvent);
+          reject(new Error("GM_addElement unavailable"));
+          return;
+        }
+        script = GM_addElement("script", { textContent: source });
+      } else {
+        script = document.createElement("script");
+        script.textContent = source;
+        (document.head || document.documentElement).appendChild(script);
+      }
+      script?.remove();
+    });
+  }
+
+  async function readGameBindings(names) {
+    // Strategy 1: page Function constructor (blocked if the page CSP
+    // lacks unsafe-eval). Function-constructed code runs against the
+    // global environment, so it can see top-level let/const bindings.
+    try {
+      const json = new pageWindow.Function(buildStateReaderBody(names))();
+      return { readMethod: "function-constructor", ...JSON.parse(json) };
+    } catch {
+      // fall through
+    }
+
+    // Strategy 2: inline script element (blocked if CSP forbids inline).
+    try {
+      const parsed = await injectReaderAndListen(names, false);
+      return { readMethod: "inline-script", ...parsed };
+    } catch {
+      // fall through
+    }
+
+    // Strategy 3: GM_addElement — Tampermonkey's privileged injection,
+    // usually exempt from page CSP.
+    const parsed = await injectReaderAndListen(names, true);
+    return { readMethod: "gm-add-element", ...parsed };
+  }
+
+  async function captureFullState() {
+    status = "Reading full game state…";
+    updatePanel();
+
+    const result = await readGameBindings(GAME_STATE_BINDINGS);
+    const state = result.bindings ?? {};
+
+    const equipmentCount =
+      state.equipmentData && typeof state.equipmentData === "object"
+        ? Object.keys(state.equipmentData).length
+        : 0;
+    const inventoryCount = Array.isArray(state.inventoryData?.items)
+      ? state.inventoryData.items.length
+      : 0;
+
+    console.info(
+      `[IH Capture] Full state read via ${result.readMethod}: ` +
+        `${equipmentCount} equipped, ${inventoryCount} inventory items.`,
+    );
+
+    postToHub(
+      {
+        schema: "idle-hacking-state-capture-v1",
+        capturedAt: new Date().toISOString(),
+        sourceVersion: TOOL_VERSION,
+        url: location.href,
+        readMethod: result.readMethod,
+        readErrors: result.errors ?? {},
+        state,
+      },
+      hubExportName("idle-hacking-state"),
+      `Sending full state (${equipmentCount} equipped, ${inventoryCount} items)…`,
+    );
+  }
+
   function createPanel() {
     document.querySelector("#ih-capture-panel")?.remove();
 
@@ -2591,6 +2746,7 @@
           <button data-action="download">Download JSON</button>
           <button data-action="send-hub">Send to workspace</button>
           <button data-action="probe-sources">Probe data sources</button>
+          <button data-action="capture-state" class="wide">Capture all (full state)</button>
           <button data-action="toggle-auto">Pause auto</button>
           <button data-action="clear-candidates">Clear candidates</button>
           <button data-action="clear-crafting">Clear crafting</button>
@@ -2681,6 +2837,14 @@
         runSourceProbe().catch((error) => {
           console.error("[IH Capture] Probe failed:", error);
           status = `Probe failed: ${error}`;
+          updatePanel();
+        });
+      }
+
+      if (action === "capture-state") {
+        captureFullState().catch((error) => {
+          console.error("[IH Capture] Full-state capture failed:", error);
+          status = `State capture failed: ${error}`;
           updatePanel();
         });
       }

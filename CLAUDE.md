@@ -21,6 +21,7 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 - `docs/open-questions.md` — unknowns and planned tests; prevents working models becoming "facts".
 - `docs/data-dictionary.md` — combat-log field meanings and analysis conventions.
 - `docs/capture-tool.md` — userscript reference and safety boundary.
+- `docs/game-client-internals.md` — how the game client stores state (bindings, item schema, WS protocol); basis for full-state capture. Game JS reference copies: `vendor/game-js/` (git-ignored).
 - `data/` — structured exports and combat logs (see `data/README.md`); `data/incoming/` is the untriaged staging area fed by the capture hub.
 - `tools/item-loadout-capture.user.js` — the passive Tampermonkey capture script (schema 4; version in the `@version` header).
 - `scripts/capture-hub.py` — localhost:8123 hub (systemd user service `idle-hacking-capture-hub`): serves the userscript to Tampermonkey and receives in-game exports into `data/incoming/`.
