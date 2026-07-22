@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      0.7.0
+// @version      0.8.0
 // @description  Passively captures equipped/candidate item tooltips plus user-opened Enhancing panels. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -16,8 +16,14 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "0.7.0";
+  const TOOL_VERSION = "0.8.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
+
+  // Page-context window. With @grant active the script runs in the
+  // Tampermonkey sandbox, so page globals are only visible through
+  // unsafeWindow. Reads only — never call into page code.
+  const pageWindow =
+    typeof unsafeWindow === "undefined" ? window : unsafeWindow;
 
   const STORAGE_KEY = "idle-hacking-item-capture:v4";
   const LEGACY_STORAGE_KEY = "idle-hacking-item-capture:v3";
@@ -2192,19 +2198,14 @@
     updatePanel();
   }
 
-  function sendToHub() {
+  function postToHub(payload, exportName, sendingMessage) {
     if (typeof GM_xmlhttpRequest !== "function") {
       status = "GM_xmlhttpRequest unavailable — reinstall from the hub URL";
       updatePanel();
       return;
     }
 
-    const exportName =
-      `idle-hacking-capture-${new Date()
-        .toISOString()
-        .replace(/[:.]/g, "-")}.json`;
-
-    status = "Sending export to workspace…";
+    status = sendingMessage;
     updatePanel();
 
     GM_xmlhttpRequest({
@@ -2214,7 +2215,7 @@
         "Content-Type": "application/json",
         "X-Export-Name": exportName,
       },
-      data: JSON.stringify(exportPayload(), null, 2),
+      data: JSON.stringify(payload, null, 2),
       timeout: 5000,
       onload: (response) => {
         status = response.status === 200
@@ -2231,6 +2232,274 @@
         updatePanel();
       },
     });
+  }
+
+  function hubExportName(prefix) {
+    return `${prefix}-${new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")}.json`;
+  }
+
+  function sendToHub() {
+    postToHub(
+      exportPayload(),
+      hubExportName("idle-hacking-capture"),
+      "Sending export to workspace…",
+    );
+  }
+
+  // ---- Read-only data-source probe -------------------------------------
+  // Inventories WHERE the game keeps client-side state (storage keys,
+  // IndexedDB layout, page globals, framework fingerprints) so bulk
+  // passive capture can be designed against the right source. It records
+  // structure only — key names, sizes, shapes. Stored VALUES are never
+  // included, so session tokens cannot leak into the report.
+
+  function describeWebStorage(storage) {
+    const entries = [];
+
+    try {
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i);
+        const value = storage.getItem(key) ?? "";
+        const entry = {
+          key,
+          chars: value.length,
+          ours: key === STORAGE_KEY || key === LEGACY_STORAGE_KEY,
+        };
+
+        const trimmed = value.trim();
+
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(trimmed);
+
+            if (Array.isArray(parsed)) {
+              entry.shape = "array";
+              entry.arrayLength = parsed.length;
+              const first = parsed[0];
+              if (first && typeof first === "object") {
+                entry.elementKeys = Object.keys(first).slice(0, 25);
+              }
+            } else {
+              entry.shape = "object";
+              entry.topLevelKeys = Object.keys(parsed).slice(0, 40);
+            }
+          } catch {
+            entry.shape = "invalid-json";
+          }
+        } else {
+          entry.shape = "string";
+        }
+
+        entries.push(entry);
+      }
+    } catch (error) {
+      return { error: String(error) };
+    }
+
+    return entries;
+  }
+
+  function idbRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out`)), ms),
+      ),
+    ]);
+  }
+
+  async function describeIndexedDb() {
+    if (!indexedDB?.databases) {
+      return { supported: false };
+    }
+
+    const result = { supported: true, databases: [] };
+
+    let infos;
+    try {
+      infos = await withTimeout(indexedDB.databases(), 3000, "databases()");
+    } catch (error) {
+      result.error = String(error);
+      return result;
+    }
+
+    for (const info of infos) {
+      const entry = { name: info.name, version: info.version, stores: [] };
+
+      try {
+        const openRequest = indexedDB.open(info.name);
+        const db = await withTimeout(
+          idbRequest(openRequest),
+          3000,
+          `open ${info.name}`,
+        );
+
+        for (const storeName of Array.from(db.objectStoreNames)) {
+          const storeEntry = { name: storeName };
+
+          try {
+            const store = db
+              .transaction(storeName, "readonly")
+              .objectStore(storeName);
+
+            storeEntry.count = await withTimeout(
+              idbRequest(store.count()),
+              3000,
+              "count",
+            );
+
+            const sample = (
+              await withTimeout(
+                idbRequest(store.getAll(undefined, 1)),
+                3000,
+                "sample",
+              )
+            )[0];
+
+            if (sample === undefined) {
+              storeEntry.sample = "empty";
+            } else if (sample && typeof sample === "object") {
+              storeEntry.sample = "object";
+              storeEntry.sampleKeys = Object.keys(sample).slice(0, 25);
+            } else {
+              storeEntry.sample = typeof sample;
+            }
+          } catch (error) {
+            storeEntry.error = String(error);
+          }
+
+          entry.stores.push(storeEntry);
+        }
+
+        db.close();
+      } catch (error) {
+        entry.error = String(error);
+      }
+
+      result.databases.push(entry);
+    }
+
+    return result;
+  }
+
+  function describePageGlobals() {
+    let baseline;
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      document.body.appendChild(iframe);
+      baseline = new Set(
+        Object.getOwnPropertyNames(iframe.contentWindow),
+      );
+      iframe.remove();
+    } catch (error) {
+      return { error: String(error) };
+    }
+
+    const extras = [];
+
+    for (const name of Object.getOwnPropertyNames(pageWindow)) {
+      if (baseline.has(name) || extras.length >= 150) {
+        continue;
+      }
+
+      let value;
+      try {
+        value = pageWindow[name];
+      } catch {
+        continue;
+      }
+
+      const entry = { name, type: typeof value };
+
+      if (value && typeof value === "object") {
+        try {
+          entry.constructorName = value.constructor?.name ?? null;
+          entry.keys = Object.keys(value).slice(0, 15);
+        } catch {
+          // Some page objects throw on inspection; name/type is enough.
+        }
+      }
+
+      extras.push(entry);
+    }
+
+    return extras;
+  }
+
+  function describeFrameworks() {
+    const hints = {};
+
+    try {
+      const roots = document.querySelectorAll(
+        "body, body > div, #app, #root, #__next, #__nuxt",
+      );
+
+      for (const element of roots) {
+        for (const key of Object.getOwnPropertyNames(element)) {
+          if (key.startsWith("__react")) {
+            hints.react = true;
+          }
+          if (key.startsWith("__vue")) {
+            hints.vue = true;
+          }
+        }
+      }
+
+      if (pageWindow.__NEXT_DATA__) hints.nextData = true;
+      if (pageWindow.__NUXT__ || pageWindow.$nuxt) hints.nuxt = true;
+      if (pageWindow.__PINIA__) hints.pinia = true;
+      if (pageWindow.__INITIAL_STATE__) hints.initialState = true;
+      if (pageWindow.__VUE_DEVTOOLS_GLOBAL_HOOK__) hints.vueDevtoolsHook = true;
+
+      const chunkGlobals = Object.getOwnPropertyNames(pageWindow).filter(
+        (name) => name.startsWith("webpackChunk") || name === "webpackJsonp",
+      );
+      if (chunkGlobals.length) {
+        hints.webpackChunkGlobals = chunkGlobals;
+      }
+
+      hints.scriptSources = Array.from(document.scripts)
+        .map((script) => script.src)
+        .filter(Boolean)
+        .slice(0, 30);
+    } catch (error) {
+      hints.error = String(error);
+    }
+
+    return hints;
+  }
+
+  async function runSourceProbe() {
+    status = "Probing client-side data sources…";
+    updatePanel();
+
+    const report = {
+      schema: "idle-hacking-source-probe-v1",
+      probedAt: new Date().toISOString(),
+      sourceVersion: TOOL_VERSION,
+      url: location.href,
+      localStorage: describeWebStorage(localStorage),
+      sessionStorage: describeWebStorage(sessionStorage),
+      indexedDb: await describeIndexedDb(),
+      pageGlobals: describePageGlobals(),
+      frameworks: describeFrameworks(),
+    };
+
+    postToHub(
+      report,
+      hubExportName("idle-hacking-probe"),
+      "Sending probe report to workspace…",
+    );
   }
 
   function createPanel() {
@@ -2267,6 +2536,7 @@
           <button data-action="copy-json">Copy JSON</button>
           <button data-action="download">Download JSON</button>
           <button data-action="send-hub">Send to workspace</button>
+          <button data-action="probe-sources">Probe data sources</button>
           <button data-action="toggle-auto">Pause auto</button>
           <button data-action="clear-candidates">Clear candidates</button>
           <button data-action="clear-crafting">Clear crafting</button>
@@ -2351,6 +2621,14 @@
 
       if (action === "send-hub") {
         sendToHub();
+      }
+
+      if (action === "probe-sources") {
+        runSourceProbe().catch((error) => {
+          console.error("[IH Capture] Probe failed:", error);
+          status = `Probe failed: ${error}`;
+          updatePanel();
+        });
       }
 
       if (action === "toggle-auto") {
