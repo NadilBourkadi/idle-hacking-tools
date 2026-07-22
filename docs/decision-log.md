@@ -31,6 +31,12 @@
 - Forced suffix Augment added `of Sandboxing` T9 (+25 Barrier), costing one Stability.
 - Decision: abort main-set project. Do not attempt routine Prune/re-Augment salvage.
 
+## 22 July 2026 — mechanics resolved from rich full-state capture
+
+- Streak recovery law confirmed exact: `heal = base × 0.99^(streak−10)`, base 4,465 (36.9% max HP) for current build. Attrition = heal decay crossing rising per-fight damage (~streak 50 in sample).
+- Snapshot Backups (crafting) and Snapshot Rollback (combat lethal-save) identified as distinct Homelab upgrades; both at level 0. Craft budgets need no backup adjustment.
+- Zone catalog captured: Corporate Network (min 600) unlocked and unfarmed; 1.35× credits / 1.5× rarity vs Small Business.
+
 ## Current decision
 
 - Main loadout remains the original baseline with Brutal Firewall of Perpetuity and Hearty Kernel of Decay.

@@ -52,21 +52,13 @@ Failed attempts do not improve the tier and consume resources. Normal failures c
 
 ## Priority open questions
 
-### 1. Snapshot Backup
+### 1. Snapshot Backup — RESOLVED 22 July 2026
 
-Known:
+From `homelabInfo` in the rich capture:
 
-- it can prevent Stability loss on failed Version Upgrades.
-
-Unknown:
-
-- the player's current level and trigger chance;
-- whether it affects any other failed craft action.
-
-Test/capture:
-
-- passively capture the Homelab branch tooltip;
-- record a sequence of failed upgrades and whether Stability was retained.
+- **Snapshot Backups** (crafting upgrade): +5% chance per level to not lose Stability on a failed Version Upgrade. **Current level: 0** — trigger chance 0%, so the "conservative" no-backup craft budgets are exact.
+- Distinct upgrade with a confusable name: **Snapshot Rollback** (combat): recover 25% HP after lethal damage, once per 10 fights, cooldown −1/level. Also level 0. Anti-attrition candidate.
+- Whether Snapshot Backups affects other failed actions remains unknown (irrelevant while level 0).
 
 ### 2. Successful Version Upgrade roll behaviour
 
@@ -142,11 +134,10 @@ Unknown: formula, caps/floors and modifier interactions.
 
 Unknown: mitigation curve, penetration treatment and breakpoints.
 
-### 9. Streak recovery model
+### 9. Streak recovery model — RESOLVED 22 July 2026 (formula), residual unknowns
 
-Established: late-streak losses often begin far below maximum HP.
-Unknown: full post-combat heal/exhaustion formula and which upgrades modify it.
-Successful-fight exports remain required.
+Exact law from 21 winning fights: `heal = heal_base × 0.99^(streak − 10)`, capped at missing HP. See `mechanics.md` §3.
+Remaining unknowns: what `heal_base` scales with (constant 4,465 = 36.9% max HP in sample; needs a capture after an equipment change), and what triggers `post_combat_heal_exhaustion_relief` (0 in all samples).
 
 ### 10. Corruption and Thorns formulas
 

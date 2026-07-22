@@ -121,6 +121,21 @@ The level-699 loss began at only about 20% HP; the level-608 loss began at about
 
 The `post_combat_heal` field is zero on these losses because the player died; this does not by itself establish that no post-combat recovery exists after victories.
 
+### Streak recovery law — RESOLVED 22 July 2026 (exact, N=21 winning fights)
+
+The 22 July rich capture exposed the full post-combat heal decomposition on victories:
+
+```text
+heal = heal_base × 0.99^(win_streak − 10), capped at missing HP
+```
+
+- Verified exact (float-precision) across 21 consecutive wins at streaks 38–58.
+- `heal_base` was constant 4,465 = 36.9% of max HP for the current build; whether it scales with max HP, Regeneration or something else needs a capture after an equipment change.
+- No exhaustion for the first 10 wins; thereafter healing decays 1% compounding per win. A `post_combat_heal_exhaustion_relief` field exists (0 in all samples) — some relief mechanic exists but is unobserved.
+- Attrition mechanism: heal shrinks while per-fight damage grows with enemy level. In the sample, damage taken crossed heal near streak ~50 — past that point HP ratchets down monotonically, which is why late-streak losses begin at 20–50% HP.
+- Strategic frame: the equilibrium streak is where average damage taken per fight equals the decayed heal. Defense/Evasion/fight-shortening stats push the crossing point later; Max HP does not move it (it only widens the buffer being drained).
+- Related survival mechanic: the Homelab **Snapshot Rollback** upgrade (currently level 0) recovers 25% HP on lethal damage once per 10 fights (−1 fight cooldown per level) — a direct anti-attrition tool worth evaluating against combat-stat homelab upgrades.
+
 ---
 
 ## 4. Equipment structure
