@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      1.1.0
+// @version      1.1.1
 // @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources). Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -23,7 +23,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "1.1.0";
+  const TOOL_VERSION = "1.1.1";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. Under @grant the script runs in the
@@ -168,6 +168,21 @@
       ? state.inventoryData.items.length
       : 0;
 
+    const missing = [];
+    if (!inventoryCount) missing.push("inventory (open Inventory tab)");
+    if (!state.homelabInfo) missing.push("homelab (open Homelab tab)");
+    if (!Array.isArray(state.combatLog) || !state.combatLog.length) {
+      missing.push("combat log (let fights run after page load)");
+    }
+    if (!state.statsBreakdown && !state.extendedStats) {
+      missing.push("stats (open stats panel)");
+    }
+
+    let summary = `${equipmentCount} equipped, ${inventoryCount} items`;
+    if (missing.length) {
+      summary += ` — THIN: missing ${missing.join("; ")}`;
+    }
+
     return {
       payload: {
         schema: "idle-hacking-state-capture-v1",
@@ -178,7 +193,7 @@
         readErrors: result.errors ?? {},
         state,
       },
-      summary: `${equipmentCount} equipped, ${inventoryCount} items`,
+      summary,
     };
   }
 

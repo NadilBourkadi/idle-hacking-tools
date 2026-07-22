@@ -1,6 +1,6 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v1.1.0)
+**Current source:** `tools/item-loadout-capture.user.js` (v1.1.1)
 **Export schema:** `idle-hacking-state-capture-v1`
 
 Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
@@ -57,7 +57,7 @@ Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.con
 - v0.8.0–v0.8.1 — read-only data-source probe (storage/IndexedDB/globals/frameworks recon; structure only, values never captured).
 - v0.9.0–v0.9.1 — "Capture all (full state)" from game bindings; probe findings in `game-client-internals.md`.
 - v1.0.0 — legacy click-scraping UI and DOM machinery removed (~3,000 → ~390 lines). Full-state capture + download fallback only. Schema-4 exports remain readable in `data/loadouts/` history; the legacy tool lives in git history if ever needed.
-- v1.1.0 — capture set expanded with combat and homelab bindings: `combatLog` (rolling fight list incl. wins and drops), `lastCombatStatusPayload`, `hackingState`, `hackingZones` (zone catalog), `multiplierData`, `homelabInfo` (upgrade levels — Snapshot Backup). Hub now auto-routes state captures to `data/captures/`.
+- v1.1.0–v1.1.1 — capture set expanded with combat and homelab bindings: `combatLog` (rolling fight list incl. wins and drops), `lastCombatStatusPayload`, `hackingState`, `hackingZones` (zone catalog), `multiplierData`, `homelabInfo` (upgrade levels — Snapshot Backup). Hub now auto-routes state captures to `data/captures/`.
 
 ## Leftovers from the legacy tool
 
