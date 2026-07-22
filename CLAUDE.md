@@ -50,7 +50,7 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Userscript safety (non-negotiable)
 
-The capture tool must remain passive/read-only: passive DOM observation, user-click origin classification, localStorage, copy/download, and user-click-initiated POSTs of captured data to the local capture hub only. Never automate equip, enhance, decompile, purchase, combat selection, repeated clicks, or any API/WebSocket/server request against the game or a remote host. Preserve equipped-vs-inventory-candidate classification. Bump the script's `@version` on every change (Tampermonkey won't update otherwise).
+The capture tool must remain passive/read-only: it reads game state bindings from page scope (values only — never calling game functions, not even getters), and delivers captures via download or user-click-initiated POSTs to the local capture hub. Never simulate input, automate equip/enhance/decompile/purchase/combat selection, or make any API/WebSocket/server request against the game or a remote host. Bump the script's `@version` on every change (Tampermonkey won't update otherwise).
 
 ## Maintenance conventions
 

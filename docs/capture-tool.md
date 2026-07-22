@@ -1,15 +1,37 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v0.9.1)
-**Export schema:** 4
+**Current source:** `tools/item-loadout-capture.user.js` (v1.0.0)
+**Export schema:** `idle-hacking-state-capture-v1`
 
 Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
 
-- v0.5 — last source archived in the original ChatGPT handover.
-- v0.6.1 — recovered from Tampermonkey on 22 July 2026 after the handover flagged it missing; added crafting snapshots and schema 4.
-- v0.7.0 — capture-hub integration: served to Tampermonkey from `http://localhost:8123`, "Send to workspace" button POSTs exports into `data/incoming/`. Switched `@grant none` → `GM_xmlhttpRequest` (script now runs in Tampermonkey's sandbox).
-- v0.9.0–v0.9.1 — "Capture all (full state)" button: reads the game's top-level state bindings (`currentPlayer`, `equipmentData`, `inventoryData`, `statsBreakdown`, `recentLossStreaks`) via a page-scope snippet (three CSP-fallback strategies: page `Function` constructor → inline script → `GM_addElement`) and sends everything to the hub as schema `idle-hacking-state-capture-v1`. Replaces per-item tooltip clicking and enhance-panel visits entirely; the snippet only reads bindings — it never calls game functions. See `game-client-internals.md`.
-- v0.8.0–v0.8.1 — "Probe data sources" button: one-shot read-only inventory of where the game keeps client-side state (localStorage/sessionStorage key names+sizes+JSON shapes, IndexedDB layout+counts+sample field names, non-standard page globals via `unsafeWindow`, framework fingerprints). Structure only — stored values are never captured, so tokens cannot leak. Groundwork for bulk passive capture to replace per-item click-scraping; no synthetic clicks, nothing sent to any server.
+## What it does (v1.0.0)
+
+One-click, read-only capture of the full game state. The panel has two buttons:
+
+- **Capture all (full state)** — reads the game's top-level state bindings (`currentPlayer`, `equipmentData`, `inventoryData`, `statsBreakdown`, `extendedStats`, `recentLossStreaks`) via a page-scope snippet and POSTs the JSON to the local capture hub → `data/incoming/`.
+- **Download instead** — same payload as a browser download, for when the hub is offline.
+
+Because lexical bindings are invisible to the Tampermonkey sandbox, the reader snippet is evaluated in page scope with three CSP-fallback strategies: page `Function` constructor → inline `<script>` → `GM_addElement`. The payload records which strategy ran (`readMethod`). The snippet only reads the named bindings — it calls no game functions.
+
+Lazy bindings: `statsBreakdown`/`extendedStats`/`recentLossStreaks` are null/empty until the stats panel or loss-history screen has been opened that session. Item data is always present. Internal slot names (`main_hand`…) map to display slots per `game-client-internals.md`.
+
+## Purpose and safety boundary
+
+The tool must remain read-only with respect to gameplay.
+
+Allowed:
+
+- reading game state bindings from page scope (values only, never calling game functions);
+- copy/download of captures;
+- POSTing captures to the user's own localhost capture hub (user-click-initiated only).
+
+Forbidden:
+
+- synthetic clicks or any simulated input;
+- equipping, enhancing, compiling, pruning, decompiling, purchasing, combat selection;
+- calling game functions (including read-only-looking getters);
+- API/WebSocket/server requests against the game or any remote host.
 
 ## Local capture hub
 
@@ -23,47 +45,19 @@ journalctl --user -u idle-hacking-capture-hub -n 20 # logs
 
 Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.config/systemd/user/`).
 
-**Install/update the userscript:** open `http://localhost:8123/item-loadout-capture.user.js` in the browser — Tampermonkey shows its install/update page. Subsequent updates also arrive via Tampermonkey's "Check for userscript updates" (the script's `@updateURL`/`@downloadURL` point at the hub).
+**Install/update the userscript:** open `http://localhost:8123/item-loadout-capture.user.js` in the browser — Tampermonkey shows its install/update page. Subsequent updates arrive via Tampermonkey's "Check for userscript updates" (the script's `@updateURL`/`@downloadURL` point at the hub).
 
-**Export flow:** click **Send to workspace** in the in-game panel → the hub writes the JSON to `data/incoming/` (never overwriting; suggested filenames are sanitised). Triage per `data/incoming/README.md`. The Copy/Download buttons remain as fallbacks.
+**Export flow:** Capture all → hub writes to `data/incoming/` (never overwriting; filenames sanitised) → triage per `data/incoming/README.md`.
 
-## Purpose and safety boundary
+## Version history
 
-The userscript passively captures opened item tooltips, the equipped loadout and crafting-panel snapshots. It must remain read-only with respect to gameplay.
+- v0.5 — legacy DOM click-scraper; last source archived in the original ChatGPT handover.
+- v0.6.1 — recovered from Tampermonkey 22 July 2026 after the handover flagged it missing; crafting snapshots, schema 4.
+- v0.7.0 — capture-hub integration ("Send to workspace"); `@grant none` → `GM_xmlhttpRequest` (sandboxed).
+- v0.8.0–v0.8.1 — read-only data-source probe (storage/IndexedDB/globals/frameworks recon; structure only, values never captured).
+- v0.9.0–v0.9.1 — "Capture all (full state)" from game bindings; probe findings in `game-client-internals.md`.
+- v1.0.0 — legacy click-scraping UI and DOM machinery removed (~3,000 → ~390 lines). Full-state capture + download fallback only. Schema-4 exports remain readable in `data/loadouts/` history; the legacy tool lives in git history if ever needed.
 
-Allowed:
+## Leftovers from the legacy tool
 
-- observe DOM changes;
-- classify the user's own clicks;
-- parse visible text;
-- use localStorage;
-- copy/download exports;
-- POST captured exports to the user's own localhost capture hub (user-click-initiated only).
-
-Forbidden:
-
-- automatic game clicks;
-- equipping, enhancing, compiling, pruning or decompiling;
-- purchasing or combat selection;
-- direct API/WebSocket/server actions against the game or any remote host.
-
-## Validated click origins
-
-- Equipped: `#equipped-software-panel .equipment-slot`
-- Inventory: `#inventory-grid [data-item-id]`
-- The v0.5 `Alt+E` fallback hotkey no longer exists since v0.6.1.
-
-## Schema-4 export contents
-
-- top-level `sourceVersion`;
-- item `domItemId` where available;
-- `crafting.capturedSnapshotCount`;
-- `crafting.snapshots` with affix ranges, current roll positions, operation controls, costs and affordability;
-- `itemRevisions` for tracking item changes across crafting actions.
-
-The complete fixture in `data/loadouts/current-loadout-and-candidates-2026-07-21-schema4.json` is the authoritative schema example.
-
-## Storage
-
-- Current localStorage key: `idle-hacking-item-capture:v4`
-- Legacy key migrated from: `idle-hacking-item-capture:v3`
+The old versions cached scraped data in localStorage keys `idle-hacking-item-capture:v2`–`:v4` and `idle-hacking-captured-items-v1` (~150 KB total). v1.0.0 neither reads nor writes them; they can be deleted manually via DevTools if desired.
