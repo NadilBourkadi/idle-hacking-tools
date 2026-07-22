@@ -21,11 +21,13 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 - `docs/open-questions.md` — unknowns and planned tests; prevents working models becoming "facts".
 - `docs/data-dictionary.md` — combat-log field meanings and analysis conventions.
 - `docs/capture-tool.md` — userscript reference and safety boundary.
-- `data/` — structured exports and combat logs (see `data/README.md`).
-- `tools/item-loadout-capture.user.js` — the passive Tampermonkey capture script (v0.6.1, schema 4).
+- `data/` — structured exports and combat logs (see `data/README.md`); `data/incoming/` is the untriaged staging area fed by the capture hub.
+- `tools/item-loadout-capture.user.js` — the passive Tampermonkey capture script (schema 4; version in the `@version` header).
+- `scripts/capture-hub.py` — localhost:8123 hub (systemd user service `idle-hacking-capture-hub`): serves the userscript to Tampermonkey and receives in-game exports into `data/incoming/`.
 
 ## Working with the data
 
+- When the user says they sent/exported new data, look in `data/incoming/` first; triage files into `data/loadouts|combat|crafting/` with dated names before analysis.
 - The schema-4 loadout export is ~1.3 MB. **Never read it whole** — query it with `python3` or `jq` and extract only the items/snapshots needed.
 - Combat logs in `data/combat/kernel-test/` include one `DUPLICATE-` file; it is the same fight as its sibling and must be counted once. Field semantics: `docs/data-dictionary.md`.
 - New data files are dated, never overwritten. A one-slot export gives exact slot deltas but not whole-loadout state.
@@ -47,7 +49,7 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Userscript safety (non-negotiable)
 
-The capture tool must remain passive/read-only: passive DOM observation, user-click origin classification, localStorage and copy/download only. Never automate equip, enhance, decompile, purchase, combat selection, repeated clicks, direct API calls, WebSocket commands or server requests. Preserve equipped-vs-inventory-candidate classification.
+The capture tool must remain passive/read-only: passive DOM observation, user-click origin classification, localStorage, copy/download, and user-click-initiated POSTs of captured data to the local capture hub only. Never automate equip, enhance, decompile, purchase, combat selection, repeated clicks, or any API/WebSocket/server request against the game or a remote host. Preserve equipped-vs-inventory-candidate classification. Bump the script's `@version` on every change (Tampermonkey won't update otherwise).
 
 ## Maintenance conventions
 

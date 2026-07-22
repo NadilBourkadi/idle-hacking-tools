@@ -1,16 +1,23 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      0.6.1
+// @version      0.7.0
 // @description  Passively captures equipped/candidate item tooltips plus user-opened Enhancing panels. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
 // @run-at       document-idle
-// @grant        none
+// @updateURL    http://localhost:8123/item-loadout-capture.user.js
+// @downloadURL  http://localhost:8123/item-loadout-capture.user.js
+// @grant        GM_xmlhttpRequest
+// @connect      localhost
+// @connect      127.0.0.1
 // ==/UserScript==
 
 (() => {
   "use strict";
+
+  const TOOL_VERSION = "0.7.0";
+  const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   const STORAGE_KEY = "idle-hacking-item-capture:v4";
   const LEGACY_STORAGE_KEY = "idle-hacking-item-capture:v3";
@@ -1704,7 +1711,7 @@
     );
 
     return {
-      parserVersion: "0.6.1",
+      parserVersion: TOOL_VERSION,
       expectedAffixCounts,
       parsedAffixCounts,
       affixCountMatchesPanel,
@@ -2036,7 +2043,7 @@
       schemaVersion: 4,
       exportedAt: new Date().toISOString(),
       source: "idle-hacking-item-loadout-capture",
-      sourceVersion: "0.6.1",
+      sourceVersion: TOOL_VERSION,
       sourceUrl: location.href,
       loadout: {
         complete: missingSlots.length === 0,
@@ -2185,6 +2192,47 @@
     updatePanel();
   }
 
+  function sendToHub() {
+    if (typeof GM_xmlhttpRequest !== "function") {
+      status = "GM_xmlhttpRequest unavailable — reinstall from the hub URL";
+      updatePanel();
+      return;
+    }
+
+    const exportName =
+      `idle-hacking-capture-${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+
+    status = "Sending export to workspace…";
+    updatePanel();
+
+    GM_xmlhttpRequest({
+      method: "POST",
+      url: HUB_EXPORT_URL,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Export-Name": exportName,
+      },
+      data: JSON.stringify(exportPayload(), null, 2),
+      timeout: 5000,
+      onload: (response) => {
+        status = response.status === 200
+          ? `Workspace: ${response.responseText.trim()}`
+          : `Hub rejected export (HTTP ${response.status})`;
+        updatePanel();
+      },
+      onerror: () => {
+        status = "Hub unreachable — is capture-hub running in WSL?";
+        updatePanel();
+      },
+      ontimeout: () => {
+        status = "Hub timed out — is capture-hub running in WSL?";
+        updatePanel();
+      },
+    });
+  }
+
   function createPanel() {
     document.querySelector("#ih-capture-panel")?.remove();
 
@@ -2218,6 +2266,7 @@
           <button data-action="copy-loadout">Copy loadout only</button>
           <button data-action="copy-json">Copy JSON</button>
           <button data-action="download">Download JSON</button>
+          <button data-action="send-hub">Send to workspace</button>
           <button data-action="toggle-auto">Pause auto</button>
           <button data-action="clear-candidates">Clear candidates</button>
           <button data-action="clear-crafting">Clear crafting</button>
@@ -2278,7 +2327,7 @@
           JSON.stringify({
             schemaVersion: 4,
             exportedAt: new Date().toISOString(),
-            sourceVersion: "0.6.1",
+            sourceVersion: TOOL_VERSION,
             crafting: {
               capturedSnapshotCount: state.craftingSnapshots.length,
               snapshots: state.craftingSnapshots,
@@ -2298,6 +2347,10 @@
 
       if (action === "download") {
         downloadJson();
+      }
+
+      if (action === "send-hub") {
+        sendToHub();
       }
 
       if (action === "toggle-auto") {
@@ -2563,6 +2616,6 @@
   scheduleCapture();
 
   console.info(
-    "[IH Capture] v0.6.1 loaded. Item click-origin classification and passive Enhancing-panel snapshots are enabled.",
+    `[IH Capture] v${TOOL_VERSION} loaded. Item click-origin classification and passive Enhancing-panel snapshots are enabled.`,
   );
 })();

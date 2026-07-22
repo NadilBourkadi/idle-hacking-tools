@@ -1,0 +1,10 @@
+[Unit]
+Description=Idle Hacking capture hub (userscript server + export receiver)
+
+[Service]
+ExecStart=/usr/bin/env python3 ~/Dev/idle-hacking-tools/scripts/capture-hub.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

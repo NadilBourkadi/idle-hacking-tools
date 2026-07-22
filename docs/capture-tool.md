@@ -1,9 +1,29 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v0.6.1)
+**Current source:** `tools/item-loadout-capture.user.js` (v0.7.0)
 **Export schema:** 4
 
-The v0.6.1 source was recovered from the installed Tampermonkey script on 22 July 2026, after the original ChatGPT handover was built (that dump could only archive v0.5 and flagged v0.6.1 as missing). Version history is tracked by git from here on; bump `@version` in the script header on any change.
+Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
+
+- v0.5 — last source archived in the original ChatGPT handover.
+- v0.6.1 — recovered from Tampermonkey on 22 July 2026 after the handover flagged it missing; added crafting snapshots and schema 4.
+- v0.7.0 — capture-hub integration: served to Tampermonkey from `http://localhost:8123`, "Send to workspace" button POSTs exports into `data/incoming/`. Switched `@grant none` → `GM_xmlhttpRequest` (script now runs in Tampermonkey's sandbox).
+
+## Local capture hub
+
+`scripts/capture-hub.py` runs on `127.0.0.1:8123` inside WSL (reachable from the Windows browser via localhost forwarding) as the systemd user service `idle-hacking-capture-hub`:
+
+```bash
+systemctl --user status idle-hacking-capture-hub    # check
+systemctl --user restart idle-hacking-capture-hub   # after editing the hub script
+journalctl --user -u idle-hacking-capture-hub -n 20 # logs
+```
+
+Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.config/systemd/user/`).
+
+**Install/update the userscript:** open `http://localhost:8123/item-loadout-capture.user.js` in the browser — Tampermonkey shows its install/update page. Subsequent updates also arrive via Tampermonkey's "Check for userscript updates" (the script's `@updateURL`/`@downloadURL` point at the hub).
+
+**Export flow:** click **Send to workspace** in the in-game panel → the hub writes the JSON to `data/incoming/` (never overwriting; suggested filenames are sanitised). Triage per `data/incoming/README.md`. The Copy/Download buttons remain as fallbacks.
 
 ## Purpose and safety boundary
 
@@ -15,20 +35,21 @@ Allowed:
 - classify the user's own clicks;
 - parse visible text;
 - use localStorage;
-- copy/download exports.
+- copy/download exports;
+- POST captured exports to the user's own localhost capture hub (user-click-initiated only).
 
 Forbidden:
 
 - automatic game clicks;
 - equipping, enhancing, compiling, pruning or decompiling;
 - purchasing or combat selection;
-- direct API/WebSocket/server actions.
+- direct API/WebSocket/server actions against the game or any remote host.
 
 ## Validated click origins
 
 - Equipped: `#equipped-software-panel .equipment-slot`
 - Inventory: `#inventory-grid [data-item-id]`
-- The v0.5 `Alt+E` fallback hotkey no longer exists in v0.6.1.
+- The v0.5 `Alt+E` fallback hotkey no longer exists since v0.6.1.
 
 ## Schema-4 export contents
 
