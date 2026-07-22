@@ -1,6 +1,6 @@
 # Static Export Analysis — 22 July 2026
 
-Findings mined from `data/loadouts/full-state-2026-07-22.json` (78 items, 415 affix instances). All fits are against this single snapshot; confidence noted per finding. Analysis scripts were one-off (rerun against future captures to re-verify).
+Findings mined from `data/captures/idle-hacking-state-2026-07-22T17-42-35-392Z.json` (78 items, 415 affix instances). All fits are against this single snapshot; confidence noted per finding. Analysis scripts were one-off (rerun against future captures to re-verify).
 
 ## 1. Affix value scaling by item level — near-exact fit
 

@@ -33,6 +33,12 @@ The engine uses generic RPG slot keys; the UI renames them (mapping from `SLOT_N
 | `statsBreakdown` | `state.js` | Aggregated stat summary (lazy — null until the stats panel is opened) |
 | `extendedStats` | `state.js` | Extended stat summary (lazy, as above) |
 | `recentLossStreaks` | `hacking.js` | Loss-streak history entries (lazy-loaded; open the loss history UI once to populate) |
+| `combatLog` | `state.js` | Rolling list of recent fight entries — wins and losses, with compact round logs and drops |
+| `lastCombatStatusPayload` | `state.js` | Most recent combat status message |
+| `hackingState` | `state.js` | Active-fight state (zone, combat HP, win streak) |
+| `hackingZones` | `state.js` | Zone catalog |
+| `multiplierData` | `state.js` | Global multiplier summary |
+| `homelabInfo` | `homelab.js` | Homelab upgrade levels (Snapshot Backup, Optimization Pass, ...) — lazy, open the Homelab tab to populate |
 
 ## Item object schema (fields observed in client code)
 

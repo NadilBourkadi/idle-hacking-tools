@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      1.0.0
+// @version      1.1.0
 // @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources). Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -23,7 +23,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "1.0.0";
+  const TOOL_VERSION = "1.1.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. Under @grant the script runs in the
@@ -47,6 +47,12 @@
     "statsBreakdown",
     "extendedStats",
     "recentLossStreaks",
+    "combatLog",
+    "lastCombatStatusPayload",
+    "hackingState",
+    "hackingZones",
+    "multiplierData",
+    "homelabInfo",
   ];
 
   function buildStateReaderBody(names) {

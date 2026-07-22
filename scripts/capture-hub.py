@@ -9,11 +9,13 @@ via WSL2 localhost forwarding):
       updates the script from this URL (@updateURL/@downloadURL).
 
   POST /export
-      Receives a JSON export from the userscript's "Send to workspace"
-      button and writes it to data/incoming/ for triage. The optional
-      X-Export-Name header suggests a filename; it is sanitised and
-      never allowed to escape the incoming directory or overwrite an
-      existing file.
+      Receives a JSON export from the userscript and routes it by its
+      top-level "schema" field: full-state captures go straight to
+      data/captures/ (no triage needed — they are always complete
+      snapshots); anything else goes to data/incoming/ for triage.
+      The optional X-Export-Name header suggests a filename; it is
+      sanitised and never allowed to escape the target directory or
+      overwrite an existing file.
 
 Stdlib only. Run directly or via the systemd user unit in scripts/.
 """
@@ -32,6 +34,11 @@ MAX_BODY_BYTES = 32 * 1024 * 1024
 ROOT = Path(__file__).resolve().parent.parent
 USERSCRIPT = ROOT / "tools" / "item-loadout-capture.user.js"
 INCOMING = ROOT / "data" / "incoming"
+CAPTURES = ROOT / "data" / "captures"
+
+SCHEMA_ROUTES = {
+    "idle-hacking-state-capture-v1": CAPTURES,
+}
 
 
 def sanitise_name(raw):
@@ -44,11 +51,11 @@ def sanitise_name(raw):
     return name
 
 
-def unique_path(name):
-    path = INCOMING / name
+def unique_path(directory, name):
+    path = directory / name
     stem, counter = path.stem, 1
     while path.exists():
-        path = INCOMING / f"{stem}-{counter}.json"
+        path = directory / f"{stem}-{counter}.json"
         counter += 1
     return path
 
@@ -91,13 +98,17 @@ class Handler(BaseHTTPRequestHandler):
 
         body = self.rfile.read(length)
         try:
-            json.loads(body)
+            payload = json.loads(body)
         except ValueError:
             self._send(400, "Body is not valid JSON\n")
             return
 
-        INCOMING.mkdir(parents=True, exist_ok=True)
-        path = unique_path(sanitise_name(self.headers.get("X-Export-Name")))
+        schema = payload.get("schema") if isinstance(payload, dict) else None
+        directory = SCHEMA_ROUTES.get(schema, INCOMING)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = unique_path(
+            directory, sanitise_name(self.headers.get("X-Export-Name"))
+        )
         path.write_bytes(body)
         self._send(200, f"Saved {path.relative_to(ROOT)}\n")
 

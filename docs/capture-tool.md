@@ -1,6 +1,6 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v1.0.0)
+**Current source:** `tools/item-loadout-capture.user.js` (v1.1.0)
 **Export schema:** `idle-hacking-state-capture-v1`
 
 Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
@@ -9,7 +9,7 @@ Version history is tracked by git. Bump `@version` in the script header on **eve
 
 One-click, read-only capture of the full game state. The panel has two buttons:
 
-- **Capture all (full state)** — reads the game's top-level state bindings (`currentPlayer`, `equipmentData`, `inventoryData`, `statsBreakdown`, `extendedStats`, `recentLossStreaks`) via a page-scope snippet and POSTs the JSON to the local capture hub → `data/incoming/`.
+- **Capture all (full state)** — reads the game's top-level state bindings (`currentPlayer`, `equipmentData`, `inventoryData`, `statsBreakdown`, `extendedStats`, `recentLossStreaks`, `combatLog`, `lastCombatStatusPayload`, `hackingState`, `hackingZones`, `multiplierData`, `homelabInfo`) via a page-scope snippet and POSTs the JSON to the local capture hub, which auto-routes it to `data/captures/`.
 - **Download instead** — same payload as a browser download, for when the hub is offline.
 
 Because lexical bindings are invisible to the Tampermonkey sandbox, the reader snippet is evaluated in page scope with three CSP-fallback strategies: page `Function` constructor → inline `<script>` → `GM_addElement`. The payload records which strategy ran (`readMethod`). The snippet only reads the named bindings — it calls no game functions.
@@ -47,7 +47,7 @@ Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.con
 
 **Install/update the userscript:** open `http://localhost:8123/item-loadout-capture.user.js` in the browser — Tampermonkey shows its install/update page. Subsequent updates arrive via Tampermonkey's "Check for userscript updates" (the script's `@updateURL`/`@downloadURL` point at the hub).
 
-**Export flow:** Capture all → hub writes to `data/incoming/` (never overwriting; filenames sanitised) → triage per `data/incoming/README.md`.
+**Export flow:** Capture all → hub routes by schema: state captures → `data/captures/` (immediately queryable via `scripts/ih.py`), everything else → `data/incoming/` for triage. Never overwrites; filenames sanitised.
 
 ## Version history
 
@@ -57,6 +57,7 @@ Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.con
 - v0.8.0–v0.8.1 — read-only data-source probe (storage/IndexedDB/globals/frameworks recon; structure only, values never captured).
 - v0.9.0–v0.9.1 — "Capture all (full state)" from game bindings; probe findings in `game-client-internals.md`.
 - v1.0.0 — legacy click-scraping UI and DOM machinery removed (~3,000 → ~390 lines). Full-state capture + download fallback only. Schema-4 exports remain readable in `data/loadouts/` history; the legacy tool lives in git history if ever needed.
+- v1.1.0 — capture set expanded with combat and homelab bindings: `combatLog` (rolling fight list incl. wins and drops), `lastCombatStatusPayload`, `hackingState`, `hackingZones` (zone catalog), `multiplierData`, `homelabInfo` (upgrade levels — Snapshot Backup). Hub now auto-routes state captures to `data/captures/`.
 
 ## Leftovers from the legacy tool
 

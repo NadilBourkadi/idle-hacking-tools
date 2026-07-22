@@ -4,11 +4,10 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Source-of-truth order
 
-1. A newly supplied full-state capture (`idle-hacking-state-capture-v1`) or combat log.
-2. `data/loadouts/full-state-2026-07-22.json` — latest complete baseline (8/8 equipped via internal slot names — see `docs/game-client-internals.md` for the mapping — plus all 70 inventory items with full crafting data).
-3. `docs/current-state.md` and `docs/decision-log.md`.
-4. `docs/mechanics.md` and `docs/crafting.md`.
-5. Older schema-4/3 exports (`data/loadouts/current-loadout-and-candidates-*.json`) and historical logs.
+1. The latest capture in `data/captures/` (query via `scripts/ih.py`).
+2. `docs/current-state.md` (interpretation) and `docs/decision-log.md`.
+3. `docs/mechanics.md`, `docs/crafting.md`, `docs/static-analysis-2026-07-22.md`.
+4. Older schema-4/3 exports (`data/loadouts/`) and historical combat logs (`data/combat/`).
 
 ## File map
 
@@ -22,16 +21,19 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 - `docs/data-dictionary.md` — combat-log field meanings and analysis conventions.
 - `docs/capture-tool.md` — userscript reference and safety boundary.
 - `docs/game-client-internals.md` — how the game client stores state (bindings, item schema, WS protocol); basis for full-state capture. Game JS reference copies: `vendor/game-js/` (git-ignored).
-- `data/` — structured exports and combat logs (see `data/README.md`); `data/incoming/` is the untriaged staging area fed by the capture hub.
-- `tools/item-loadout-capture.user.js` — the passive Tampermonkey capture script (schema 4; version in the `@version` header).
-- `scripts/capture-hub.py` — localhost:8123 hub (systemd user service `idle-hacking-capture-hub`): serves the userscript to Tampermonkey and receives in-game exports into `data/incoming/`.
+- `data/captures/` — full-state captures (authoritative, auto-routed by the hub); `data/incoming/` — non-capture staging; legacy exports in `data/loadouts/` and `data/combat/` (see `data/README.md`).
+- `scripts/ih.py` + `scripts/ihlib.py` — capture query CLI and analysis library (slot map, scaling law, cost model as code).
+- `tools/item-loadout-capture.user.js` — the read-only Tampermonkey capture script (version in the `@version` header; bump on every change).
+- `scripts/capture-hub.py` — localhost:8123 hub (systemd user service `idle-hacking-capture-hub`): serves the userscript to Tampermonkey and routes incoming exports by schema.
 
-## Working with the data
+## Working with the data — query-first
 
-- When the user says they sent/exported new data, look in `data/incoming/` first; triage files into `data/loadouts|combat|crafting/` with dated names before analysis.
-- The schema-4 loadout export is ~1.3 MB. **Never read it whole** — query it with `python3` or `jq` and extract only the items/snapshots needed.
-- Combat logs in `data/combat/kernel-test/` include one `DUPLICATE-` file; it is the same fight as its sibling and must be counted once. Field semantics: `docs/data-dictionary.md`.
-- New data files are dated, never overwritten. A one-slot export gives exact slot deltas but not whole-loadout state.
+**Use `python3 scripts/ih.py <cmd>` for all capture queries; never parse capture JSON ad hoc.** Full-state captures land in `data/captures/` automatically (hub routes by schema); latest = lexicographically last. Commands: `captures`, `loadout`, `item <query>`, `candidates [--slot s]`, `compare <a> <b>`, `diff [old new]`, `stats`, `history <query>`. For bespoke analysis, import `scripts/ihlib.py` — it encodes the slot mapping, scaling law and cost model so they are never re-derived.
+
+- Captures are ~1 MB each. **Never read one whole** — `ih.py` or targeted `ihlib` scripts only.
+- `statsBreakdown`/`extendedStats`/`combatLog`/`recentLossStreaks`/`homelabInfo` are lazy — captured only if the corresponding game panel was opened that session (`ih.py captures` shows what each capture contains).
+- Anything in `data/incoming/` is non-capture output needing manual triage. Legacy schema-4/3 exports and combat logs live in `data/loadouts/` and `data/combat/` (one `DUPLICATE-` file there counts once; field semantics: `docs/data-dictionary.md`).
+- Data files are immutable once written; new capture > editing an old one.
 
 ## Analysis rules
 
