@@ -189,4 +189,7 @@ A forced-suffix Augment:
 3. Version Upgrade before/after export to determine new-tier roll behaviour.
 4. Snapshot Backup chance/trigger capture.
 5. Bias Reroll before/after capture.
-6. Recover and archive the actual 0.6.1 userscript source.
+
+### 22 July 2026 — resolved
+
+- The actual 0.6.1 userscript source was recovered from Tampermonkey and is archived at `tools/item-loadout-capture.user.js`.

@@ -193,7 +193,7 @@ The exact generation formula and how Ratio should be weighted are not fully esta
 
 ### Stability, enhancement and compilation — verified operational model
 
-The full operational reference is in `07_CRAFTING_MECHANICS_AND_DECISION_PROTOCOL.md`.
+The full operational reference is in `crafting.md`.
 
 Verified from the in-game help and the schema-4 crafting export:
 
@@ -256,7 +256,7 @@ Use it as input, not the verdict.
 
 ## 6. Current loadout’s functional shape
 
-See `03_CURRENT_STATE_AND_LOADOUT.md` for exact affixes.
+See `current-state.md` for exact affixes.
 
 ### Offensive core
 
@@ -380,7 +380,7 @@ Current speed/barrier alternate project: `Aligned Firewall of Bastion`.
 
 ---
 
-## 10. 21 July 2026 equipment-test update
+## 11. 21 July 2026 equipment-test update
 
 A crafted Kernel was tested against the existing Hearty Kernel. The candidate gained +11 listed Regeneration, +5.53% Max HP and +3.46% Evasion, while losing 7.46% Defense, 1.57% Accuracy and 2.09% Attack Speed. Two unique post-swap losses ended at streaks 89 and 90, compared with the recent baseline range of 90-92. This is not a matched-enemy formula test, but it is sufficient directional evidence to reject that trade for the present build.
 
@@ -391,9 +391,9 @@ Durable interpretation:
 - Max HP increases the buffer but does not improve net recovery.
 - Listed Regeneration must be checked against realised `prg` and the resulting streak trajectory.
 
-See `09_EQUIPMENT_TEST_RESULTS_2026-07-21.md` for exact logs and limitations.
+See `equipment-tests.md` for exact logs and limitations.
 
-## 11. Augment observations now verified
+## 12. Augment observations now verified
 
 The Fortified Firewall probe directly showed:
 
