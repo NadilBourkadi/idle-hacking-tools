@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      1.1.1
+// @version      1.2.0
 // @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources). Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
@@ -23,7 +23,7 @@
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "1.1.1";
+  const TOOL_VERSION = "1.2.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Page-context window. Under @grant the script runs in the
@@ -84,7 +84,7 @@
       return json;`;
   }
 
-  function injectReaderAndListen(names, useGmAddElement) {
+  function injectReaderAndListen(bodySource, useGmAddElement) {
     return new Promise((resolve, reject) => {
       const eventName = `ih-state-read-${Date.now()}-${Math.random()
         .toString(36)
@@ -108,7 +108,7 @@
       document.addEventListener(eventName, onEvent);
 
       const source = `(() => {
-        const read = () => { ${buildStateReaderBody(names)} };
+        const read = () => { ${bodySource} };
         document.dispatchEvent(
           new CustomEvent(${JSON.stringify(eventName)}, { detail: read() }),
         );
@@ -132,28 +132,102 @@
     });
   }
 
-  async function readGameBindings(names) {
-    // Strategy 1: page Function constructor — sees global lexical
-    // bindings; blocked only if the page CSP forbids unsafe-eval.
-    try {
-      const json = new pageWindow.Function(buildStateReaderBody(names))();
-      return { readMethod: "function-constructor", ...JSON.parse(json) };
-    } catch {
-      // fall through
+  // Strategies, in preference order: page Function constructor (sees
+  // global lexical bindings; blocked only if page CSP forbids
+  // unsafe-eval), inline script element (blocked if CSP forbids
+  // inline), GM_addElement (Tampermonkey's privileged injection,
+  // usually CSP-exempt). The first method that works is cached so
+  // periodic readiness polling doesn't retry failing strategies.
+  const READ_METHODS = [
+    "function-constructor",
+    "inline-script",
+    "gm-add-element",
+  ];
+  let preferredReadMethod = null;
+
+  async function evaluateInPage(bodySource) {
+    const attempt = async (method) => {
+      if (method === "function-constructor") {
+        return JSON.parse(new pageWindow.Function(bodySource)());
+      }
+      return injectReaderAndListen(bodySource, method === "gm-add-element");
+    };
+
+    const order = preferredReadMethod
+      ? [
+          preferredReadMethod,
+          ...READ_METHODS.filter((m) => m !== preferredReadMethod),
+        ]
+      : READ_METHODS;
+
+    let lastError;
+    for (const method of order) {
+      try {
+        const parsed = await attempt(method);
+        preferredReadMethod = method;
+        return { readMethod: method, ...parsed };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? new Error("all read strategies failed");
+  }
+
+  function readGameBindings(names) {
+    return evaluateInPage(buildStateReaderBody(names));
+  }
+
+  // ---- Capture readiness --------------------------------------------------
+  // Lightweight page-scope poll (counts/booleans only, no serialization
+  // of the full state) so the panel shows BEFORE capturing which lazy
+  // stores are hydrated.
+
+  function buildReadinessBody() {
+    return `
+      const out = {};
+      out.inventory =
+        typeof inventoryData !== "undefined" && inventoryData &&
+        Array.isArray(inventoryData.items)
+          ? inventoryData.items.length : 0;
+      out.fights =
+        typeof combatLog !== "undefined" && Array.isArray(combatLog)
+          ? combatLog.length : 0;
+      out.losses =
+        typeof recentLossStreaks !== "undefined" &&
+        Array.isArray(recentLossStreaks)
+          ? recentLossStreaks.length : 0;
+      out.homelab = typeof homelabInfo !== "undefined" && !!homelabInfo;
+      out.stats =
+        (typeof statsBreakdown !== "undefined" && !!statsBreakdown) ||
+        (typeof extendedStats !== "undefined" && !!extendedStats);
+      return JSON.stringify(out);`;
+  }
+
+  async function updateReadiness() {
+    const element = document.querySelector(
+      "#ih-capture-panel [data-role='readiness']",
+    );
+    if (!element || document.hidden) {
+      return;
     }
 
-    // Strategy 2: inline script element (blocked if CSP forbids inline).
     try {
-      const parsed = await injectReaderAndListen(names, false);
-      return { readMethod: "inline-script", ...parsed };
+      const r = await evaluateInPage(buildReadinessBody());
+      const parts = [
+        r.inventory ? `inv ${r.inventory}` : "inv ✗",
+        r.fights ? `fights ${r.fights}` : "fights ✗",
+        r.homelab ? "homelab ✓" : "homelab ✗",
+        r.stats ? "stats ✓" : "stats ✗",
+        r.losses ? `losses ${r.losses}` : "losses ✗",
+      ];
+      const complete = r.inventory && r.fights && r.homelab && r.stats && r.losses;
+      element.textContent =
+        (complete ? "RICH — " : "PARTIAL — ") + parts.join(" · ");
+      element.classList.toggle("ok", !!complete);
     } catch {
-      // fall through
+      element.textContent = "readiness unavailable";
+      element.classList.remove("ok");
     }
-
-    // Strategy 3: GM_addElement — Tampermonkey's privileged injection,
-    // usually exempt from page CSP.
-    const parsed = await injectReaderAndListen(names, true);
-    return { readMethod: "gm-add-element", ...parsed };
   }
 
   async function buildCapturePayload() {
@@ -288,6 +362,7 @@
         <button data-action="collapse" title="Collapse">−</button>
       </div>
       <div class="ihc-body">
+        <div class="ihc-ready" data-role="readiness">checking readiness…</div>
         <div class="ihc-actions">
           <button data-action="capture-state" class="wide">
             Capture all (full state)
@@ -397,6 +472,16 @@
         margin-top: 7px;
         color: #a9bac8;
       }
+
+      #ih-capture-panel .ihc-ready {
+        margin-bottom: 7px;
+        line-height: 1.4;
+        color: #e0b36a;
+      }
+
+      #ih-capture-panel .ihc-ready.ok {
+        color: #7fd18a;
+      }
     `;
 
     document.head.appendChild(style);
@@ -404,6 +489,8 @@
 
   addStyles();
   createPanel();
+  updateReadiness();
+  setInterval(updateReadiness, 3000);
 
   console.info(
     `[IH Capture] v${TOOL_VERSION} loaded. One-click full-state capture; no DOM scraping, no gameplay actions.`,
