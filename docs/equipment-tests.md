@@ -100,3 +100,17 @@ Abort. The Augment did not supply Regeneration, the item is now full, and furthe
 - **Death streak is a low-power metric.** Session variance was ±8 streaks (84–104 over 8 baseline runs); a 2-streak test only detects revolutionary changes. Judge *crafts* on mechanism metrics — rounds/fight and damage/round at matched enemy level, damage taken/fight, attrition-onset streak (first start <90%) — which moved detectably (−5%, +8%, −6.5%, +5 streaks) while the death streak showed nothing.
 - **Baselines must be same-session.** Player levels (+8 = +40 heal, HP/def growth) and completing homelab jobs shift stats within hours; compare against streaks from the same session and log completed jobs as confounds.
 - **Model components validated so far:** tier-midpoint landing assumption (4/4 lines at/above mid), independent re-roll on Version Upgrade (6/6), ilvl scaling and cost model (exact). Weakest link: unknown hit-chance formula — the naive +13% output estimate realized as +8% largely through the unmodeled Accuracy interaction. The Hawk instrument streak (open questions §7) is the cheapest fix; the Hacking Simulator (homelab 10) is the real one.
+
+## Test — Bastioned Payload of Perfect Strike A/B (23 July 2026)
+
+**Swap:** Enduring Payload of Armageddon (Acc +3.7%, AtkDmg +28.2%, AtkSpd +6.2%, CritDmg +7.4% implicit, ArmorPen +51) → crafted Bastioned Payload of Perfect Strike (Acc +25.4%, CritCh +9.8%, Corrupt +11, AtkDmg +7.5% implicit). Player Accuracy 5,057 → 5,816.
+
+| Metric | Old Payload | New Payload |
+|---|---|---|
+| Death streak, mean (same-loadout window) | 96.2 (n=12) | **98.6 (n=9), delta +2.3** |
+| Death streaks, last four | — | 100, 101, 101, 101 |
+| Deep-streak hit rate | 70.1% (n=164, eva ~2,500) | **76.9% (n=8,021, eva ~2,700–3,700)** |
+| Rounds/fight, streak 24–42 | 18.1 | 20.7 (+14%) |
+| Corruption share of output | — | 1–18% per fight |
+
+**Decision: KEEP.** Evidence quality: the strongest A/B to date — cross-capture tracker, all 9 deaths pre-contamination (VLAN Rules +1% Def completed after the last death). Durable learnings: hit rate is measurable at scale via the Detailed Logs checkbox; accuracy moves the death ceiling where raw tempo does not; the (acc, eva → hit%) dataset now spans two accuracy levels for hit-formula fitting (open questions §7/§8).

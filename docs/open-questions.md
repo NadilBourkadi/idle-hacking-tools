@@ -207,3 +207,11 @@ A forced-suffix Augment:
 ### 12. Rarity promotion on 6th affix
 
 Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Single observation — unknown whether rarity is simply an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield. Check on the next rare that gains a 6th affix.
+
+### 13. Hardware/homelab percentage stacking (added 23 July 2026)
+
+`ih.py hardware` scores shop tracks assuming a hardware track's %-per-level joins the **same additive multiplier pool** as gear percentage affixes (and similarly for homelab stat upgrades, e.g. VLAN Rules +1% Defense/level). Plausible from the shared `mult_add`-style data shapes but unverified — multiplicative stacking or a separate pool would change per-chip value rankings materially. Test: buy one cheap level on a big-base stat track (e.g. Encryption Module with Defense visible) and diff `combat_stats` before/after; two captures resolve it. Until then, treat hardware-vs-craft value comparisons as directional only.
+
+### 14. Version Upgrade tier-roll behaviour — strong evidence 23 July 2026 (was: unresolved item 2)
+
+During the Bastioned Payload craft (08:26 → 08:28 captures), of Infection went roll 100% → of Decay roll 50%, and of Targeting roll 82% → of Unerring roll 60% across multi-step promotions. Strong evidence that a successful Version Upgrade **rerolls the value within the new tier** rather than preserving relative roll position. Not yet formula-level (no per-step captures); one single-step before/after capture would finish it.

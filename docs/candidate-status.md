@@ -1,9 +1,13 @@
-# Candidate and Craft Status — 22 July 2026
+# Candidate and Craft Status — 23 July 2026
+
+> **23 July note:** the 22 July inventory was mass-decompiled overnight (including previously locked items — Targeted Daemon of Quarantine, Vital Driver of the Hawk, the Firewall alternates); holds below that reference them are void. Current inventory is the ~17 fresh drops; re-rank with `ih.py potential`.
 
 ## Finished or spent projects
 
 | Item | Status | Action |
 |---|---|---|
+| Bastioned Payload of Perfect Strike | **Crafted + equipped 23 Jul; A/B KEEP** (+2.3 death depth, 77% vs 70% hit) | Main set |
+| Enduring Payload of Armageddon | Revert path for the above | Keep decompile-locked |
 | Citadel Firewall of the Bastion | Coherent alternate; not main streak upgrade | Keep locked as alternate/test item |
 | Aggressive Kernel of Renewal | Failed main-set combat trial | Revert to Hearty; keep only for alternate/test |
 | Fortified Firewall of the Giant | Failed Augment gate | Decompile or use as disposable mechanics-test base |

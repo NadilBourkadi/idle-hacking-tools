@@ -10,7 +10,7 @@ This file holds *interpretation only* — the reasoning behind the current setup
 The main set is the original eight-slot baseline (see `ih.py loadout`). Its logic:
 
 - **Sustain anchors — Brutal Firewall of Perpetuity and Hearty Kernel of Decay.** Both are low item level but carry dense HP/Defense/Regeneration packages that no candidate or craft has yet replaced without losing net sustain. The 21 July Kernel A/B trial (see `equipment-tests.md`) empirically vetoed trading Defense/Accuracy/Attack Speed for more HP/listed Regen.
-- **Offensive core — Payload, Analyzer, Driver, Daemon** supply the accuracy/crit/speed/damage package; the Payload's Crit Damage implicit makes Crit Chance elsewhere unusually valuable. The Daemon slot holds the crafted **Targeted Daemon of the Storm** (22 July, first contract-crafted main-set item; A/B: −5% fight length, −6.5% damage taken, kept on marginal-positive evidence — Quarantine daemon is the locked revert path).
+- **Offensive core — Payload, Analyzer, Driver, Daemon** supply the accuracy/crit/speed/damage package. The Payload slot holds the crafted **Bastioned Payload of Perfect Strike** (23 July, second contract-crafted main-set item; A/B KEEP: death ceiling +2.3 with four consecutive 100–101 deaths, hit rate 76.9% vs 70.1% at higher evasion, at the cost of +14% rounds/fight — Enduring Payload of Armageddon is the locked revert path). The Daemon slot holds the crafted **Targeted Daemon of the Storm** (22 July, first contract-crafted main-set item; A/B: −5% fight length, −6.5% damage taken; its Quarantine revert path was decompiled 23 July — the keep is now permanent).
 - **Shell and Router** are the Defense/Barrier backbone.
 
 Caveat now quantified: the Firewall's ilvl-314 malus is ~-31% on percentage stats and worse on flat Regen (scaling law, `static-analysis-2026-07-22.md`). A replacement *will* eventually win; it must preserve the HP/Def/Regen *package*, not just raw numbers.
@@ -18,7 +18,7 @@ Caveat now quantified: the Firewall's ilvl-314 malus is ~-31% on percentage stat
 ## Bottleneck model
 
 1. **Primary: accumulated HP attrition across long streaks** — losses consistently start well below full HP.
-2. **Secondary: hit reliability / fight duration** against high-evasion (Mirrored) enemies.
+2. **Secondary (partially addressed 23 July): hit reliability / fight duration** against high-evasion enemies — the Bastioned Payload lifted deep-streak hit rate 70→77% and the death ceiling to ~101; the residual killer profile is enemy *accuracy* burst (e.g. Mirrored Backup Daemon, eff. acc 5,812) against a depleted HP pool.
 3. **Tertiary: incoming burst** in some final matchups.
 
 ## Active project status

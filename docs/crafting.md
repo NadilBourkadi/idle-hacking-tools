@@ -98,7 +98,7 @@ P(success from Tn to T(n-1)) = 10 × n percent, for n = 2..9
 - Resources are consumed on failure.
 - Normally 1 Stability is also consumed.
 - The Homelab **Snapshot Backup** upgrade can sometimes prevent Stability loss on a failed attempt.
-- The player's current Snapshot Backup level/chance is not captured, so planning uses the conservative no-backup budget.
+- The player's Snapshot Backups upgrade is level 0 (resolved 22 July 2026, `open-questions.md` §1), so the no-backup budget is currently exact, not conservative. Re-check if the upgrade is ever levelled (+5%/level, max 5).
 
 ### Useful cumulative budgets
 
