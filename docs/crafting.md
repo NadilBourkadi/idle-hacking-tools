@@ -283,3 +283,24 @@ First contract executed end-to-end. Lessons, all encoded in tooling where possib
 - **Corruption is outgoing DoT** worth ~1% of output per point in long fights (measured: 15.6% of output from 12 points, streak-96 death fight). Weight raised 0.08 → 0.6.
 - **Affix display names change with tier** (of Precision→of the Hawk at T3). Track crafted items by id / `ih.py history`, never by name.
 - **Whole-loadout function first:** a candidate that dumps the equipped item's densest line (AtkDmg+Corrupt here) starts deep in the hole regardless of its own gains — same lesson as the Kernel guardrail, now confirmed on an offensive slot.
+
+## 14. Contract-execution lessons — 23 July 2026 (Phoenix Shell craft + A/B)
+
+Third contract executed end-to-end; first to realize **above** projection (+22.6 vs +20.2). New rules, amending §10.1:
+
+- **Identify affixes by visible stat lines, never by display name alone.** The Shell carried two suffixes both displayed as "of Recovery"; the contract said "the regeneration line" but the player promoted the other one (the Def+Regen dual — favourable, by luck). Names collide *and* change with tier. Contracts must reference each affix as e.g. "the suffix showing only `Regen +5`" vs "the suffix showing `Def % + Regen`", and quote its current values.
+- **Define post-craft test metrics at field level, verified against the data dictionary, before equipping.** The original keep rule said "damage taken/fight ≤ +5%" — but `damage_taken` is gross intake (see data-dictionary), which *must* rise under a mitigation→recovery trade and silently over-credits any barrier-carrying baseline. The clause was amended pre-outcome at 4/10 deaths to net drain (gross − in-fight `prg` − barrier absorption). General form: **when a craft trades across stat categories, the test metric must be the net quantity the trade affects**, not a component the trade is guaranteed to move.
+- **Plan for equip-on-compile.** The contract scheduled a post-VLAN baseline before equipping; the player equipped within minutes of compiling. The passive combat-stream baseline (14 payload-era deaths already banked) is what made the test valid anyway. Baselines must come from the always-on ledger, with `segment_ms` boundaries pre-declared for known upcoming stat events — never from a promised future waiting period.
+- **Audit accounting identities at the first interim readout, not at verdict time.** The gross-vs-net problem was caught at 4/10 because the interim pass included a `damage_taken − regen − HP-drop` closure check. Make that check standard for any test whose keep rule references a damage or sustain field.
+
+### Realized-vs-projected ledger (all contract crafts)
+
+| Craft | Projected Δ | Realized Δ | Note |
+|---|---|---|---|
+| Vital Driver (22 Jul) | +3.9 | −2.0 | source of the ±5 verdict band |
+| Storm Daemon (22 Jul) | +8.0 | ~+9 | first surviving UPGRADE |
+| Targeted Payload (22 Jul) | +6.9 | +1.7 | Phase-1 cap-out; on-cap replan rule |
+| Bastioned Payload (23 Jul) | +30.2 (post-Augment) | ~+10 realized score, A/B KEEP | unlucky VU run (13 fails) |
+| Phoenix Shell (23 Jul) | +20.2 (post-Augment) | +22.6, A/B KEEP | lucky VU run (17 attempts / 12 promotions vs ~22 expected) |
+
+Spread vs projection is roll luck (±5–10); the ~5-point contract-conservatism discount on `potential` projections stands. Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).

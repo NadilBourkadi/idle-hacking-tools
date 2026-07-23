@@ -6,6 +6,8 @@
 
 | Item | Status | Action |
 |---|---|---|
+| Citadel Shell of the Phoenix | **Crafted + equipped 23 Jul; A/B KEEP** (death mean +7.0, ceiling ~110, net drain and onset improved) | Main set |
+| Overclocked Shell of the Monolith | Revert path for the above | Keep decompile-locked |
 | Bastioned Payload of Perfect Strike | **Crafted + equipped 23 Jul; A/B KEEP** (+2.3 death depth, 77% vs 70% hit) | Main set |
 | Enduring Payload of Armageddon | Revert path for the above | Keep decompile-locked |
 | Citadel Firewall of the Bastion | Coherent alternate; not main streak upgrade | Keep locked as alternate/test item |

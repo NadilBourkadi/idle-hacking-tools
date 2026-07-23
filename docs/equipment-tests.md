@@ -114,3 +114,19 @@ Abort. The Augment did not supply Regeneration, the item is now full, and furthe
 | Corruption share of output | — | 1–18% per fight |
 
 **Decision: KEEP.** Evidence quality: the strongest A/B to date — cross-capture tracker, all 9 deaths pre-contamination (VLAN Rules +1% Def completed after the last death). Durable learnings: hit rate is measurable at scale via the Detailed Logs checkbox; accuracy moves the death ceiling where raw tempo does not; the (acc, eva → hit%) dataset now spans two accuracy levels for hit-formula fitting (open questions §7/§8).
+
+## Test — Citadel Shell of the Phoenix A/B (23 July 2026)
+
+**Swap:** Overclocked Shell of the Monolith (Def +28.4%, Barrier +221, MaxHP +7.26%) → crafted Citadel Shell of the Phoenix (Eva +20.0%, Regen +46, Def +12.21%, MaxHP +8.06%). A deliberate mitigation→recovery trade targeting the primary attrition bottleneck.
+
+| Metric | Old Shell (payload era, n=14) | New Shell (n=10) |
+|---|---|---|
+| Death streak, mean | 97.3 | **104.3 (+7.0)** |
+| Death streaks, last four | 98, 97, 95, 92 (declining) | **108, 109, 110, 111** |
+| Attrition onset (first start-HP <90%) | streak 60–76 | **streak 78–90** |
+| Realized regen, streak ≥60 | 130.6 prg/round | **167–177 prg/round (+28–36%)** |
+| Gross damage in/fight, streak 60–85 | 4,749 | 5,154–5,353 (+8–13%) |
+| Net drain/fight, streak 60–85 (≈) | ~690 | **~155–450** |
+| Hit rate (control — Shell touches no Acc) | 77.9% | 77.6% |
+
+**Decision: KEEP.** Confounds: VLAN Rules +1% Def landed mid-test (5/10 deaths after; segmented, conclusion holds either way); player level 955→963; Malware Injector +15 levels pre-boundary. Methodology notes: (1) `damage_taken` is **gross** incoming (verified) and Σ`pbs` is probably per-round barrier absorption (working model; the full accounting identity does not close exactly — see data-dictionary) — never compare `damage_taken` across a mitigation↔recovery trade without netting out prg and absorption (keep-rule clause amended at 4/10, logged pre-outcome); (2) the tracker banked 1,051 post-equip fights with full round detail, zero manual bookkeeping; (3) one burst-shaped death (76% start-HP, Trojan Wall eff_acc 5,899) shows the thinner Def/Barrier flank exists but did not dominate.

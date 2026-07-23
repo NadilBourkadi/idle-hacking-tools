@@ -206,7 +206,7 @@ A forced-suffix Augment:
 
 ### 12. Rarity promotion on 6th affix
 
-Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Single observation — unknown whether rarity is simply an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield. Check on the next rare that gains a 6th affix.
+Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Second observation 23 July (10:00 capture): Citadel Shell of Recovery, rare with 5 affixes, flipped to **epic** on its Augment adding a 6th. The rare→epic-on-6th-affix pattern is now 2/2; still unknown whether rarity is purely an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield.
 
 ### 13. Hardware/homelab percentage stacking (added 23 July 2026)
 
