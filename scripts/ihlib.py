@@ -219,3 +219,240 @@ def item_header(item, slot=None, where=None):
         f"scale x{mult_scale(item.get('item_level') or 0):.3f}",
     ]
     return "  ".join(str(b) for b in bits if b)
+
+
+# ---- Craft-potential projection (empirical tier ladders) -------------------
+#
+# Inventory items are crafting BASES (docs/crafting.md §1): with 25-30
+# Stability they can Version-Upgrade key affixes several tiers and Compile.
+# Comparing current rolls against equipped items systematically understates
+# candidates — candidate decisions must use projected ceilings
+# (`ih.py potential`), never raw `compare`/`candidates` output alone.
+#
+# Tier ladders are EMPIRICAL: normalized per-tier value midpoints are read
+# from every affix instance in the capture (actual value = normalized value
+# x mult/flat_scale(ilvl); verified to reproduce across items within ~1%).
+# Tiers nobody owns are log-linearly interpolated between observed
+# neighbours and marked "~" — a measurement gap, not a mechanic claim.
+
+# Planning weights for scalar ranking ONLY — a strategy heuristic encoding
+# the current bottleneck model (late-streak attrition: sustain + tempo, see
+# docs/current-state.md), NOT a game formula. Retune when the bottleneck
+# changes. Keys are display labels (STAT_LABELS values).
+CRAFT_WEIGHTS_PCT = {   # value per +1 percentage point
+    "Def": 1.0, "Eva": 1.0, "Acc": 1.0, "AtkSpd": 0.9,
+    "AtkDmg": 0.7, "CritCh": 0.7, "MaxHP": 0.5, "CritDmg": 0.35,
+}
+CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
+    # Corrupt recalibrated 22 Jul: outgoing DoT ~15.6% of total output from 12
+    # points in the streak-96 death fight (sum(ecd) 990 vs direct 5368) — ~1%
+    # of output per point in long fights; 0.6 is deliberately conservative.
+    "Regen": 0.6, "Corrupt": 0.6, "ArmorPen": 0.05,
+    "Thorns": 0.05, "Barrier": 0.02,
+}
+
+# Verdict bands for ceiling-vs-equipped score deltas, calibrated against the
+# realized Vital Driver craft (projected +3.9, realized -2): treat small
+# positive deltas as noise/contract-shortfall, not upgrades.
+UPGRADE_BAND = 5.0   # delta > +5 -> genuine upgrade candidate
+INFERIOR_BAND = -5.0  # delta < -5 -> inferior; between -> sidegrade
+
+DEFAULT_TIER_STEP = 1.4  # mean observed adjacent-tier ratio; last-resort fallback
+
+
+def weighted_score(totals):
+    """Scalar bottleneck score of a {label: (pct, flat)} totals dict."""
+    score = 0.0
+    for label, (pct, flat) in totals.items():
+        score += pct * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
+        score += flat * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
+    return score
+
+
+def vu_expected_attempts(tier):
+    """Expected Version-Upgrade attempts Tn -> T(n-1); chance = tier x 10%."""
+    return 10.0 / tier
+
+
+def tier_ladders(capture):
+    """Empirical {(affix_id, resource, type): {tier: normalized mid value}}."""
+    raw = {}
+    for _, _, item in iter_items(capture):
+        for side in ("prefixes", "suffixes"):
+            for affix in item.get(side) or []:
+                ilvl = affix.get("item_level") or item.get("item_level") or 0
+                for e in affix.get("effects") or []:
+                    if not e.get("value_max"):
+                        continue
+                    scale = (flat_scale(ilvl) if e.get("type") == "flat_add"
+                             else mult_scale(ilvl))
+                    mid = (e["value_min"] + e["value_max"]) / 2 / scale
+                    key = (affix.get("affix_id"), e.get("resource"), e.get("type"))
+                    raw.setdefault(key, {}).setdefault(affix["tier"], []).append(mid)
+    return {key: {t: sum(v) / len(v) for t, v in tiers.items()}
+            for key, tiers in raw.items()}
+
+
+def ladder_value(ladder, tier):
+    """(normalized mid value at tier, measured?) — log-linear interp/extrap."""
+    import math
+    if tier in ladder:
+        return ladder[tier], True
+    ts = sorted(ladder)
+    if len(ts) == 1:
+        return ladder[ts[0]] * DEFAULT_TIER_STEP ** (ts[0] - tier), False
+    if tier < ts[0]:
+        a, b = ts[0], ts[1]
+    elif tier > ts[-1]:
+        a, b = ts[-2], ts[-1]
+    else:
+        a = max(t for t in ts if t < tier)
+        b = min(t for t in ts if t > tier)
+    la, lb = math.log(ladder[a]), math.log(ladder[b])
+    slope = (lb - la) / (b - a)
+    return math.exp(la + slope * (tier - a)), False
+
+
+def augment_state(item):
+    """(slot_open?, forced_side) per docs/crafting.md §2."""
+    n_pre = len(item.get("prefixes") or [])
+    n_suf = len(item.get("suffixes") or [])
+    if n_pre + n_suf >= item.get("max_normal_affixes", 6):
+        return False, None
+    if n_pre >= item.get("max_prefixes", 3):
+        return True, "suffix"
+    if n_suf >= item.get("max_suffixes", 3):
+        return True, "prefix"
+    return True, "either"
+
+
+def plan_craft(item, ladders, floor=8, tier_cap=3):
+    """Greedy expected-Stability Version-Upgrade plan + Compile projection.
+
+    Model assumptions (conservative, documented):
+      - upgraded affixes land at the target tier midpoint (roll-reset
+        semantics unknown, docs/crafting.md §12);
+      - unchanged affixes keep their current roll;
+      - Compile multiplies explicit affixes only (implicit treatment unknown);
+      - one Stability is reserved for Augment when a slot is open, but the
+        unknown augmented affix contributes NO projected value (pure upside);
+      - targets capped at T{tier_cap}; T2/T1 chase deliberately excluded;
+      - `floor` Stability is preserved for Compile (+0.5%/point).
+    Returns dict with steps, expected_spend, augment info, compile_pct,
+    projected totals {label: (pct, flat)} and weighted scores.
+    """
+    stability = item.get("stability") or 0
+    ilvl = item.get("item_level") or 0
+    open_slot, forced_side = augment_state(item)
+    reserve = 1 if (open_slot and stability > floor) else 0
+    budget = stability - floor - reserve
+
+    # mutable affix state: [side, affix, current_tier, upgraded?]
+    state = []
+    for side in ("prefixes", "suffixes"):
+        for affix in item.get(side) or []:
+            state.append({"affix": affix, "tier": affix.get("tier"), "up": False})
+
+    def step_gain(entry):
+        """Weighted gain of upgrading this affix one tier from its planned tier."""
+        tier = entry["tier"]
+        if tier is None or tier <= tier_cap:
+            return None
+        gain, estimated = 0.0, False
+        for e in entry["affix"].get("effects") or []:
+            key = (entry["affix"].get("affix_id"), e.get("resource"), e.get("type"))
+            ladder = ladders.get(key)
+            if not ladder:
+                continue
+            cur, m1 = ladder_value(ladder, tier)
+            nxt, m2 = ladder_value(ladder, tier - 1)
+            estimated = estimated or not (m1 and m2)
+            label = stat_label(e.get("resource") or "?")
+            if e.get("type") == "flat_add":
+                gain += (nxt - cur) * flat_scale(ilvl) * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
+            else:
+                gain += (nxt - cur) * mult_scale(ilvl) * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
+        return gain, estimated
+
+    steps, spend = [], 0.0
+    if stability > 0:
+        while True:
+            best, best_ratio = None, 0.0
+            for entry in state:
+                res = step_gain(entry)
+                if not res:
+                    continue
+                gain, estimated = res
+                cost = vu_expected_attempts(entry["tier"])
+                if cost > budget - spend or gain <= 0:
+                    continue
+                if gain / cost > best_ratio:
+                    best, best_ratio = (entry, gain, estimated, cost), gain / cost
+            if best is None:
+                break
+            entry, gain, estimated, cost = best
+            spend += cost
+            entry["tier"] -= 1
+            entry["up"] = True
+            steps.append((entry["affix"].get("name"), entry["affix"].get("tier"),
+                          entry["tier"], cost, estimated))
+
+    compile_left = max(0.0, stability - reserve - spend)
+    # Compiled (stability-0) items already carry their bonus baked into the
+    # effect values (confirmed 22 Jul: Compile multiplies explicit values in
+    # place, implicit untouched, ranges unchanged) — never re-apply it.
+    compile_pct = 0.005 * compile_left if stability > 0 else 0.0
+
+    # projected totals
+    totals = {}
+    def add(label, etype, value):
+        pct, flat = totals.get(label, (0.0, 0.0))
+        if etype == "flat_add":
+            flat += value
+        else:
+            pct += value
+        totals[label] = (pct, flat)
+
+    implicit = item.get("implicit_info")
+    if implicit:
+        add(stat_label(implicit.get("stat_type") or "?"),
+            implicit.get("effect_type"), implicit.get("value", 0))
+    any_estimated = False
+    for entry in state:
+        affix = entry["affix"]
+        for e in affix.get("effects") or []:
+            label = stat_label(e.get("resource") or "?")
+            if entry["up"]:
+                key = (affix.get("affix_id"), e.get("resource"), e.get("type"))
+                ladder = ladders.get(key)
+                if ladder:
+                    norm, measured = ladder_value(ladder, entry["tier"])
+                    any_estimated = any_estimated or not measured
+                    scale = (flat_scale(ilvl) if e.get("type") == "flat_add"
+                             else mult_scale(ilvl))
+                    value = norm * scale
+                else:
+                    value = e.get("value", 0)
+            else:
+                value = e.get("value", 0)
+            add(label, e.get("type"), value * (1 + compile_pct))
+
+    # merge upgraded steps per affix for compact display
+    merged = {}
+    for name, t_from, t_to, cost, estimated in steps:
+        cur = merged.setdefault(name, [t_from, t_to, 0.0, False])
+        cur[1] = min(cur[1], t_to)
+        cur[2] += cost
+        cur[3] = cur[3] or estimated
+    plan_steps = [(name, f, t, c, est) for name, (f, t, c, est) in merged.items()]
+
+    return {
+        "steps": plan_steps,
+        "expected_spend": spend,
+        "augment_open": open_slot,
+        "augment_side": forced_side,
+        "compile_pct": compile_pct,
+        "totals": totals,
+        "score": weighted_score(totals),
+        "estimated": any_estimated,
+    }

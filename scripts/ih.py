@@ -12,6 +12,9 @@ Commands:
   diff [OLD] [NEW]         item changes between captures (default: last two)
   stats                    player resources, level, homelab presence
   history QUERY            an item's stability/affixes across all captures
+  potential [--slot S]     rank candidates by PROJECTED post-craft ceiling
+                           (empirical tier ladders; use for candidate decisions
+                           instead of raw compare/candidates output)
 
 Output is deliberately compact; prefer this over ad-hoc capture parsing.
 """
@@ -208,6 +211,65 @@ def cmd_history(args):
             print(f"{path.name}: (absent)")
 
 
+def cmd_potential(args):
+    cap, path = ihlib.load_capture(args.file)
+    ladders = ihlib.tier_ladders(cap)
+    print(f"# {path.name}")
+    print("# Projected post-craft ceilings (Version Upgrade to T"
+          f"{args.cap} cap, Compile floor {args.floor}); score = bottleneck "
+          "planning heuristic (ihlib.CRAFT_WEIGHTS_*), not a game formula.")
+    slot_filter = args.slot.lower() if args.slot else None
+    slots = [s for s in ihlib.SLOT_DISPLAY.values()
+             if slot_filter is None or s.lower() == slot_filter]
+    items = list(ihlib.iter_items(cap))
+    for slot in slots:
+        equipped = next((i for w, s, i in items if w == "equipped" and s == slot), None)
+        print(f"\n== {slot} ==")
+        if equipped:
+            base = ihlib.weighted_score(ihlib.stat_totals(equipped))
+            print(f"  equipped  {equipped.get('name'):<44} score {base:6.1f}  "
+                  f"{ihlib.fmt_totals(ihlib.stat_totals(equipped))}")
+        else:
+            base = 0.0
+            print("  (slot empty)")
+        rows = []
+        for where, s, item in items:
+            if where != "inventory" or s != slot:
+                continue
+            plan = ihlib.plan_craft(item, ladders, floor=args.floor, tier_cap=args.cap)
+            rows.append((plan["score"], item, plan))
+        rows.sort(key=lambda r: -r[0])
+        eq_totals = ihlib.stat_totals(equipped) if equipped else {}
+        for score, item, plan in rows[: args.top]:
+            delta = score - base
+            verdict = ("UPGRADE" if delta > ihlib.UPGRADE_BAND
+                       else "inferior" if delta < ihlib.INFERIOR_BAND
+                       else "sidegrade")
+            marker = "~" if plan["estimated"] else " "
+            steps = ", ".join(
+                f"{name} T{f}->T{t}{'~' if est else ''}"
+                for name, f, t, c, est in plan["steps"])
+            aug = (f"Augment[{plan['augment_side']}]" if plan["augment_open"] else "full")
+            print(f" {marker}ceiling   {item.get('name'):<44} score {score:6.1f} "
+                  f"({delta:+6.1f} {verdict:<9})  ilvl {item.get('item_level'):>4} "
+                  f"stab {item.get('stability'):>2}  "
+                  f"spend ~{plan['expected_spend']:.1f}  {aug}  "
+                  f"Compile +{plan['compile_pct'] * 100:.1f}%")
+            if steps:
+                print(f"            plan: {steps}")
+            print(f"            proj: {ihlib.fmt_totals(plan['totals'])}")
+            econ = []
+            for label in sorted(set(plan["totals"]) | set(eq_totals)):
+                if ihlib.is_combat_stat(label):
+                    continue
+                dp = (plan["totals"].get(label, (0, 0))[0]
+                      - eq_totals.get(label, (0, 0))[0])
+                if abs(dp) > 1e-4:
+                    econ.append(f"{label} {dp * 100:+.1f}%")
+            if econ:
+                print(f"            econ Δ vs equipped: {'  '.join(econ)}")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="ih.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -246,6 +308,14 @@ def main():
     p = sub.add_parser("history")
     p.add_argument("query")
     p.set_defaults(fn=cmd_history)
+
+    p = sub.add_parser("potential")
+    p.add_argument("--slot")
+    p.add_argument("--file")
+    p.add_argument("--top", type=int, default=3)
+    p.add_argument("--floor", type=int, default=8)
+    p.add_argument("--cap", type=int, default=3)
+    p.set_defaults(fn=cmd_potential)
 
     args = parser.parse_args()
     args.fn(args)
