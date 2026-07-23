@@ -16,6 +16,8 @@
 
 Exact semantics are not fully decoded. Preserve raw logs.
 
+**Round detail records only while the "Detailed Logs" checkbox in the Hacking panel is enabled** (corrected 23 July 2026 — an earlier working model blamed the combat-log modal; the checkbox is the real switch and it keeps recording even while other screens are visible, verified by capture). Fight-level fields — `rounds`, `damage_dealt/taken`, `starting_hp`, `enemy_stats`, streak — are always present regardless. For any hit-rate or corruption analysis, ensure the checkbox is on; the userscript readiness line shows `rounds N/M LIVE` when detail is flowing and warns when it stops. The in-log order is newest-first, and **fight `id`s are per-session** (the counter resets on page reload), so cross-capture analysis must not treat ids as global — `ihlib.experiment_status` dedupes by content key. `recentLossStreaks` is the reliable record of death depth.
+
 ## Working hit-rate calculation
 
 Current model:

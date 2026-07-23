@@ -22,10 +22,15 @@ Stdlib only. Run directly or via the systemd user unit in scripts/.
 
 import json
 import re
+import subprocess
 import sys
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ihlib  # noqa: E402  (fight_key + STREAM_DIR shared with analysis)
 
 HOST = "127.0.0.1"
 PORT = 8123
@@ -39,6 +44,111 @@ CAPTURES = ROOT / "data" / "captures"
 SCHEMA_ROUTES = {
     "idle-hacking-state-capture-v1": CAPTURES,
 }
+
+# After saving a state capture, run the standing A/B analysis and return its
+# summary in the POST response — the userscript panel displays it, closing
+# the feedback loop at capture time. Read-only with respect to the game.
+ANALYSIS_CMD = [sys.executable, str(ROOT / "scripts" / "ih.py"), "ab", "--brief"]
+
+
+def analysis_summary():
+    try:
+        proc = subprocess.run(
+            ANALYSIS_CMD, capture_output=True, text=True, timeout=20, cwd=ROOT
+        )
+    except Exception as error:  # analysis must never break capture saving
+        return f"(analysis unavailable: {error})"
+    output = (proc.stdout or "").strip()
+    if proc.returncode != 0 or not output:
+        return "(analysis unavailable: ih.py ab failed — see hub logs)"
+    return output
+
+
+# ---- Combat stream ledger --------------------------------------------------
+# Auto-stream payloads (schema below) are NOT stored raw: fights and deaths
+# are extracted, deduped (fights by ihlib.fight_key — ids are per-session —
+# and deaths by ended_at_ms), and appended to a daily JSONL ledger that
+# ihlib.experiment_status reads alongside full captures.
+
+STREAM_SCHEMA = "idle-hacking-combat-stream-v1"
+_stream_lock = threading.Lock()
+_seen_fights = set()
+_seen_deaths = set()
+_last_stats = None
+_seen_loaded_for = None
+
+
+def _ledger_path(now):
+    return ihlib.STREAM_DIR / f"{now:%Y-%m-%d}.jsonl"
+
+
+def _load_seen(now):
+    global _seen_loaded_for, _last_stats
+    day = f"{now:%Y-%m-%d}"
+    if _seen_loaded_for == day:
+        return
+    _seen_fights.clear()
+    _seen_deaths.clear()
+    _last_stats = None
+    path = _ledger_path(now)
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if record.get("kind") == "fight":
+                _seen_fights.add(tuple(record.get("key") or ()))
+            elif record.get("kind") == "death":
+                _seen_deaths.add((record.get("death") or {}).get("ended_at_ms"))
+            elif record.get("kind") == "stats":
+                _last_stats = (record.get("player") or {}).get("combat_stats")
+    _seen_loaded_for = day
+
+
+def absorb_stream(payload):
+    """Append new fights/deaths from a stream payload; return summary text."""
+    state = payload.get("state") or {}
+    now = datetime.now(timezone.utc)
+    seen_ms = int(now.timestamp() * 1000)
+    with _stream_lock:
+        _load_seen(now)
+        new_records = []
+        detailed = 0
+        for f in state.get("combatLog") or []:
+            key = ihlib.fight_key(f)
+            if key in _seen_fights:
+                continue
+            _seen_fights.add(key)
+            if f.get("combat_log"):
+                detailed += 1
+            new_records.append({"kind": "fight", "seen_ms": seen_ms,
+                                "key": list(key), "fight": f})
+        for entry in state.get("recentLossStreaks") or []:
+            ms = entry.get("ended_at_ms")
+            if not ms or ms in _seen_deaths:
+                continue
+            _seen_deaths.add(ms)
+            new_records.append({"kind": "death", "seen_ms": seen_ms,
+                                "death": entry})
+        # Combat-stat change records timestamp gear/homelab/hardware effects
+        # landing — automatic segmentation boundaries for A/B analysis.
+        global _last_stats
+        player = state.get("playerLite") or {}
+        stats = player.get("combat_stats")
+        if stats and stats != _last_stats:
+            new_records.append({"kind": "stats", "seen_ms": seen_ms,
+                                "player": player,
+                                "changed_from": _last_stats})
+            _last_stats = stats
+        if new_records:
+            ihlib.STREAM_DIR.mkdir(parents=True, exist_ok=True)
+            with _ledger_path(now).open("a") as ledger:
+                for record in new_records:
+                    ledger.write(json.dumps(record) + "\n")
+    fights = sum(1 for r in new_records if r["kind"] == "fight")
+    deaths = sum(1 for r in new_records if r["kind"] == "death")
+    return (f"stream: +{fights} fights ({detailed} detailed), "
+            f"+{deaths} deaths banked")
 
 
 def sanitise_name(raw):
@@ -104,13 +214,22 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         schema = payload.get("schema") if isinstance(payload, dict) else None
+        if schema == STREAM_SCHEMA:
+            try:
+                self._send(200, absorb_stream(payload) + "\n")
+            except Exception as error:
+                self._send(500, f"stream absorb failed: {error}\n")
+            return
         directory = SCHEMA_ROUTES.get(schema, INCOMING)
         directory.mkdir(parents=True, exist_ok=True)
         path = unique_path(
             directory, sanitise_name(self.headers.get("X-Export-Name"))
         )
         path.write_bytes(body)
-        self._send(200, f"Saved {path.relative_to(ROOT)}\n")
+        response = f"Saved {path.relative_to(ROOT)}\n"
+        if directory == CAPTURES:
+            response += analysis_summary() + "\n"
+        self._send(200, response)
 
     def log_message(self, format, *args):
         sys.stdout.write(

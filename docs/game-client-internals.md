@@ -39,6 +39,7 @@ The engine uses generic RPG slot keys; the UI renames them (mapping from `SLOT_N
 | `hackingZones` | `state.js` | Zone catalog |
 | `multiplierData` | `state.js` | Global multiplier summary |
 | `homelabInfo` | `homelab.js` | Homelab upgrade levels (Snapshot Backup, Optimization Pass, ...) — lazy, open the Homelab tab to populate |
+| `hardwareInfo` | `state.js` (assigned by the `HARDWARE_INFO` WS handler in `ui.js`) | Hardware Shop catalog/owned state — lazy, hydrated when the Hardware Shop tab is opened; rendered by `renderHardwareList()` (renderer not among the vendored files) |
 
 ## Item object schema (fields observed in client code)
 

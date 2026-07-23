@@ -21,14 +21,14 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 - `docs/data-dictionary.md` — combat-log field meanings and analysis conventions.
 - `docs/capture-tool.md` — userscript reference and safety boundary.
 - `docs/game-client-internals.md` — how the game client stores state (bindings, item schema, WS protocol); basis for full-state capture. Game JS reference copies: `vendor/game-js/` (git-ignored).
-- `data/captures/` — full-state captures (authoritative, auto-routed by the hub); `data/incoming/` — non-capture staging; legacy exports in `data/loadouts/` and `data/combat/` (see `data/README.md`).
+- `data/captures/` — full-state captures (authoritative, auto-routed by the hub); `data/combat-stream/` — daily JSONL ledger of deduped fights/deaths/stat-changes from the userscript auto-stream (hub-extracted, raw stream not stored); `data/incoming/` — non-capture staging; legacy exports in `data/loadouts/` and `data/combat/` (see `data/README.md`).
 - `scripts/ih.py` + `scripts/ihlib.py` — capture query CLI and analysis library (slot map, scaling law, cost model as code).
 - `tools/item-loadout-capture.user.js` — the read-only Tampermonkey capture script (version in the `@version` header; bump on every change).
 - `scripts/capture-hub.py` — localhost:8123 hub (systemd user service `idle-hacking-capture-hub`): serves the userscript to Tampermonkey and routes incoming exports by schema.
 
 ## Working with the data — query-first
 
-**Use `python3 scripts/ih.py <cmd>` for all capture queries; never parse capture JSON ad hoc.** Full-state captures land in `data/captures/` automatically (hub routes by schema); latest = lexicographically last. Commands: `captures`, `loadout`, `item <query>`, `candidates [--slot s]`, `compare <a> <b>`, `diff [old new]`, `stats`, `history <query>`, `potential [--slot s]`. For bespoke analysis, import `scripts/ihlib.py` — it encodes the slot mapping, scaling law, cost model and empirical tier ladders so they are never re-derived.
+**Use `python3 scripts/ih.py <cmd>` for all capture queries; never parse capture JSON ad hoc.** Full-state captures land in `data/captures/` automatically (hub routes by schema); latest = lexicographically last. Commands: `captures`, `loadout`, `item <query>`, `candidates [--slot s]`, `compare <a> <b>`, `diff [old new]`, `stats`, `history <query>`, `potential [--slot s]`, `homelab`, `hardware`. For bespoke analysis, import `scripts/ihlib.py` — it encodes the slot mapping, scaling law, cost model and empirical tier ladders so they are never re-derived.
 
 **Candidate judgements use post-craft ceilings, never current rolls.** Equipped items are at 0 Stability (final); inventory items carry 25–30 Stability of Version-Upgrade headroom, so `compare`/`candidates` output systematically understates them. `ih.py potential` projects realistic ceilings (empirical tier ladders, T3 cap, Compile floor); its score is a planning heuristic (`ihlib.CRAFT_WEIGHTS_*`), so confirm any craft with the `docs/crafting.md` §10 contract before spending.
 
@@ -57,7 +57,7 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Userscript safety (non-negotiable)
 
-The capture tool must remain passive/read-only: it reads game state bindings from page scope (values only — never calling game functions, not even getters), and delivers captures via download or user-click-initiated POSTs to the local capture hub. Never simulate input, automate equip/enhance/decompile/purchase/combat selection, or make any API/WebSocket/server request against the game or a remote host. Bump the script's `@version` on every change (Tampermonkey won't update otherwise).
+The capture tool must remain passive/read-only: it reads game state bindings from page scope (values only — never calling game functions, not even getters), and delivers data only to a download or the local capture hub — via user-click-initiated full captures or the opt-in auto-stream timer (combat-only payload; boundary amended 23 Jul 2026 at the player's request, still zero game interaction). Never simulate input, automate equip/enhance/decompile/purchase/combat selection, or make any API/WebSocket/server request against the game or a remote host. Bump the script's `@version` on every change (Tampermonkey won't update otherwise).
 
 ## Maintenance conventions
 
