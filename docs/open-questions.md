@@ -215,3 +215,7 @@ Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6
 ### 14. Version Upgrade tier-roll behaviour — strong evidence 23 July 2026 (was: unresolved item 2)
 
 During the Bastioned Payload craft (08:26 → 08:28 captures), of Infection went roll 100% → of Decay roll 50%, and of Targeting roll 82% → of Unerring roll 60% across multi-step promotions. Strong evidence that a successful Version Upgrade **rerolls the value within the new tier** rather than preserving relative roll position. Not yet formula-level (no per-step captures); one single-step before/after capture would finish it.
+
+### 14. Hackcoin deduction timing (added 23 July 2026)
+
+Homelab job hackcoin costs do not visibly deduct at queue time (11 hc held at 09:44 with Worker Orchestrator +3 and QoS +1 queued; still 11 at 10:33 after queueing Snapshot Backups +1; 9 by 11:52 after QoS completed). Working model: deduction at job completion, not queueing. Matters for the advisory's ≥6 hc install-gate reserve — until confirmed, treat queued-but-incomplete hc jobs as unpaid liabilities when computing the reserve.
