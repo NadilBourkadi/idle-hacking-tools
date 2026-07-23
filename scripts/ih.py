@@ -15,6 +15,11 @@ Commands:
   potential [--slot S]     rank candidates by PROJECTED post-craft ceiling
                            (empirical tier ladders; use for candidate decisions
                            instead of raw compare/candidates output)
+  homelab                  level/progress, active jobs, purchasable upgrades
+  hardware                 shop tracks ranked by value per chip (heuristic)
+  ab [--brief]             active A/B experiment status across ALL captures
+                           (deduped; each capture permanently banks its
+                           combat windows — capture at least once per climb)
 
 Output is deliberately compact; prefer this over ad-hoc capture parsing.
 """
@@ -33,7 +38,7 @@ def cmd_captures(args):
         eq = state.get("equipmentData") or {}
         lazy = [
             k for k in ("statsBreakdown", "extendedStats", "recentLossStreaks",
-                        "combatLog", "homelabInfo")
+                        "combatLog", "homelabInfo", "hardwareInfo")
             if state.get(k)
         ]
         print(f"{path.name}  v{cap.get('sourceVersion')}  "
@@ -270,6 +275,185 @@ def cmd_potential(args):
                 print(f"            econ Δ vs equipped: {'  '.join(econ)}")
 
 
+def cmd_homelab(args):
+    cap, path = ihlib.load_capture(args.file)
+    homelab, definitions, info = ihlib.homelab_state(cap)
+    if not homelab:
+        sys.exit("no homelabInfo in capture (open the Homelab tab and recapture)")
+    print(f"# {path.name}")
+    level = homelab.get("level", 0)
+    points = homelab.get("progress_points", 0)
+    line = f"  level {level} — {points:,} pts"
+    for target in (level + 1, level + 2):
+        need = ihlib.homelab_level_threshold(definitions, target)
+        if need:
+            line += f"; level {target} at {need:,} ({max(0, need - points):,} to go)"
+    print(line)
+    print(f"  slots {info.get('active_build_slots')}/{info.get('max_build_slots')}"
+          f"  hackcoin {info.get('hackcoin')}  credits {info.get('credits'):,.0f}")
+
+    names = {u["def"]["type"]: u["def"].get("name") or u["def"]["type"]
+             for u in ihlib.iter_homelab_upgrades(homelab, definitions)}
+    jobs = homelab.get("active_jobs") or []
+    in_flight_points = 0
+    if jobs:
+        print("\n  active jobs:")
+        tick_s = info.get("tick_seconds") or 5
+        for job in jobs:
+            done = job.get("progress_ticks") or 0
+            total = job.get("duration_ticks") or 1
+            eta_min = (total - done) * tick_s / 60
+            pts = job.get("progress_points") or 0
+            in_flight_points += pts
+            print(f"    {names.get(job.get('target'), job.get('target')):28s} "
+                  f"-> L{job.get('target_level')}  {done / total * 100:3.0f}%  "
+                  f"~{eta_min:.0f}min  +{pts}pts  "
+                  f"[{ihlib.fmt_cost(job.get('cost_snapshot'))}]")
+        print(f"    (in-flight progress points: +{in_flight_points})")
+
+    queued_targets = {job.get("target") for job in jobs}
+    installs = definitions.get("installs") or []
+    install_names = {d.get("type"): d.get("name")
+                     for d in (installs if isinstance(installs, list)
+                               else installs.values())}
+    tick_s = info.get("tick_seconds") or 5
+    print("\n  purchasable now (gate <= level, install present, below max),")
+    print("  by progress points per slot-hour (slot time, not cost, is the")
+    print("  binding constraint on progress while credits are plentiful):")
+    rows = []
+    for u in ihlib.iter_homelab_upgrades(homelab, definitions):
+        gate = u["def"].get("unlock_level", 0)
+        if gate > level or not u["install_present"] or not u["next"]:
+            continue
+        hours = (u["next"].get("duration_ticks") or 0) * tick_s / 3600
+        pts = u["next"].get("progress_points", 0)
+        rows.append((pts / hours if hours else 0, hours, u))
+    for pts_hr, hours, u in sorted(rows, key=lambda r: -r[0]):
+        d, nxt = u["def"], u["next"]
+        section = install_names.get(u["install"], u["install"])
+        queued = "  [QUEUED]" if d["type"] in queued_targets else ""
+        est = "~" if nxt.get("estimated") else ""
+        maxed = f"/{u['max_level']}" if u["max_level"] else ""
+        print(f"    {d.get('name'):26s} L{u['level']}{maxed:<5} "
+              f"+{nxt.get('progress_points', 0):>3}pts "
+              f"{est}{hours:4.1f}h  {pts_hr:5.0f}pts/h  "
+              f"{est}{ihlib.fmt_cost(nxt.get('cost'))}{queued}")
+        print(f"        [{section}]  {(d.get('description') or '')[:80]}")
+    upcoming = sorted({u["def"].get("unlock_level", 0)
+                       for u in ihlib.iter_homelab_upgrades(homelab, definitions)
+                       if u["def"].get("unlock_level", 0) > level})[:2]
+    for gate in upcoming:
+        gated = [u["def"].get("name") for u in ihlib.iter_homelab_upgrades(homelab, definitions)
+                 if u["def"].get("unlock_level", 0) == gate]
+        print(f"\n  unlocks at level {gate}: {', '.join(gated)}")
+    installs = definitions.get("installs") or []
+    pending = [d for d in (installs if isinstance(installs, list) else installs.values())
+               if not (homelab.get("installed") or {}).get(d.get("type"))]
+    if pending:
+        print("\n  installs not yet built:")
+        for d in sorted(pending, key=lambda d: d.get("unlock_level", 0)):
+            gate = d.get("unlock_level", 0)
+            state = "available NOW" if gate <= level else f"gated: homelab {gate}"
+            print(f"    {d.get('name'):28s} {ihlib.fmt_cost(d.get('cost')):<24} ({state})")
+
+
+def cmd_hardware(args):
+    cap, path = ihlib.load_capture(args.file)
+    hw = ihlib.hardware_state(cap)
+    if not hw:
+        sys.exit("no hardwareInfo in capture (open the Hardware Shop tab and recapture)")
+    print(f"# {path.name}")
+    combat_stats = (cap["state"].get("currentPlayer") or {}).get("combat_stats") or {}
+    print(f"  chips {hw.get('chips'):,.0f}  hackcoin {hw.get('hackcoin')}  "
+          f"levels held {hw.get('hardware_purchased')}")
+    if hw.get("can_reset"):
+        refund = next((o.get("refund") for o in hw.get("reset_section_options") or []
+                       if o.get("section") == "all"), None)
+        print(f"  RESET AVAILABLE ({hw.get('reset_preview_mode')}, "
+              f"{hw.get('reset_cooldown_mode')}): all-hardware refund "
+              f"{ihlib.fmt_cost(refund)}")
+    print("\n  combat tracks by value per 1K chips (heuristic: CRAFT_WEIGHTS on the")
+    print("  current build; assumes hardware % pools with gear % — unverified):")
+    combat_rows, economy_rows = [], []
+    for d in hw.get("definitions") or []:
+        value = ihlib.hardware_track_value(d, combat_stats)
+        cost = d.get("next_cost") or {}
+        if value:
+            per_1k = value / max(cost.get("chips", 0), 1) * 1000
+            combat_rows.append((per_1k, value, d))
+        else:
+            economy_rows.append(d)
+    for per_1k, value, d in sorted(combat_rows, key=lambda r: -r[0]):
+        cost = d.get("next_cost") or {}
+        afford = "" if d.get("can_afford") else "  [CAN'T AFFORD]"
+        print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
+              f"value/lvl {value:5.2f}  per-1K-chips {per_1k:6.2f}  "
+              f"next {ihlib.fmt_cost(cost)}{afford}")
+    print("\n  economy/farming tracks (not scored):")
+    for d in sorted(economy_rows, key=lambda d: d.get("name") or ""):
+        print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
+              f"next {ihlib.fmt_cost(d.get('next_cost'))}  "
+              f"{(d.get('description') or '')[:60]}")
+
+
+def cmd_ab(args):
+    status = ihlib.experiment_status()
+    if status is None:
+        last = getattr(ihlib, "PAYLOAD_AB_2026_07_23", {})
+        print("no active experiment"
+              + (f" (last: {last.get('name')} — {last.get('concluded')})"
+                 if last else ""))
+        return
+    exp = status["experiment"]
+    pre = status["pre_recent_streaks"] or status["pre_death_streaks"]
+    pre_all = status["pre_death_streaks"]
+    post = status["post_death_streaks"]
+    ph, pm = status["post_hits"]
+    bh, bm = exp["baseline_hits"]
+    pre_mean = sum(pre) / len(pre) if pre else 0
+    post_mean = sum(post) / len(post) if post else 0
+    base_hit = bh / (bh + bm) * 100
+    post_hit = ph / (ph + pm) * 100 if ph + pm else None
+    n, target = len(post), exp["target_deaths"]
+    if args.brief:
+        depth = (f"deaths {n}/{target}: mean {post_mean:.1f} vs {pre_mean:.1f} "
+                 f"({post_mean - pre_mean:+.1f})" if post else
+                 f"deaths 0/{target}")
+        hit = (f"hit {post_hit:.1f}% (n={ph + pm}) vs baseline {base_hit:.1f}%"
+               if post_hit is not None else
+               "hit-rate: NO round data — enable Detailed Logs (Hacking panel)!")
+        detail = (f"{status['detailed_fight_count']}/{status['post_fight_count']}"
+                  " fights have round detail")
+        print(f"A/B {exp['item']}")
+        print(depth + " | " + hit)
+        print(detail + (f" | {status['deaths_after_segment']} deaths post-VLAN"
+                        if status["deaths_after_segment"] else ""))
+        if n >= target:
+            print("TARGET REACHED — run the keep/revert decision")
+        return
+    print(f"# A/B: {exp['name']} — {exp['item']} [{exp['slot']}]")
+    print(f"  keep rule: {exp['keep_rule']}")
+    print(f"  pre-equip deaths, same-loadout window ({len(pre)}): {pre}  "
+          f"mean {pre_mean:.1f}")
+    if len(pre_all) > len(pre):
+        all_mean = sum(pre_all) / len(pre_all)
+        print(f"  (wider context: {len(pre_all)} deaths across older loadouts, "
+              f"mean {all_mean:.1f})")
+    print(f"  post-equip deaths ({n}/{target}): {post}  mean {post_mean:.1f}"
+          f"  delta {post_mean - pre_mean:+.1f}")
+    if status["deaths_after_segment"]:
+        print(f"  ({status['deaths_after_segment']} of them after the VLAN "
+              f"+1% Def segment boundary — analyse separately)")
+    if post_hit is not None:
+        print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) vs old-Payload "
+              f"deep-streak baseline {base_hit:.1f}% ({bh}h/{bm}m)")
+    else:
+        print("  hit rate: no post-equip round data — enable Detailed Logs "
+              "in the Hacking panel")
+    print(f"  fight coverage: {status['post_fight_count']} post-equip fights "
+          f"banked, {status['detailed_fight_count']} with round detail")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="ih.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -308,6 +492,18 @@ def main():
     p = sub.add_parser("history")
     p.add_argument("query")
     p.set_defaults(fn=cmd_history)
+
+    p = sub.add_parser("homelab")
+    p.add_argument("--file")
+    p.set_defaults(fn=cmd_homelab)
+
+    p = sub.add_parser("hardware")
+    p.add_argument("--file")
+    p.set_defaults(fn=cmd_hardware)
+
+    p = sub.add_parser("ab")
+    p.add_argument("--brief", action="store_true")
+    p.set_defaults(fn=cmd_ab)
 
     p = sub.add_parser("potential")
     p.add_argument("--slot")

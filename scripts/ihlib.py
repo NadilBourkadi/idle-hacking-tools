@@ -6,6 +6,7 @@ Used by ih.py; import directly for bespoke analysis.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -455,4 +456,289 @@ def plan_craft(item, ladders, floor=8, tier_cap=3):
         "totals": totals,
         "score": weighted_score(totals),
         "estimated": any_estimated,
+    }
+
+
+# ---- Homelab and hardware (lazy bindings; schema notes in
+# docs/game-client-internals.md). These read capture values only; costs and
+# gates always come from the capture, never re-derived. -----------------------
+
+RESOURCE_SHORT = {
+    "credits": "cr", "chips": "chips", "hackcoin": "hc",
+    "snippets": "snip", "cycles": "cyc", "hashes": "hash", "packets": "pkt",
+}
+
+
+def fmt_cost(cost):
+    """Compact '500M cr + 1M pkt + 1 hc' rendering of a cost dict."""
+    def compact(n):
+        for div, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
+            if abs(n) >= div:
+                value = n / div
+                return f"{value:.3g}{suffix}"
+        return f"{n:g}"
+    parts = [f"{compact(v)} {RESOURCE_SHORT.get(k, k)}"
+             for k, v in (cost or {}).items() if v]
+    return " + ".join(parts) if parts else "free"
+
+
+def homelab_state(capture):
+    """(homelab, definitions, info) from a capture, or (None, None, {})."""
+    info = capture["state"].get("homelabInfo") or {}
+    return info.get("homelab"), info.get("definitions"), info
+
+
+def homelab_level_threshold(definitions, target_level):
+    """Progress points required to reach target_level (None if uncharted)."""
+    thresholds = definitions.get("level_thresholds") or []
+    idx = target_level - 1
+    return thresholds[idx] if 0 <= idx < len(thresholds) else None
+
+
+def iter_homelab_upgrades(homelab, definitions):
+    """Yield per-upgrade dicts with current level and next-level details.
+
+    next: {level, cost, duration_ticks, progress_points, estimated} — exact
+    when the definition carries a per-level table, otherwise extrapolated
+    from base cost/progress fields (estimated=True).
+    """
+    current = homelab.get("upgrade_levels") or {}
+    installed = homelab.get("installed") or {}
+    for group in definitions.get("upgrade_groups") or []:
+        for upg in group.get("upgrades") or []:
+            level = current.get(upg["type"], 0)
+            max_level = upg.get("max_level") or 0
+            nxt = None
+            if not max_level or level < max_level:
+                for entry in upg.get("levels") or []:
+                    if entry.get("level") == level + 1:
+                        nxt = dict(entry, estimated=False)
+                        break
+                if nxt is None:
+                    # Scaling verified against the 23 Jul active-job cost
+                    # snapshots: cost = base_cost x target_level (hackcoin
+                    # capped at hackcoin_cost_cap), progress = base + per x
+                    # target_level.
+                    target = level + 1
+                    cost = {k: v * target
+                            for k, v in (upg.get("base_cost") or {}).items()}
+                    cap = upg.get("hackcoin_cost_cap")
+                    if cap and cost.get("hackcoin"):
+                        cost["hackcoin"] = min(cost["hackcoin"], cap)
+                    nxt = {
+                        "level": target,
+                        "cost": cost,
+                        "duration_ticks": (upg.get("duration_base_ticks", 0)
+                                           + upg.get("duration_ticks_per_level", 0)
+                                           * (target - 1)),
+                        "progress_points": (upg.get("progress_base", 0)
+                                            + upg.get("progress_per_level", 0) * target),
+                        "estimated": True,
+                    }
+            yield {
+                "def": upg,
+                "install": group.get("install"),
+                "install_present": bool(installed.get(group.get("install"))),
+                "level": level,
+                "max_level": max_level,
+                "next": nxt,
+            }
+
+
+def hardware_state(capture):
+    return capture["state"].get("hardwareInfo") or None
+
+
+# currentPlayer.combat_stats keys for the flat-weighted labels, used to turn
+# a hardware track's %-per-level into flat points on the current build.
+COMBAT_STATS_KEYS = {
+    "Regen": "Regeneration", "Corrupt": "Corruption",
+    "ArmorPen": "ArmorPenetration", "Thorns": "Thorns",
+    "Barrier": "DamageBarrier",
+}
+
+
+def hardware_track_value(defn, combat_stats):
+    """Heuristic bottleneck value of +1 level, on the CRAFT_WEIGHTS scale.
+
+    Returns None for pure economy tracks (no combat_stat effect). Assumes a
+    hardware percentage joins the same additive multiplier pool as gear
+    percentages — plausible but UNVERIFIED (docs/open-questions.md).
+    """
+    value = None
+    for effect in defn.get("effects") or []:
+        stat = effect.get("combat_stat")
+        if not stat:
+            continue
+        value = value or 0.0
+        label = stat_label(stat)
+        per_level = effect.get("additive_per_level") or effect.get("mult_per_level") or 0
+        if label in CRAFT_WEIGHTS_PCT:
+            value += per_level * 100 * CRAFT_WEIGHTS_PCT[label]
+        elif label in CRAFT_WEIGHTS_FLAT:
+            base = (combat_stats or {}).get(COMBAT_STATS_KEYS.get(label, ""), 0)
+            value += per_level * base * CRAFT_WEIGHTS_FLAT[label]
+    return value
+
+
+# ---- Active A/B experiment tracking ----------------------------------------
+# The experiment definition is code-as-record (like the cost model). When an
+# A/B concludes, move the outcome to docs/decision-log.md and replace/clear
+# this block. Aggregation walks ALL captures and dedupes, so every capture
+# permanently banks whatever the rolling combat windows held at click time.
+
+PAYLOAD_AB_2026_07_23 = {
+    "concluded": "KEEP — 23 Jul 2026 (death ceiling +2.3, hit 76.9% vs "
+                 "70.1%); see docs/decision-log.md",
+    "name": "payload-ab-2026-07-23",
+    "item": "Bastioned Payload of Perfect Strike",
+    "slot": "Payload",
+    # compile+equip happened between the 08:28:42 and 08:32:02 captures
+    "equip_ms": 1784795400000,          # 2026-07-23T08:30:00Z
+    "boundary_fight_id": 169,            # last pre-equip fight id
+    # pre-equip deaths observed 23 Jul 07:37-08:29 (old Payload)
+    "baseline_deaths": [89, 96, 96, 98, 90, 96, 94],
+    # pooled deep-streak hit counts from the 21 Jul legacy loss exports
+    # (data/combat/*, old Payload, enemy eva ~2475-2543)
+    "baseline_hits": (115, 49),
+    "target_deaths": 10,
+    # same-loadout-era baseline window (23 Jul 00:00Z); older deaths span
+    # pre-Daemon-craft loadouts and only give a wide-context mean
+    "baseline_recent_ms": 1784764800000,
+    # VLAN Rules L10 (+1% Def) build completion — segment deaths after this
+    "segment_ms": 1784800600000,        # ~2026-07-23T09:57Z (estimated)
+    "keep_rule": "mean death streak +2 or better vs baseline 94.1, or "
+                 "material miss-rate drop vs Mirrored; revert if depth flat "
+                 "AND fights ~10% slower",
+}
+
+# No experiment currently running (set to a dict like the concluded one above
+# when the next A/B starts). Concluded experiments stay importable for
+# retrospective analysis: experiment_status(PAYLOAD_AB_2026_07_23).
+ACTIVE_EXPERIMENT = None
+
+
+STREAM_DIR = ROOT / "data" / "combat-stream"
+
+
+def fight_key(f):
+    """Content identity for a combat-log fight entry. Fight ids are
+    PER-SESSION (the client counter resets on reload) — never treat them as
+    global; this key is what makes cross-capture/stream dedupe safe."""
+    return (f.get("id"), f.get("enemy_name"), f.get("current_win_streak"),
+            f.get("rounds"), f.get("damage_dealt"))
+
+
+def _fight_record(f, post):
+    rounds = f.get("combat_log") or []
+    return {
+        "id": f.get("id"),
+        "post": post,
+        "streak": f.get("current_win_streak"),
+        "victory": f.get("victory"),
+        "rounds": f.get("rounds"),
+        "detail": bool(rounds),
+        "ph": sum(r.get("ph") or 0 for r in rounds),
+        "pm": sum(1 for r in rounds if r.get("pm")),
+        "eva": (f.get("enemy_stats") or {}).get("effective_evasion", 0),
+        "enemy": f.get("enemy_name"),
+    }
+
+
+def _absorb_fight(fights, f, post):
+    key = fight_key(f)
+    known = fights.get(key)
+    if known and known["detail"]:
+        if post and not known["post"]:
+            known["post"] = True
+        return
+    fights[key] = _fight_record(f, post)
+
+
+def stream_records():
+    """Yield deduped ledger records from data/combat-stream/*.jsonl."""
+    for path in sorted(STREAM_DIR.glob("*.jsonl")):
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def experiment_status(experiment=None):
+    """Aggregate the active A/B across all captures + the stream ledger.
+
+    Deaths dedupe by ended_at_ms; fights by fight_key (see above). Each
+    capture classifies its own fights: captures taken before equip are pre;
+    captures after equip use boundary_fight_id only if their window still
+    reaches ids above it (same session as the equip), otherwise the session
+    restarted post-equip and every fight is post. Ledger records carry a
+    seen_ms and classify by that (streaming postdates any equip by design).
+    Round-level detail exists only for fights run with the Hacking panel's
+    "Detailed Logs" checkbox enabled (verified 23 Jul; it records regardless
+    of the visible screen).
+    """
+    exp = experiment or ACTIVE_EXPERIMENT
+    if exp is None:
+        return None
+    deaths = {}       # ended_at_ms -> entry
+    fights = {}       # content key -> compact record (+ post flag)
+    for record in stream_records():
+        if record.get("kind") == "death":
+            entry = record.get("death") or {}
+            if entry.get("ended_at_ms"):
+                deaths[entry["ended_at_ms"]] = entry
+        elif record.get("kind") == "fight":
+            f = record.get("fight") or {}
+            post = (record.get("seen_ms") or 0) >= exp["equip_ms"]
+            _absorb_fight(fights, f, post)
+    for path in capture_paths():
+        cap, _ = load_capture(path)
+        state = cap["state"]
+        captured_ms = None
+        stamp = cap.get("capturedAt")
+        if stamp:
+            captured_ms = int(datetime.fromisoformat(
+                stamp.replace("Z", "+00:00")).timestamp() * 1000)
+        for entry in state.get("recentLossStreaks") or []:
+            ms = entry.get("ended_at_ms")
+            if ms:
+                deaths[ms] = entry
+        log = state.get("combatLog") or []
+        ids = [f.get("id") for f in log if f.get("id") is not None]
+        capture_pre = captured_ms is not None and captured_ms < exp["equip_ms"]
+        same_session_as_equip = bool(ids) and max(ids) > exp["boundary_fight_id"]
+        for f in log:
+            fid = f.get("id")
+            if fid is None:
+                continue
+            if capture_pre:
+                post = False
+            elif same_session_as_equip:
+                post = fid > exp["boundary_fight_id"]
+            else:
+                post = True  # session restarted after equip
+            _absorb_fight(fights, f, post)
+    post_deaths = sorted(
+        (e for ms, e in deaths.items() if ms >= exp["equip_ms"]),
+        key=lambda e: e["ended_at_ms"])
+    pre_deaths = sorted(
+        (e for ms, e in deaths.items() if ms < exp["equip_ms"]),
+        key=lambda e: e["ended_at_ms"])
+    post_fights = [f for f in fights.values() if f["post"]]
+    detailed = [f for f in post_fights if f["detail"]]
+    ph = sum(f["ph"] for f in detailed)
+    pm = sum(f["pm"] for f in detailed)
+    segmented = [e for e in post_deaths if e["ended_at_ms"] >= exp["segment_ms"]]
+    recent_ms = exp.get("baseline_recent_ms", 0)
+    return {
+        "experiment": exp,
+        "pre_death_streaks": [e["streak_ended"] for e in pre_deaths],
+        "pre_recent_streaks": [e["streak_ended"] for e in pre_deaths
+                               if e["ended_at_ms"] >= recent_ms],
+        "post_death_streaks": [e["streak_ended"] for e in post_deaths],
+        "post_deaths": post_deaths,
+        "deaths_after_segment": len(segmented),
+        "post_fight_count": len(post_fights),
+        "detailed_fight_count": len(detailed),
+        "post_hits": (ph, pm),
     }
