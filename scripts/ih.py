@@ -399,7 +399,9 @@ def cmd_hardware(args):
 def cmd_ab(args):
     status = ihlib.experiment_status()
     if status is None:
-        last = getattr(ihlib, "PAYLOAD_AB_2026_07_23", {})
+        concluded = [v for v in vars(ihlib).values()
+                     if isinstance(v, dict) and v.get("concluded")]
+        last = concluded[-1] if concluded else {}
         print("no active experiment"
               + (f" (last: {last.get('name')} — {last.get('concluded')})"
                  if last else ""))
@@ -452,6 +454,31 @@ def cmd_ab(args):
               "in the Hacking panel")
     print(f"  fight coverage: {status['post_fight_count']} post-equip fights "
           f"banked, {status['detailed_fight_count']} with round detail")
+    mech = ihlib.experiment_mechanism(status)
+    if any(g["brackets"] for g in mech.values()):
+        print("\n  mechanism (victorious detailed fights; net = gross damage "
+              "- in-fight prg - barrier absorption, directional):")
+        for lo, hi in ihlib.MECH_BRACKETS:
+            parts = []
+            for era in ("pre", "post", "post-seg"):
+                b = mech[era]["brackets"].get((lo, hi))
+                if b:
+                    parts.append(f"{era} n={b['n']} gross {b['gross']:.0f} "
+                                 f"net {b['net']:.0f} rnds {b['rounds']:.1f}")
+            if parts:
+                print(f"    streak {lo}-{hi}:  " + "  |  ".join(parts))
+        onset_parts = [f"{era} {mech[era]['onsets']}"
+                       for era in ("pre", "post", "post-seg")
+                       if mech[era]["onsets"]]
+        if onset_parts:
+            print("    attrition onset (first start-HP <90%, streak >10): "
+                  + "  |  ".join(onset_parts))
+        prg_parts = [f"{era} {mech[era]['prg_per_round']:.1f}"
+                     for era in ("pre", "post", "post-seg")
+                     if mech[era]["prg_per_round"]]
+        if prg_parts:
+            print("    realized regen/round, streak >=60: "
+                  + "  |  ".join(prg_parts))
 
 
 def main():

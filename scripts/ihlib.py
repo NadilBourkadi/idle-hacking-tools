@@ -612,9 +612,42 @@ PAYLOAD_AB_2026_07_23 = {
                  "AND fights ~10% slower",
 }
 
-# No experiment currently running (set to a dict like the concluded one above
-# when the next A/B starts). Concluded experiments stay importable for
-# retrospective analysis: experiment_status(PAYLOAD_AB_2026_07_23).
+SHELL_AB_2026_07_23 = {
+    "concluded": "KEEP — 23 Jul 2026 (death mean 104.3 vs 97.3, +7.0; last "
+                 "four deaths 109-111; net drain and attrition onset both "
+                 "improved); see docs/decision-log.md",
+    "name": "shell-ab-2026-07-23",
+    "item": "Citadel Shell of the Phoenix",
+    "slot": "Shell",
+    # compile+equip happened between the 10:19:57 and 10:33:09 captures
+    "equip_ms": 1784802360000,          # 2026-07-23T10:26:00Z
+    "boundary_fight_id": 515,            # last pre-equip fight id (10:19 capture)
+    # payload-era deaths (post-Payload-equip 08:30Z, pre-Shell-equip), n=14
+    "baseline_deaths": [97, 93, 97, 101, 96, 100, 101, 101, 101, 98, 97,
+                        95, 92, 93],
+    # payload-era detailed-fight hit counts (ph, pm) from the stream ledger;
+    # the Shell does not touch Accuracy — a hit-rate shift flags contamination
+    "baseline_hits": (17151, 4862),
+    "target_deaths": 10,
+    "baseline_recent_ms": 1784795400000,  # Payload equip — same-loadout era
+    # VLAN Rules L10 (+1% Def) completes mid-test — segment deaths after this
+    "segment_ms": 1784805060000,        # ~2026-07-23T11:11Z (estimated)
+    # Damage clause amended at 4/10 deaths (23 Jul ~11:15Z, logged): the
+    # original "damage taken/fight <= +5%" measured GROSS intake, which must
+    # rise when trading Def/Barrier for Regen and ignores the recovery the
+    # craft buys; also pre-era damage_taken includes ~300-700/fight of
+    # barrier soak that never touched HP. Replaced with net drain.
+    "keep_rule": "KEEP if mean death streak >= 96.3 (baseline 97.3 - 1) AND "
+                 "net drain/fight (damage_taken - in-fight prg - barrier "
+                 "soak) <= +5% at matched bracket AND attrition onset not "
+                 "earlier; REVERT if mean < 95.3, net drain worse than +5%, "
+                 "or high-accuracy burst deaths dominate (Def 28.4->12.2, "
+                 "Barrier 221->0 is the exposed flank)",
+}
+
+# No experiment currently running (set to a dict like the concluded ones
+# above when the next A/B starts). Concluded experiments stay importable for
+# retrospective analysis: experiment_status(SHELL_AB_2026_07_23).
 ACTIVE_EXPERIMENT = None
 
 
@@ -629,30 +662,39 @@ def fight_key(f):
             f.get("rounds"), f.get("damage_dealt"))
 
 
-def _fight_record(f, post):
+def _fight_record(f, post, ms=None):
     rounds = f.get("combat_log") or []
+    shp, mhp = f.get("starting_hp"), f.get("max_hp")
     return {
         "id": f.get("id"),
         "post": post,
+        "ms": ms,
         "streak": f.get("current_win_streak"),
         "victory": f.get("victory"),
         "rounds": f.get("rounds"),
         "detail": bool(rounds),
         "ph": sum(r.get("ph") or 0 for r in rounds),
         "pm": sum(1 for r in rounds if r.get("pm")),
+        # gross intake + recovery components (see data-dictionary: net drain
+        # = dmg - rg - soak is directional; the identity does not close
+        # exactly, suspected overheal capping in prg)
+        "dmg": f.get("damage_taken") or 0,
+        "rg": sum(r.get("prg") or 0 for r in rounds),
+        "soak": sum(r.get("pbs") or 0 for r in rounds),
+        "sfrac": (shp / mhp) if shp is not None and mhp else None,
         "eva": (f.get("enemy_stats") or {}).get("effective_evasion", 0),
         "enemy": f.get("enemy_name"),
     }
 
 
-def _absorb_fight(fights, f, post):
+def _absorb_fight(fights, f, post, ms=None):
     key = fight_key(f)
     known = fights.get(key)
     if known and known["detail"]:
         if post and not known["post"]:
             known["post"] = True
         return
-    fights[key] = _fight_record(f, post)
+    fights[key] = _fight_record(f, post, ms)
 
 
 def stream_records():
@@ -690,7 +732,7 @@ def experiment_status(experiment=None):
         elif record.get("kind") == "fight":
             f = record.get("fight") or {}
             post = (record.get("seen_ms") or 0) >= exp["equip_ms"]
-            _absorb_fight(fights, f, post)
+            _absorb_fight(fights, f, post, record.get("seen_ms"))
     for path in capture_paths():
         cap, _ = load_capture(path)
         state = cap["state"]
@@ -717,7 +759,7 @@ def experiment_status(experiment=None):
                 post = fid > exp["boundary_fight_id"]
             else:
                 post = True  # session restarted after equip
-            _absorb_fight(fights, f, post)
+            _absorb_fight(fights, f, post, captured_ms)
     post_deaths = sorted(
         (e for ms, e in deaths.items() if ms >= exp["equip_ms"]),
         key=lambda e: e["ended_at_ms"])
@@ -741,4 +783,73 @@ def experiment_status(experiment=None):
         "post_fight_count": len(post_fights),
         "detailed_fight_count": len(detailed),
         "post_hits": (ph, pm),
+        "fights": list(fights.values()),
     }
+
+
+MECH_BRACKETS = ((24, 42), (60, 85), (86, 105))
+
+
+def experiment_mechanism(status):
+    """Mechanism-metric readout for an A/B (locked as tooling 23 Jul 2026
+    after the Phoenix Shell keep-rule amendment).
+
+    Judge crafts on these, not on death streak alone: net drain/fight
+    (gross damage_taken minus in-fight prg and barrier absorption —
+    directional, see data-dictionary), attrition onset (first fight of a
+    run starting below 90% HP — exact), and realized regen per round.
+    Eras: pre = same-loadout window [baseline_recent_ms, equip); post is
+    split at segment_ms into post / post-seg.
+    """
+    exp = status["experiment"]
+    lo_ms = exp.get("baseline_recent_ms", 0)
+    groups = {"pre": [], "post": [], "post-seg": []}
+    for f in status["fights"]:
+        ms = f["ms"]
+        if f["post"]:
+            era = "post-seg" if ms and ms >= exp["segment_ms"] else "post"
+        elif ms and lo_ms <= ms < exp["equip_ms"]:
+            era = "pre"
+        else:
+            continue  # older loadouts or unknown timestamp
+        groups[era].append(f)
+
+    out = {}
+    for era, rows in groups.items():
+        det = [f for f in rows if f["detail"] and f["victory"]]
+        brackets = {}
+        for lo, hi in MECH_BRACKETS:
+            sel = [f for f in det if lo <= (f["streak"] or 0) <= hi]
+            if sel:
+                n = len(sel)
+                brackets[(lo, hi)] = {
+                    "n": n,
+                    "gross": sum(f["dmg"] for f in sel) / n,
+                    "net": sum(f["dmg"] - f["rg"] - f["soak"]
+                               for f in sel) / n,
+                    "rounds": sum(f["rounds"] or 0 for f in sel) / n,
+                }
+        deep_rounds = sum(f["rounds"] or 0 for f in det
+                          if (f["streak"] or 0) >= 60)
+        deep_rg = sum(f["rg"] for f in det if (f["streak"] or 0) >= 60)
+        onsets = []
+        cur, last_streak = None, -1
+        for f in sorted(rows, key=lambda f: (f["ms"] or 0, f["streak"] or 0)):
+            st = f["streak"] or 0
+            if st < last_streak:
+                if cur is not None:
+                    onsets.append(cur)
+                cur = None
+            last_streak = st
+            # streak > 10 skips the post-death heal-up artifact
+            if cur is None and st > 10 and f["sfrac"] is not None \
+                    and f["sfrac"] < 0.90:
+                cur = st
+        if cur is not None:
+            onsets.append(cur)
+        out[era] = {
+            "brackets": brackets,
+            "onsets": sorted(onsets),
+            "prg_per_round": (deep_rg / deep_rounds) if deep_rounds else None,
+        }
+    return out
