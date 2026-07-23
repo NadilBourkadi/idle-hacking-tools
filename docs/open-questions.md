@@ -62,10 +62,12 @@ From `homelabInfo` in the rich capture:
 
 ### 2. Successful Version Upgrade roll behaviour
 
-Unknown:
+First evidence 22 July (Storm Daemon, phases 1–2): roll positions moved 84%→71%, 39%→55%, 1%→80% across upgrades — the 1%→80% jump strongly suggests the new-tier value is **independently rerolled** (n=3 effects; treat as working model, not fact).
 
-- whether the new-tier value is independently rerolled;
-- whether relative roll percentile is preserved or transformed.
+Still unknown:
+
+- confirmation at larger n;
+- whether relative roll percentile is preserved or transformed in any case.
 
 Test:
 
@@ -84,17 +86,15 @@ Unknown:
 
 Test only on a disposable item after enough Essence is available.
 
-### 4. Compile coverage
+### 4. Compile coverage — LARGELY RESOLVED 22 July 2026
 
-Known:
+Confirmed on the Perfect Strike Payload compile (+5.5%):
 
-- non-signature affixes are multiplied.
+- explicit affix `value` fields are multiplied **in place** (×1.0552 exact); `value_min`/`value_max` stay at the tier range, so **post-compile roll positions are inflated and not comparable**;
+- the **implicit is NOT multiplied** (5.86% unchanged pre/post);
+- consequence: compiled items' displayed stats are final — never re-apply the bonus in analysis (fixed in `ihlib.plan_craft`).
 
-Unknown:
-
-- whether the implicit affix is included;
-- rounding order;
-- interaction with an Optimization Pass base bonus.
+Still unknown: rounding order; interaction with an Optimization Pass base bonus.
 
 Test:
 
@@ -137,11 +137,17 @@ Unknown: mitigation curve, penetration treatment and breakpoints.
 ### 9. Streak recovery model — RESOLVED 22 July 2026 (formula), residual unknowns
 
 Exact law from 21 winning fights: `heal = heal_base × 0.99^(streak − 10)`, capped at missing HP. See `mechanics.md` §3.
-Remaining unknowns: what `heal_base` scales with (constant 4,465 = 36.9% max HP in sample; needs a capture after an equipment change), and what triggers `post_combat_heal_exhaustion_relief` (0 in all samples).
+`heal_base` resolved 22 July (second rich capture): **5 × player hack level** — `statsBreakdown.post_combat_heal` shows the full 4,470 under `level` (= 5 × 894); the earlier 4,465 sample matches level 893. Not max-HP- or equipment-scaled.
+Remaining unknowns: what triggers `post_combat_heal_exhaustion_relief` (0 in all samples), and whether the 0.99^ decay would also apply to Homelab `thermal_budget` post-combat healing.
+
+### 11. In-fight regeneration decay
+
+In the streak-96 loss compact log, realised per-round regen (`prg`) declined within the fight — 179, 146, 113, 80, 47 … 14, 0 — quantized in steps of 33, hitting 0 near death, while listed loadout Regen was +148. One loss sample only; direction unknown on victories. If regen genuinely exhausts over a fight, long fights (32–47 rounds at late streak) run mostly regen-less, which makes fight-shortening stats (Accuracy vs high-evasion, Attack Speed, damage) worth more than a naive constant-regen model implies. Needs: compact logs from long winning fights, and whether `prg` correlates with current HP, rounds elapsed or a depleting pool.
 
 ### 10. Corruption and Thorns formulas
 
 Observed and behaviorally described, but exact scaling/rounding remains unresolved.
+Measured 22 July (streak-96 death fight): player Corruption 12 dealt `sum(ecd)` 990 vs 5,368 direct — ~15.6% of output, ramping over the fight (`ecd` 22→110/round). Corruption is a significant outgoing-DoT stat in long fights; per-point scaling and stack mechanics still unknown.
 
 ## Decision record
 
@@ -197,3 +203,7 @@ A forced-suffix Augment:
 ### 22 July 2026 — resolved
 
 - The actual 0.6.1 userscript source was recovered from Tampermonkey and is archived at `tools/item-loadout-capture.user.js`.
+
+### 12. Rarity promotion on 6th affix
+
+Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Single observation — unknown whether rarity is simply an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield. Check on the next rare that gains a 6th affix.

@@ -26,6 +26,8 @@
 
 ## Safe-decompile list from the 21 July full export
 
+> **⚠ 22 July revision:** this list predates the post-craft ceiling model (`ih.py potential`). It was built from current rolls and is NOT safe as-is: **Resilient Analyzer of the Bulwark** ranks *above* the equipped Analyzer at ceiling, and **Keen Shell of Barbs**, **Vital Driver of Precision** and others rank as top ceiling bases in their slots. Re-run `ih.py potential --slot <s>` and keep anything within ~10 score of equipped before decompiling.
+
 Payloads: Pinpoint Payload of Precision; Targeted Payload of Rending; Fortified Payload of Puncturing.
 
 Firewalls: Hearty Firewall of the Fortress; Resilient Firewall of Hardening. Fortified Firewall of the Giant is now also decompile-eligible after the failed Augment unless retained as a test mule.
@@ -41,3 +43,16 @@ Daemons: Keen Daemon of Wind; Fortified Daemon of Barbs.
 Kernels: Aggressive Kernel of Recovery; Vital Kernel of Contagion; Pinpoint Kernel of Blight; Ghosted Kernel of Mending; Guided Kernel of Colossus.
 
 Before decompiling, compare against a fresh inventory export because this list reflects the 21 July snapshot and subsequent known craft outcomes only.
+
+## 22 July 2026 — post-calibration ceiling verdicts (21:32 capture)
+
+From `ih.py potential` with calibrated weights (Corrupt 0.6, verdict bands ±5). Full output is regenerable; this records the decisions:
+
+| Slot | Verdict | Notes |
+|---|---|---|
+| Daemon | **Targeted Daemon of the Storm +8.0 UPGRADE** — approved next craft project | Preserves AtkDmg density (18% at ceiling) while adding ~+31% AtkSpd; the tempo profile the loss analysis wants |
+| Daemon | Intangible Daemon of Thorns +10.6 (top score) — **held, not approved** | Repeats the Hawk mistake shape: dumps AtkDmg 21→0.9 (~−12% output multiplicatively, which linear weights under-penalize) for Eva/HP/Thorns |
+| Payload | **Targeted Payload of Deadliness +6.9 UPGRADE** — approved second project | Keeps AtkDmg 23%, adds CritCh 12.5/AtkSpd 11.4/ArmorPen 105; econ cost: −15% hack XP (slows level → heal_base) |
+| Firewall | Aligned Firewall of Bastion +6.5 — **conditional**, guardrail-gated | Score driven by interpolated Corrupt T3~ + Barrier 314; loses Regen −31 / MaxHP −11 vs Brutal — sustain-anchor rule applies, craft only with explicit A/B test plan |
+| Driver | Vital Driver of the Hawk (crafted, compiled) | Anti-evasion alternate; decompile-locked; also the designated hit-formula measurement instrument |
+| Analyzer/Shell/Router/Kernel | No upgrades at ceiling | Equipped anchors hold; Resilient Analyzer of the Bulwark downgraded to sidegrade (+1.7) after calibration |

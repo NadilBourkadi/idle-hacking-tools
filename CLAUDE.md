@@ -28,7 +28,9 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 
 ## Working with the data — query-first
 
-**Use `python3 scripts/ih.py <cmd>` for all capture queries; never parse capture JSON ad hoc.** Full-state captures land in `data/captures/` automatically (hub routes by schema); latest = lexicographically last. Commands: `captures`, `loadout`, `item <query>`, `candidates [--slot s]`, `compare <a> <b>`, `diff [old new]`, `stats`, `history <query>`. For bespoke analysis, import `scripts/ihlib.py` — it encodes the slot mapping, scaling law and cost model so they are never re-derived.
+**Use `python3 scripts/ih.py <cmd>` for all capture queries; never parse capture JSON ad hoc.** Full-state captures land in `data/captures/` automatically (hub routes by schema); latest = lexicographically last. Commands: `captures`, `loadout`, `item <query>`, `candidates [--slot s]`, `compare <a> <b>`, `diff [old new]`, `stats`, `history <query>`, `potential [--slot s]`. For bespoke analysis, import `scripts/ihlib.py` — it encodes the slot mapping, scaling law, cost model and empirical tier ladders so they are never re-derived.
+
+**Candidate judgements use post-craft ceilings, never current rolls.** Equipped items are at 0 Stability (final); inventory items carry 25–30 Stability of Version-Upgrade headroom, so `compare`/`candidates` output systematically understates them. `ih.py potential` projects realistic ceilings (empirical tier ladders, T3 cap, Compile floor); its score is a planning heuristic (`ihlib.CRAFT_WEIGHTS_*`), so confirm any craft with the `docs/crafting.md` §10 contract before spending.
 
 - Captures are ~1 MB each. **Never read one whole** — `ih.py` or targeted `ihlib` scripts only.
 - `statsBreakdown`/`extendedStats`/`combatLog`/`recentLossStreaks`/`homelabInfo` are lazy — captured only if the corresponding game panel was opened that session (`ih.py captures` shows what each capture contains).
@@ -36,6 +38,9 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 - Data files are immutable once written; new capture > editing an old one.
 
 ## Analysis rules
+
+- **Check accessibility before recommending any game system.** Homelab installs/upgrades, zones and crafting operations carry gates in the capture (`unlock_level` vs current homelab level, required install present/absent, zone `min_level`). Anything not currently reachable must be labelled with its gate ("unlocks at homelab 9"); gated upgrades may be entirely invisible in the game UI, so never assume the player has seen them. Always use display `name` fields from the capture's definitions, not internal slugs.
+- **Credits are the effective crafting currency.** Basic resources (Cycles, Hashes, etc.) are purchasable on the marketplace at ~2 credits/unit (observed 22 Jul 2026: 5M cycles = 10.2M credits). Convert resource costs to credits when judging affordability; low on-hand gathering resources are never a schedule gate while credits are plentiful.
 
 - Treat the newest structured export as the source of truth; ask for a fresh complete export when a decision depends on the current whole loadout.
 - Separate verified facts, working models and unknowns. Never invent formulas or mechanics.

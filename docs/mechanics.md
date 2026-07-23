@@ -130,7 +130,7 @@ heal = heal_base × 0.99^(win_streak − 10), capped at missing HP
 ```
 
 - Verified exact (float-precision) across 21 consecutive wins at streaks 38–58.
-- `heal_base` was constant 4,465 = 36.9% of max HP for the current build; whether it scales with max HP, Regeneration or something else needs a capture after an equipment change.
+- `heal_base` = **5 × player hack level** (confirmed 22 July: `statsBreakdown.post_combat_heal` attributes the full amount to `level` — 4,470 at level 894, and the earlier 4,465 sample matches level 893 exactly; `equipment_flat`/`equipment_pct`/`homelab` components all 0). It does **not** scale with max HP or equipment; the Homelab `thermal_budget` upgrade (+1% max HP post-combat heal per level) would add the first max-HP-scaling component.
 - No exhaustion for the first 10 wins; thereafter healing decays 1% compounding per win. A `post_combat_heal_exhaustion_relief` field exists (0 in all samples) — some relief mechanic exists but is unobserved.
 - Attrition mechanism: heal shrinks while per-fight damage grows with enemy level. In the sample, damage taken crossed heal near streak ~50 — past that point HP ratchets down monotonically, which is why late-streak losses begin at 20–50% HP.
 - Strategic frame: the equilibrium streak is where average damage taken per fight equals the decayed heal. Defense/Evasion/fight-shortening stats push the crossing point later; Max HP does not move it (it only widens the buffer being drained).

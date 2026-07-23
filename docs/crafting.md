@@ -9,6 +9,8 @@ A candidate export is primarily a set of **crafting bases**. The correct questio
 
 > Can this item's fixed structure and finite Stability budget be converted into a better whole-loadout contribution than the current item?
 
+`ih.py potential` mechanizes the first pass of this: it projects each candidate's realistic post-craft package from empirical tier ladders (per-tier normalized affix values measured across the whole inventory; interpolated tiers marked `~`) under a greedy Version-Upgrade plan (T3 cap, Compile floor, one Stability reserved when an Augment slot is open). Its score weights (`ihlib.CRAFT_WEIGHTS_*`) encode the current bottleneck model and are a planning heuristic, not a game formula. Use it for ranking; use this document's §10 contract before actually spending.
+
 Evaluate in this order:
 
 1. Which bottleneck must the item solve?
@@ -234,12 +236,29 @@ Every future recommendation should include:
 - expected resource classes and current displayed costs;
 - post-craft test plan.
 
+### 10.1 Standard craft contract template (locked 22 July 2026)
+
+Every approved craft recommendation is delivered as an explicit contract with exactly these sections — high-level suggestions are not deliverables. All displayed costs come from the item's current `crafting_preview`; the in-game panel wins on any mismatch.
+
+0. **Header & evidence** — item, slot, ilvl, Stability; ceiling verdict (score Δ must exceed `UPGRADE_BAND`); 2–3 sentences tying the craft to the current bottleneck with measured numbers; key trade vs equipped including the economy delta.
+1. **Shopping list** — worst-case resource totals (all caps hit + Compile), in units and credit-equivalents; marketplace purchases required before starting.
+2. **Pre-flight** — decompile-lock the base; confirm current capture matches the plan; equipped item stays equipped throughout.
+3. **Version-Upgrade phases, numbered, in execution order.** Each phase states: the affix (display name, stat, current tier/value/roll), target tier, per-attempt cost, per-step success chances, expected attempts, and a **hard attempt cap**. On-cap rule (amended 22 July after the Payload Phase-1 cap-out): **never chase the capped line further; recapture and re-plan the remaining budget** against the verdict bands — other planned phases may still run if they independently justify their Stability. Auto-compiling on first cap-out abandons value; chasing the capped line is the sunk-cost trap. Re-declare the expected final verdict (UPGRADE/sidegrade) after every re-plan so expectations track reality.
+4. **Conditional phases** — explicit Stability gates ("only if Stability ≥ N").
+5. **Augment phase** (only if a slot is open; run first for cost reasons) — forced side, cost, pre-declared Continue/Conditional/Abort outcome classes. Recapture immediately after.
+6. **Do-not-touch list** — affixes already at target with rolls ≥80%; and never Refactor an affix whose *other* effect rolls ≥60% (Refactor rerolls **all** effects of the affix — learned on of Rending, 22 July).
+7. **Refactor pass** — qualifying lines (roll <20% after VU work), maximum count, minimum Stability (floor + 1).
+8. **Compile** — floor 8, preferred finish 8–12 remaining; always the final action.
+9. **Recapture checkpoints** — after Augment, after each phase group, after Compile.
+10. **Post-craft test** — equip rule, number of streaks, metrics vs recorded baseline (death streak, rounds/fight at high streak, start-HP at death), explicit keep/revert criterion, decision-log entry.
+
 ## 11. Cost model (resolved 22 July 2026)
 
 The full cost structure was decoded from the full-state capture — base-cost formula, exact 1.03^spent Credit-cost escalation, per-operation multiples and the Compile cost. See `static-analysis-2026-07-22.md` §2. Headline strategic additions to the rules above:
 
-- Stability spending compounds future Credit costs (Augment/Lock/Bias) at 3%/point — Augment early is also Augment cheap.
+- Stability spending compounds future Credit costs (Augment/Lock/Bias) at 3%/point — Augment early is also Augment cheap. (Confirmed live 22 July: after 1 Stability spent, augment credit cost rose exactly ×1.03; Version Upgrade resource cost unchanged; Compile cost fell.)
 - Compile's resource price rises 0.18× base_cost per preserved Stability point; the +4-6% Compile floor remains correct, but very high floors carry a real resource price.
+- **Marketplace closes the resource loop:** basic crafting resources are purchasable at ~2 credits/unit (22 July 2026 quote: 5M Cycles = 10.2M credits). Budget crafts in credit-equivalents; never delay a justified craft to gather resources while credits are abundant.
 
 ## 12. Current unresolved mechanics
 
@@ -253,3 +272,14 @@ These remain unknown and must not silently become facts:
 - Augment's tier distribution.
 
 A fresh before/after export can resolve the first three operationally.
+
+## 13. Realized-craft calibration — 22 July 2026 (Vital Driver)
+
+First contract executed end-to-end. Lessons, all encoded in tooling where possible:
+
+- **Verdict bands:** projected +3.9 realized as −2. Ceiling deltas within ±5 heuristic score of the equipped item are **sidegrades**; demand > +5 before calling a candidate an upgrade (`ihlib.UPGRADE_BAND`; `ih.py potential` now prints the verdict).
+- **Projection ≠ contract:** the projection assumed the tool's greedy plan; the safer contract (capping of Haste at T5) cost ~5 score. Either align the contract with the tool plan or mentally discount projections by the contract's conservatism.
+- **Economy lines are strategic, not cosmetic:** credits fund the Homelab track and global XP feeds `heal_base = 5 × level`. `potential` now prints the economy delta vs equipped. The Warmongering Driver's +13.4% credits / +13.4% global XP was silently load-bearing.
+- **Corruption is outgoing DoT** worth ~1% of output per point in long fights (measured: 15.6% of output from 12 points, streak-96 death fight). Weight raised 0.08 → 0.6.
+- **Affix display names change with tier** (of Precision→of the Hawk at T3). Track crafted items by id / `ih.py history`, never by name.
+- **Whole-loadout function first:** a candidate that dumps the equipped item's densest line (AtkDmg+Corrupt here) starts deep in the hole regardless of its own gains — same lesson as the Kernel guardrail, now confirmed on an offensive slot.
