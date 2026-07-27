@@ -271,8 +271,46 @@ def weighted_score(totals):
 
 
 def vu_expected_attempts(tier):
-    """Expected Version-Upgrade attempts Tn -> T(n-1); chance = tier x 10%."""
+    """Expected Version-Upgrade attempts Tn -> T(n-1); chance = tier x 10%.
+
+    ATTEMPTS, not Stability — the two diverge once Snapshot Backups is above
+    level 0. Use this for a contract's attempt caps (what the player counts at
+    the panel) and `vu_expected_stability` for budget arithmetic.
+    """
     return 10.0 / tier
+
+
+def vu_expected_stability(tier, preserve=0.0):
+    """Expected Stability spent promoting Tn -> T(n-1).
+
+    The success always costs 1; each failure costs 1 only when Snapshot
+    Backups does not trigger. Homelab `tier_promotion_stability_preserve` is
+    5%/level, so at L2 (10%) a deep chase is ~6% cheaper than the attempt
+    count implies, and the saving grows with depth (3% at T7->T6, 8% at
+    T2->T1) because deeper steps fail more often.
+    """
+    p = tier / 10.0
+    return 1.0 + ((1.0 - p) / p) * (1.0 - preserve)
+
+
+def stability_preserve_chance(capture):
+    """Chance a failed Version Upgrade preserves Stability, from the capture.
+
+    Read from the homelab upgrade's own effect value x its level — never
+    hard-coded, because this silently changed under us: it was level 0 when
+    the craft cost model was written on 22 Jul 2026 and reached level 2 by
+    27 Jul, making every Stability budget since then ~6% over-conservative.
+    Returns 0.0 when homelabInfo is absent (conservative).
+    """
+    homelab, definitions, _ = homelab_state(capture)
+    if not homelab or not definitions:
+        return 0.0
+    for upgrade in iter_homelab_upgrades(homelab, definitions):
+        for effect in upgrade["def"].get("effects") or []:
+            per_level = effect.get("tier_promotion_stability_preserve")
+            if per_level:
+                return per_level * (upgrade.get("level") or 0)
+    return 0.0
 
 
 def tier_ladders(capture):
@@ -327,7 +365,7 @@ def augment_state(item):
     return True, "either"
 
 
-def plan_craft(item, ladders, floor=8, tier_cap=1):
+def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
     """Greedy expected-Stability Version-Upgrade plan + Compile projection.
 
     Model assumptions (conservative, documented):
@@ -396,7 +434,7 @@ def plan_craft(item, ladders, floor=8, tier_cap=1):
                 gain += (nxt - cur) * mult_scale(ilvl) * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
         return gain, estimated
 
-    steps, spend = [], 0.0
+    steps, spend, attempts = [], 0.0, 0.0
     if stability > 0:
         while True:
             best, best_ratio = None, 0.0
@@ -405,7 +443,9 @@ def plan_craft(item, ladders, floor=8, tier_cap=1):
                 if not res:
                     continue
                 gain, estimated = res
-                cost = vu_expected_attempts(entry["tier"])
+                # budget in Stability, not attempts -- they differ once
+                # Snapshot Backups is above level 0
+                cost = vu_expected_stability(entry["tier"], preserve)
                 if cost > budget - spend or gain <= 0:
                     continue
                 if gain / cost > best_ratio:
@@ -414,6 +454,7 @@ def plan_craft(item, ladders, floor=8, tier_cap=1):
                 break
             entry, gain, estimated, cost = best
             spend += cost
+            attempts += vu_expected_attempts(entry["tier"])
             entry["tier"] -= 1
             entry["up"] = True
             steps.append((entry["affix"].get("name"), entry["affix"].get("tier"),
@@ -470,7 +511,9 @@ def plan_craft(item, ladders, floor=8, tier_cap=1):
 
     return {
         "steps": plan_steps,
-        "expected_spend": spend,
+        "expected_spend": spend,          # Stability
+        "expected_attempts": attempts,    # panel clicks; > spend when preserve > 0
+        "preserve": preserve,
         "augment_open": open_slot,
         "augment_side": forced_side,
         "compile_pct": compile_pct,

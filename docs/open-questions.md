@@ -56,7 +56,7 @@ Failed attempts do not improve the tier and consume resources. Normal failures c
 
 From `homelabInfo` in the rich capture:
 
-- **Snapshot Backups** (crafting upgrade): +5% chance per level to not lose Stability on a failed Version Upgrade. **Current level: 0** — trigger chance 0%, so the "conservative" no-backup craft budgets are exact.
+- **Snapshot Backups** (crafting upgrade): +5% chance per level to not lose Stability on a failed Version Upgrade (`tier_promotion_stability_preserve`). Level 0 when this was written on 22 July 2026; **level 2 (=10%) by 27 July**, and the craft cost model went on assuming 0 the whole time — every Stability budget in between was ~6% over-conservative. **Read the level from the capture, never from this note:** `ihlib.stability_preserve_chance` does it, and `plan_craft` now budgets in Stability rather than attempts because the two diverge once this is above 0. Max level 5 (25%).
 - Distinct upgrade with a confusable name: **Snapshot Rollback** (combat): recover 25% HP after lethal damage, once per 10 fights, cooldown −1/level. Also level 0. Anti-attrition candidate.
 - Whether Snapshot Backups affects other failed actions remains unknown (irrelevant while level 0).
 
@@ -224,15 +224,19 @@ Homelab job hackcoin costs did not visibly deduct at queue time (11 hc held at 0
 
 Still unresolved, and it decides the install-gate reserve: until a queued hackcoin job is watched against a known balance, treat queued-but-incomplete hc costs as unpaid liabilities. One queued hc job plus a before/after capture settles it.
 
-### 16. Version-Upgrade success rate may beat the documented table (added 27 July 2026)
+### 16. Version-Upgrade Stability cost — RESOLVED 27 July 2026 (it was Snapshot Backups)
 
-`vu_expected_attempts` uses the documented per-tier chances (T7→T6 70% … T2→T1 20%), i.e. 10/tier expected attempts. Contract crafts have now run:
+Three consecutive crafts beat the planner's Stability budget by 1.2–1.5×, which looked like the documented chance table being wrong. The player identified the actual cause: **Snapshot Backups had reached level 2 (10% chance to preserve Stability on a failed Version Upgrade) while the cost model still assumed level 0.** Attempts and Stability are not the same quantity once that upgrade is above 0.
 
-| Craft | promotions | attempts | expected | ratio |
+Corrected model (`vu_expected_stability` = `1 + ((1-p)/p) × (1-preserve)`), applied to every contract craft with the preserve level that was live at the time:
+
+| Craft | promotions | expected Stability | actual | ratio |
 |---|---|---|---|---|
-| Bastioned Payload (23 Jul) | 8 | 21 | ~6 | 2.6× worse |
-| Phoenix Shell (23 Jul) | 12 | 17 | ~22 | 1.3× better |
-| Targeted Analyzer (27 Jul) | 12 | 19 | ~28 | 1.5× better |
-| Titanic Router (27 Jul) | 12 | ~20 | ~25.8 | 1.3× better |
+| Bastioned Payload (23 Jul, 0%) | 8 | 11.8 | 21 | **1.78× worse** |
+| Phoenix Shell (23 Jul, 0%) | 12 | 22.2 | 17 | 1.31× better |
+| Targeted Analyzer (27 Jul, 10%) | 12 | 26.6 | 19 | 1.40× better |
+| Titanic Router (27 Jul, 10%) | 12 | 24.5 | 20 | 1.22× better |
 
-Three consecutive runs beating expectation by 1.3–1.5× after one that badly missed. Sample sizes are ~12 promotions each, so this is well within variance and is **not** yet evidence of anything — but if it continues it would mean the planner systematically over-states Stability cost and contracts are being written more conservatively than they need to be. Watch the ratio on the next two crafts before touching the model. Distinguishing hypotheses: plain luck; the chance table being better than documented at low tiers; or failed attempts not always consuming Stability (Snapshot Backups is level 0, so that is not the cause here).
+**Geometric mean 0.944 — 5.9% better than model across four crafts, well inside noise at ~12 promotions each. The documented chance table needs no revision.** The apparent trend was three favourable runs read without the one badly unfavourable run that preceded them, plus an un-modelled 6% discount. Snapshot Backups alone is worth −6.2% Stability on a T7→T1 chase, −4.3% on T8→T3, and the saving grows with depth because deeper steps fail more often.
+
+Method note worth keeping: this was found because the player knew a game system the capture-derived model had silently outgrown. Any hard-coded "current level: N" in these docs is a decaying assertion — read levels from the capture.

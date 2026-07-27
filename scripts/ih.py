@@ -220,10 +220,13 @@ def cmd_potential(args):
     cap, path = ihlib.load_capture(args.file)
     ladders = ihlib.tier_ladders(cap)
     print(f"# {path.name}")
+    preserve = ihlib.stability_preserve_chance(cap)
     depth = ("depth set by Stability budget" if args.cap <= 1
              else f"planned no deeper than T{args.cap}")
+    backup = (f", Snapshot Backups {preserve*100:.0f}% Stability preserve"
+              if preserve else "")
     print(f"# Projected post-craft ceilings ({depth}, Compile floor "
-          f"{args.floor}); score = bottleneck planning heuristic "
+          f"{args.floor}{backup}); score = bottleneck planning heuristic "
           "(ihlib.CRAFT_WEIGHTS_*), not a game formula.")
     print("# These are optimal-plan ceilings; a §10.1 contract with attempt "
           "caps and a hard floor lands ~5 points lower — discount accordingly.")
@@ -245,7 +248,8 @@ def cmd_potential(args):
         for where, s, item in items:
             if where != "inventory" or s != slot:
                 continue
-            plan = ihlib.plan_craft(item, ladders, floor=args.floor, tier_cap=args.cap)
+            plan = ihlib.plan_craft(item, ladders, floor=args.floor,
+                                    tier_cap=args.cap, preserve=preserve)
             rows.append((plan["score"], item, plan))
         rows.sort(key=lambda r: -r[0])
         eq_totals = ihlib.stat_totals(equipped) if equipped else {}
@@ -262,8 +266,9 @@ def cmd_potential(args):
             print(f" {marker}ceiling   {item.get('name'):<44} score {score:6.1f} "
                   f"({delta:+6.1f} {verdict:<9})  ilvl {item.get('item_level'):>4} "
                   f"stab {item.get('stability'):>2}  "
-                  f"spend ~{plan['expected_spend']:.1f}  {aug}  "
-                  f"Compile +{plan['compile_pct'] * 100:.1f}%")
+                  f"stab ~{plan['expected_spend']:.1f}"
+                  + (f"/~{plan['expected_attempts']:.0f} att" if preserve else "")
+                  + f"  {aug}  Compile +{plan['compile_pct'] * 100:.1f}%")
             if steps:
                 print(f"            plan: {steps}")
             print(f"            proj: {ihlib.fmt_totals(plan['totals'])}")
