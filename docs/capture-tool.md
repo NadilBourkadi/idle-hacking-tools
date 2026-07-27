@@ -16,6 +16,10 @@ Because lexical bindings are invisible to the Tampermonkey sandbox, the reader s
 
 Lazy bindings: `statsBreakdown`/`extendedStats`/`recentLossStreaks` are null/empty until the stats panel or loss-history screen has been opened that session; `hardwareInfo` is null until the Hardware Shop tab has been opened (its absence is noted in the capture summary but does not mark a capture THIN). Item data is always present. Internal slot names (`main_hand`…) map to display slots per `game-client-internals.md`.
 
+**Lazy sections can also be *present but stale*** — they hold whatever the panel last read, which may badly predate the capture click. Measured 27 Jul 2026: a `homelabInfo` block 1,348 s out of date, and a `hardwareInfo` block reporting a credit balance 3.5 B stale, both inside otherwise-current captures. `ih.py audit` detects this two ways (`homelabInfo.server_time_ms` vs `capturedAt`; cross-panel `credits` divergence), but detection only tells you to go back and re-read.
+
+> **Before any capture meant for a full advisory, click through: Homelab → Hardware Shop → Stats → loss history, with "Detailed Logs" already on.** That refreshes every lazy section, so the whole capture describes one moment. A capture taken without this is fine for combat/item questions and unreliable for homelab or hardware ones.
+
 ## Purpose and safety boundary
 
 The tool must remain read-only with respect to gameplay.

@@ -1,6 +1,6 @@
 # Idle Hacking — Current State (interpretation)
 
-**Last reviewed:** 22 July 2026
+**Last reviewed:** 27 July 2026
 **Player:** the player
 
 This file holds *interpretation only* — the reasoning behind the current setup and priorities. For numbers, always query the latest capture (`python3 scripts/ih.py loadout` / `stats` / `candidates`); do not copy stats into this file, they go stale with every capture.
@@ -10,24 +10,27 @@ This file holds *interpretation only* — the reasoning behind the current setup
 The main set is the original eight-slot baseline (see `ih.py loadout`). Its logic:
 
 - **Sustain anchors — Brutal Firewall of Perpetuity and Hearty Kernel of Decay.** Both are low item level but carry dense HP/Defense/Regeneration packages that no candidate or craft has yet replaced without losing net sustain. The 21 July Kernel A/B trial (see `equipment-tests.md`) empirically vetoed trading Defense/Accuracy/Attack Speed for more HP/listed Regen.
-- **Offensive core — Payload, Analyzer, Driver, Daemon** supply the accuracy/crit/speed/damage package. The Payload slot holds the crafted **Bastioned Payload of Perfect Strike** (23 July, second contract-crafted main-set item; A/B KEEP: death ceiling +2.3 with four consecutive 100–101 deaths, hit rate 76.9% vs 70.1% at higher evasion, at the cost of +14% rounds/fight — Enduring Payload of Armageddon is the locked revert path). The Daemon slot holds the crafted **Targeted Daemon of the Storm** (22 July, first contract-crafted main-set item; A/B: −5% fight length, −6.5% damage taken; its Quarantine revert path was decompiled 23 July — the keep is now permanent).
-- **Shell and Router** — the Router remains the Defense/Regen backbone. The Shell slot changed profile on 23 July: the crafted **Citadel Shell of the Phoenix** (first craft to realize above projection, +22.6 score; **A/B KEEP**, death mean +7.0, new ~110 ceiling, attrition onset +~20 streaks, realized regen +28–36%) trades Def 28.4%/Barrier 221 for Eva +20%/Regen +46/Def 12.2% — recovery over mitigation, now the third contract-crafted main-set item. Old Overclocked Shell is the locked revert path. The build's gross intake is ~+10% at deep streaks; its net drain is much lower.
+- **Offensive core — Payload, Analyzer, Driver, Daemon** supply the accuracy/crit/speed/damage package. The Payload slot holds the crafted **Bastioned Payload of Perfect Strike** (23 July; A/B KEEP: death ceiling +2.3, hit rate 76.9% vs 70.1%, at +14% rounds/fight — Enduring Payload of Armageddon is the locked revert path). The Daemon slot holds the crafted **Targeted Daemon of the Storm** (22 July; A/B: −5% fight length, −6.5% damage taken; revert path decompiled, keep permanent). The Analyzer slot changed profile on 27 July: the crafted **Targeted Analyzer of Light Speed** (fourth contract-crafted main-set item, **+24.9 at ceiling — the largest craft delta on record**) trades CritCh 23.10% → 8.54% for Acc +19pp, Eva +5.5pp, AtkSpd +4.7pp and **Barrier 0 → 269**, restoring the mitigation the Phoenix Shell gave up. Aligned Analyzer of Light Speed is the locked revert path. Not yet A/B-read.
+- **Shell and Router** — the Router remains the Defense/Regen backbone. The Shell holds the crafted **Citadel Shell of the Phoenix** (23 July, first craft to realize above projection, +22.6; **A/B KEEP**, death mean +7.0, ceiling ~110, attrition onset +~20 streaks, realized regen +28–36%), trading Def 28.4%/Barrier 221 for Eva +20%/Regen +46/Def 12.2% — recovery over mitigation. Old Overclocked Shell is the locked revert path.
+- **Hardware is now part of the loadout, not a side system.** The 27 July free reset re-cut 821 levels into 418 better ones: Tracking Algorithm / TOR Node / Encryption Module at 100 and ECC Memory at 85, with Overclock/Vulnerability Scanner/Buffer Overflow cut to near-zero and Packet Shield / Exploit Framework abandoned entirely (their gear-flat multiplicand was zero — 81K chips doing nothing). Hardware, homelab and equipment percentages share one additive pool (`mechanics.md` §13), so hardware levels are directly comparable to gear affixes and belong in every loadout judgement.
 
 Caveat now quantified: the Firewall's ilvl-314 malus is ~-31% on percentage stats and worse on flat Regen (scaling law, `static-analysis-2026-07-22.md`). A replacement *will* eventually win; it must preserve the HP/Def/Regen *package*, not just raw numbers.
 
 ## Bottleneck model
 
-1. **Primary: accumulated HP attrition across long streaks** — losses consistently start well below full HP. Substantially moved 23 July by the Phoenix Shell (attrition onset 60–76 → 78–90, ceiling ~101 → ~110); the residual form is deep-fight net drain (~2.2K/fight at streak 86–105) where prg decay outpaces even +46 gear Regen. Next levers are recovery *systems* (WAF Rules at homelab 9, Snapshot Rollback, the Hacking Simulator path at 10), not more gear regen.
-2. **Secondary (partially addressed 23 July): hit reliability / fight duration** against high-evasion enemies — the Bastioned Payload lifted deep-streak hit rate 70→77%; hit rate held ~78% throughout the Shell test.
-3. **Tertiary: incoming burst** against the thinner Def/Barrier flank (one 76%-start-HP death vs a Trojan Wall, eff. acc ~5,900, in the Shell A/B) — real but not dominant; watch its share as streaks now regularly reach 108–111.
+1. **Primary: accumulated HP attrition across long streaks** — losses consistently start well below full HP (starting HP 17–65%, median ~30% across the 24–27 July deaths). Moved twice: the Phoenix Shell (23 July) lifted the ceiling ~101 → ~110 and attrition onset 60–76 → 78–90; player level then carried it to a settled 105–110. Residual form is deep-fight net drain (~2.2K/fight at streak 86–105) where `prg` decay outpaces gear Regen. The 27 July package attacks this from three sides at once — hardware Regen +14.9%, Defense +6.1%, and Barrier from **0 to 280** — and has not yet been read out.
+2. **Secondary: hit reliability / fight duration** against high-evasion enemies — the Bastioned Payload lifted deep-streak hit rate 70 → 77%. Accuracy has since gone 6,260 → 7,414 (+18%) from the Analyzer craft plus hardware; expect hit rate to move again.
+3. **Tertiary: incoming burst** against the thin Def/Barrier flank (one 76%-start-HP death vs a Trojan Wall in the Shell A/B). Barrier 0 → 280 is the first direct answer to this since the Shell traded it away.
+4. **Output is the deliberate cost.** Crit chance fell 51.0% → 31.5% across the day (Analyzer craft plus Vulnerability Scanner cut to 17). Roughly −10% damage per landed hit, accepted because the 22 July law holds that tempo does not move the death ceiling while recovery and mitigation do. If depth does not improve, `damage_taken` **per round** is the diagnostic — a rise there would mean attack speed is a mitigation stat and the model needs revising.
+
+Next levers are recovery *systems*, not more gear regen: WAF Rules, Snapshot Rollback, and the **Hacking Simulator** at homelab 10 (~600 progress points away), which replaces heuristic verdicts with measured ones.
 
 ## Active project status
 
-- **Citadel Firewall of the Bastion** — coherent defensive alternate; not a main-set upgrade (loses 33 Regen). Keep locked.
-- **Aggressive Kernel of Renewal** — failed main-set combat trial; alternate/test material only.
-- **Fortified Firewall of the Giant** — aborted after T9 Barrier Augment; decompile or use as disposable test mule.
-- **Aligned Firewall of Bastion** — best speed/barrier alternate base; no blind craft.
-- No candidate is currently approved for a blind full craft. Re-rank with `ih.py candidates --slot <slot>` against the current bottleneck before spending resources.
+- **Targeted Analyzer of Light Speed** — equipped 27 July, A/B not yet read. Expected mechanism: realized `prg`/round is unchanged by it (no Regen), so barrier soak appearing from zero is its signature; accuracy is bundled with the same day's hardware reallocation and is not separately attributable.
+- Revert paths held decompile-locked: Aligned Analyzer of Light Speed, Overclocked Shell of the Monolith, Enduring Payload of Armageddon.
+- No candidate is currently approved for a blind full craft. Re-rank with `ih.py potential --slot <slot>` (and `--cap 2` for the upside tail) against the current bottleneck before spending.
+- Stranded by design: ~1.47M shop-locked gathering resources after the reset. Worth ≈2.9M credits at market rate against an 11.1B balance; clearing them would cost ~90% of the chip budget. Leave them.
 
 ## Standing decisions
 
