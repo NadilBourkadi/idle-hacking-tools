@@ -569,6 +569,11 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     tick_s = info.get("tick_seconds") or 5
     busy = {j.get("target") for j in (homelab.get("active_jobs") or [])
             + (homelab.get("pending_jobs") or [])}
+    # Every purchasable carries the install (UI section) it lives under -- an
+    # upgrade name alone still means hunting through panels to find it.
+    installs = definitions.get("installs") or []
+    section_names = {d.get("type"): d.get("name") for d in
+                     (installs if isinstance(installs, list) else installs.values())}
     out = []
     for u in iter_homelab_upgrades(homelab, definitions):
         d, nxt = u["def"], u["next"]
@@ -582,6 +587,7 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             continue
         out.append({
             "name": d.get("name"), "type": d["type"],
+            "section": section_names.get(u["install"], u["install"]),
             "level": u["level"], "target_level": u["level"] + 1,
             "points": nxt.get("progress_points", 0),
             "hours": (nxt.get("duration_ticks") or 0) * tick_s / 3600,

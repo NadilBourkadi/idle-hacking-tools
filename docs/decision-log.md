@@ -242,3 +242,9 @@ Two test streaks (deaths at 98 and 96, enemy lvl 1383/1366) vs same-session old-
 - **Fixed in the tooling so the vague form is not reachable:** `ihlib.homelab_fill_suggestions(capture, limit, allow_hackcoin=False)` returns concrete jobs — name, target level, points, duration, cost — excluding gated, already-queued, unaffordable and hackcoin-costing upgrades. Both `ih.py audit` and `ih.py homelab` now print a **FILL NOW** block naming exactly what to queue.
 - **Ranking rule encoded: total progress points, not points per slot-hour.** For a slot that will run unattended, the idle time after a short job costs more than its better nominal rate — a 1.0h/95pt job beats a 0.5h job rated 110pts/h outright if nobody refills at the 30-minute mark. The pts/slot-hour ordering remains in the browse list below it, where comparing rates is what you want.
 - Recorded in `CLAUDE.md` (Analysis rules, first bullet) and `.claude/skills/advise/SKILL.md`.
+
+## 27 July 2026 — UI section is part of the action, not a nicety
+
+- Player: the recommended upgrade must **always** carry the section it sits under. The rule was already in memory ("attach the UI section/panel to every purchasable", 23 Jul) and I was following it in prose while the tooling emitted bare names — so it survived only as long as I remembered.
+- `ihlib.homelab_fill_suggestions` now resolves each job's install to its display name and returns it as `section`; `ih.py audit` prints `Virtual Desktops [Command Workstation] -> L3 (…)` and `ih.py homelab`'s FILL NOW block prints `under [Command Workstation]` with the effect description.
+- General form recorded in `CLAUDE.md` and the advise skill: an action is name + target + cost + duration + **where it lives**. A name without its panel still means hunting.

@@ -360,6 +360,7 @@ def cmd_homelab(args):
             print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
                   f"+{p['points']:>3}pts  {p['hours']:.1f}h  "
                   f"{ihlib.fmt_cost(p['cost'])}")
+            print(f"        under [{p['section']}]  {p['description'][:70]}")
         if not picks:
             print("    nothing affordable left un-queued")
 
@@ -488,8 +489,9 @@ def cmd_audit(args):
             if picks:
                 # name the exact jobs -- "refill them" is not an action
                 named = "; ".join(
-                    f"{p['name']} -> L{p['target_level']} (+{p['points']}pts, "
-                    f"{p['hours']:.1f}h, {ihlib.fmt_cost(p['cost'])})"
+                    f"{p['name']} [{p['section']}] -> L{p['target_level']} "
+                    f"(+{p['points']}pts, {p['hours']:.1f}h, "
+                    f"{ihlib.fmt_cost(p['cost'])})"
                     for p in picks)
                 flags.append(("IDLE", f"homelab has {free} build slot(s) and "
                                       f"{room} queue place(s) empty — fill with: "
