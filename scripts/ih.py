@@ -90,12 +90,23 @@ def cmd_item(args):
     print("  totals:", ihlib.fmt_totals(ihlib.stat_totals(item), combat_only=False))
     preview = item.get("crafting_preview")
     if preview:
-        interesting = ["base_cost_with_stability", "augment_cost",
-                       "augment_credit_cost", "tier_promotion_primary_cost",
-                       "tier_promotion_secondary_cost", "compile_cost"]
-        print("  costs:", "  ".join(
-            f"{k.replace('_cost', '').replace('_', ' ')} {round(preview[k]):,}"
-            for k in interesting if preview.get(k)))
+        # UI button names differ from the payload keys (decoded 27 Jul 2026
+        # from vendor/game-js): annul -> PRUNE, masterwork -> REFACTOR.
+        labels = [
+            ("base_cost_with_stability", "base w/stability"),
+            ("augment_cost", "augment"), ("augment_credit_cost", "augment cr"),
+            ("tier_promotion_primary_cost", "VU prefix"),
+            ("tier_promotion_secondary_cost", "VU suffix"),
+            ("masterwork_cost", "Refactor"), ("annul_cost", "Prune"),
+            ("bias_primary_cost", "Bias"), ("bias_credit_cost", "Bias cr"),
+            ("bias_essence_cost", "Bias essence"),
+            ("lock_cost", "Lock cr"), ("compile_cost", "compile"),
+        ]
+        print("  costs:", "  ".join(f"{name} {round(preview[k]):,}"
+                                    for k, name in labels if preview.get(k)))
+        if preview.get("lock_cost"):
+            print("         Lock also costs 1 Stabilizer "
+                  f"(held: {(cap['state'].get('currentPlayer') or {}).get('stabilizers', 0):,})")
 
 
 def cmd_candidates(args):

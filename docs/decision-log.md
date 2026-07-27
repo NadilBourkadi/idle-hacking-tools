@@ -215,3 +215,14 @@ Two test streaks (deaths at 98 and 96, enemy lvl 1383/1366) vs same-session old-
 - Player confirmed the guide's rule as "consistently reach 10% above the soft cap" = streak 132; last two deaths were 131 and 133. Independent analysis agreed (`mechanics.md` §15): cost ≈4 streaks of depth, gain ≈16% credits per fight and +15.4% drop rarity. Moved.
 - **All death-streak baselines are now segmented at this change.** A zone's `level_offset` shifts enemy level at equal streak, so streaks before and after are not comparable — the pre-move ceiling of ~133 in Small Business should read as roughly ~129 in Corporate for the same build. Death records carry `zone_id`/`zone_name`; `ih.py audit` now flags any death window spanning more than one zone so a baseline cannot silently mix them.
 - Side effect logged: this **closes the measurement window on open-questions §17** (what `reward_streak_soft_cap` caps). It needed fights above the cap; the new cap is 200 against streaks near 129. §17 parked, with the 34 fights banked above 120 on 27 July noted as the only sample that will exist for a long time. Accepted knowingly — progression outranks the question.
+
+## 27 July 2026 — Crafting operation names and costs decoded; a docs-lookup failure
+
+- Player asked whether Stabilizers are the Bias Reroll currency. They are not — **Stabilizers pay for Lock** (1 per Lock, plus `lock_cost` Credits), which `docs/crafting.md` §7 has recorded since 21 July. **I answered "I've got nothing on them" without checking our own documentation.** The workspace knew; I didn't look. Query-first applies to the docs, not only to the captures.
+- The question was still worth asking — chasing it through `vendor/game-js` turned up four things the docs did not have:
+  - **UI button names differ from the `crafting_preview` keys**: PRUNE is `EQUIPMENT_ANNUL`/`annul_cost`, and **REFACTOR is `EQUIPMENT_MASTERWORK`/`masterwork_cost`**. Both fields sit in every capture and would have been mis-read as unknown operations.
+  - **`bias_essence_cost` = 5 × (affix count − 1)** — 20 at 5 affixes, 25 at 6, measured across all 17 items in the capture. The docs recorded a flat "20 Essence" from a 0.6.1 snapshot, which was a 5-affix observation generalised too far.
+  - **Refactor's button is disabled when every effect is already at `value_max`** — independent confirmation of within-tier reroll semantics (§5).
+  - **Stabilizers come from decompiling and nothing else consumes them**, so the balance is a count of remaining Locks (94).
+  - The essence → affix-category mapping is server-side; the client passes only the essence name, so it cannot be decoded statically. Open-questions §3 updated to say so and now notes the test is cheap (Essence and Stabilizers are both abundant).
+- `ih.py item` now prints Refactor, Prune, Bias (primary/credit/essence) and Lock costs alongside the ones it already showed, with the Stabilizer requirement and the held balance.

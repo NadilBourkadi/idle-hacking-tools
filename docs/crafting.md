@@ -158,9 +158,10 @@ After Augment, capture a fresh crafting snapshot before any other operation.
 ### Lock
 
 - Only one affix can be crafting-locked at a time.
-- Lock costs Credits and one Stabilizer.
+- Lock costs `lock_cost` Credits and **one Stabilizer**.
 - Unlock refunds the lock's Credits and Stabilizer.
 - Lock is mainly relevant to random removal/reroll operations, not targeted Version Upgrade or Refactor.
+- **Stabilizers come from decompiling** (`stabilizers_gained`; the 27 July mass-decompile of 43 items yielded +7) and **nothing else consumes them**, so the balance is simply a count of remaining Locks — 94 as of 27 July 2026.
 
 ### Prune
 
@@ -183,11 +184,30 @@ Therefore, random Prune is not a routine repair tool. Use it only when several u
 
 - Bias Reroll uses a selected essence category to guarantee the orientation, not an exact affix.
 - Categories shown by the current UI: Optimization, Prosperity, Expertise, Precision, Damage, Survival, Retribution and Dexterity.
-- Current 0.6.1 snapshots showed primary resource + Credits + **20 Essence**. Older guide text showing one Essence is stale.
+- Cost is `bias_primary_cost` + `bias_credit_cost` + **`bias_essence_cost` = 5 × (affix count − 1)**: 20 on a 5-affix item, 25 on a 6-affix item, measured across all 17 items in the 27 July 2026 capture. The flat "20 Essence" in earlier 0.6.1 notes was a 5-affix observation, not a constant. Older guide text showing one Essence is stale.
+- The client sends only `BIAS_REROLL {item_id, essence}` — the essence → affix-category mapping is resolved server-side and is **not** present in the client JS, so it cannot be decoded statically (open-questions §3).
 - Prune and Bias Reroll consume the active affix lock on success; auto-relock can restore it if resources are available.
 - The exact number/selection of affixes changed by the current Bias Reroll implementation has not yet been captured in a before/after test. Do not prescribe it as a deterministic repair operation until that test exists.
 
 For the player's current attrition bottleneck, Survival is the relevant bias; Precision is secondary for high-evasion/Mirrored targets.
+
+### UI button names vs `crafting_preview` keys (decoded 27 July 2026)
+
+Two operations are stored under names that do not match their buttons, so the
+cost fields were easy to mis-read. From `vendor/game-js/inventory.js`:
+
+| UI button | WebSocket message | Cost key(s) |
+|---|---|---|
+| LOCK AFFIX | `EQUIPMENT_LOCK` | `lock_cost` Credits **+ 1 Stabilizer** |
+| **PRUNE** | **`EQUIPMENT_ANNUL`** | **`annul_cost`** |
+| **REFACTOR** | **`EQUIPMENT_MASTERWORK`** | **`masterwork_cost`** |
+| AUGMENT | `EQUIPMENT_AUGMENT` | `augment_cost` + `augment_credit_cost` |
+| Version Upgrade | `EQUIPMENT_TIER_PROMOTE` | `tier_promotion_primary/secondary_cost` |
+| Bias Reroll | `BIAS_REROLL` | `bias_primary/credit/essence_cost` |
+
+The REFACTOR button is **disabled when every effect on the affix already sits at
+`value_max`** — independent confirmation that Refactor rerolls within the current
+tier and cannot improve a maxed roll (§5). `ih.py item` prints all of these.
 
 ## 8. Slot resource mapping
 

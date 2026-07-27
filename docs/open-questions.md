@@ -75,16 +75,18 @@ Test:
 - export immediately after;
 - compare old/new ranges and percentile.
 
-### 3. Bias Reroll exact semantics
+### 3. Bias Reroll exact semantics — PARTIALLY RESOLVED 27 July 2026
 
-Unknown:
+Resolved from `vendor/game-js` and the capture (see `crafting.md` §7): the client sends only `BIAS_REROLL {item_id, essence}`; cost is `bias_primary_cost` + `bias_credit_cost` + **5 × (affix count − 1)** Essence; Prune and Bias Reroll consume the active lock, and the panel offers an auto-relock toggle costing Credits + 1 Stabilizer. **Lock costs 1 Stabilizer**, which is what Stabilizers are for — nothing else consumes them.
 
-- how many affixes are rerolled;
+Still unknown, all server-side:
+
+- how many affixes a Bias Reroll actually rerolls;
+- the essence → affix-category mapping (8 essences: optimization, prosperity, expertise, precision, damage, survival, retribution, dexterity — the client only passes the name);
 - whether selection is prefix/suffix constrained;
-- exact interaction with a full item and one lock;
-- whether failed/successful operation consumes Stability in all cases.
+- whether the operation consumes Stability on both outcomes.
 
-Test only on a disposable item after enough Essence is available.
+Now cheap to test: Essence is abundant (survival 2,699 ≈ 100+ rerolls) and Stabilizers are plentiful (94 ≈ 94 Locks). One disposable item, lock a known affix, bias with a known essence, capture before and after.
 
 ### 4. Compile coverage — LARGELY RESOLVED 22 July 2026
 
