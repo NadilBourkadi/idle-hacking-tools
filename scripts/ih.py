@@ -20,11 +20,18 @@ Commands:
   ab [--brief]             active A/B experiment status across ALL captures
                            (deduped; each capture permanently banks its
                            combat windows — capture at least once per climb)
+  contract ITEM            simulate a craft contract's OUTCOME DISTRIBUTION
+                           [--phase 'of Haste:4' ...] [--order] [--floor N]
+                           (use instead of the flat ~5-point discount when a
+                           craft verdict is close — see ihlib.simulate_contract)
+  cadence                  measured seconds per fight from the death clock
+                           (fixed ~4.87s tick; attack speed is NOT income)
 
 Output is deliberately compact; prefer this over ad-hoc capture parsing.
 """
 
 import argparse
+import statistics
 import sys
 
 import ihlib
@@ -229,7 +236,11 @@ def cmd_history(args):
 
 def cmd_potential(args):
     cap, path = ihlib.load_capture(args.file)
-    ladders = ihlib.tier_ladders(cap)
+    # ladders come from the WHOLE capture archive, not this capture: an affix's
+    # tier range is a game constant, so decompiling an item must not delete the
+    # evidence. See ihlib.tier_ladders_archive for the +9.0 -> +4.6 Firewall
+    # regression that this prevents.
+    ladders = ihlib.tier_ladders_archive()
     print(f"# {path.name}")
     preserve = ihlib.stability_preserve_chance(cap)
     depth = ("depth set by Stability budget" if args.cap <= 1
@@ -241,6 +252,14 @@ def cmd_potential(args):
           "(ihlib.CRAFT_WEIGHTS_*), not a game formula.")
     print("# These are optimal-plan ceilings; a §10.1 contract with attempt "
           "caps and a hard floor lands ~5 points lower — discount accordingly.")
+    # ladder law re-fitted from the archive, not hard-coded (ihlib.fit_tier_steps)
+    shallow_step, deep_step = ihlib.fit_tier_steps(cap, ladders=ladders)
+    print(f"# Tier ladder fitted over {len(ihlib.capture_paths())} captures: "
+          f"{shallow_step:.3f}x per tier "
+          f"above T{ihlib.DEEP_TIER}, {deep_step:.3f}x at or below it. "
+          f"'low' = same plan re-valued at the p25 deep step "
+          f"({ihlib.TIER_STEP_DEEP_LOW:.3f}); a verdict that needs the median "
+          f"to clear the band is resting on extrapolation.")
     slot_filter = args.slot.lower() if args.slot else None
     slots = [s for s in ihlib.SLOT_DISPLAY.values()
              if slot_filter is None or s.lower() == slot_filter]
@@ -260,7 +279,8 @@ def cmd_potential(args):
             if where != "inventory" or s != slot:
                 continue
             plan = ihlib.plan_craft(item, ladders, floor=args.floor,
-                                    tier_cap=args.cap, preserve=preserve)
+                                    tier_cap=args.cap, preserve=preserve,
+                                    deep_step=deep_step)
             rows.append((plan["score"], item, plan))
         rows.sort(key=lambda r: -r[0])
         eq_totals = ihlib.stat_totals(equipped) if equipped else {}
@@ -280,6 +300,16 @@ def cmd_potential(args):
                   f"stab ~{plan['expected_spend']:.1f}"
                   + (f"/~{plan['expected_attempts']:.0f} att" if preserve else "")
                   + f"  {aug}  Compile +{plan['compile_pct'] * 100:.1f}%")
+            # the same plan valued at the p25 deep step -- a verdict that only
+            # survives at the median is extrapolation, not evidence
+            delta_low = plan["score_low"] - base
+            if plan["deep_reliance"] and abs(plan["score_low"] - score) > 0.05:
+                flip = ("" if (delta_low > ihlib.UPGRADE_BAND) == (delta > ihlib.UPGRADE_BAND)
+                        else "  <-- VERDICT FLIPS")
+                print(f"            low:  score {plan['score_low']:6.1f} "
+                      f"({delta_low:+6.1f})  "
+                      f"{plan['deep_reliance']} unobserved deep-tier "
+                      f"promotion(s){flip}")
             if steps:
                 print(f"            plan: {steps}")
             print(f"            proj: {ihlib.fmt_totals(plan['totals'])}")
@@ -411,8 +441,14 @@ def cmd_hardware(args):
         sys.exit("no hardwareInfo in capture (open the Hardware Shop tab and recapture)")
     print(f"# {path.name}")
     stats_breakdown = hw.get("stats_breakdown") or {}
-    print(f"  chips {hw.get('chips'):,.0f}  hackcoin {hw.get('hackcoin')}  "
-          f"levels held {hw.get('hardware_purchased')}")
+    # live currentPlayer balance, not the panel snapshot -- see ihlib.chip_budget
+    spendable, free_chips, locked_chips = ihlib.chip_budget(cap)
+    locked_note = f" (+{locked_chips:,.0f} shop-locked)" if locked_chips else ""
+    stale_note = ("" if free_chips == hw.get("chips")
+                  else f"  [panel snapshot said {hw.get('chips'):,.0f}]")
+    print(f"  chips {free_chips:,.0f}{locked_note}  "
+          f"hackcoin {hw.get('hackcoin')}  "
+          f"levels held {hw.get('hardware_purchased')}{stale_note}")
     if hw.get("can_reset"):
         refund = next((o.get("refund") for o in hw.get("reset_section_options") or []
                        if o.get("section") == "all"), None)
@@ -443,6 +479,98 @@ def cmd_hardware(args):
               f"{(d.get('description') or '')[:60]}")
 
 
+def cmd_contract(args):
+    """Price a §10.1 craft contract by simulation instead of by discount."""
+    cap, path = ihlib.load_capture(args.file)
+    ladders = ihlib.tier_ladders_archive()
+    matches = ihlib.find_items(cap, args.item)
+    base_item = next((i for _w, _s, i in matches if (i.get("stability") or 0) > 0),
+                     matches[0][2] if matches else None)
+    if base_item is None:
+        sys.exit(f"no item matching {args.item!r}")
+    slot = base_item.get("slot")
+    equipped = (cap["state"].get("equipmentData") or {}).get(slot)
+    if equipped is None:
+        sys.exit(f"nothing equipped in {slot} to compare against")
+    baseline = ihlib.weighted_score(ihlib.stat_totals(equipped))
+    preserve = ihlib.stability_preserve_chance(cap)
+    print(f"# {path.name}")
+    print(f"  base     {base_item.get('name')}  Stability "
+          f"{base_item.get('stability')}  floor {args.floor} -> budget "
+          f"{(base_item.get('stability') or 0) - args.floor}")
+    print(f"  vs equipped {equipped.get('name')}  score {baseline:.1f}"
+          f"   (Snapshot Backups preserve {preserve:.0%})")
+
+    phases = []
+    for spec in args.phase:
+        name, _, tier = spec.rpartition(":")
+        if not name or not tier.strip().lstrip("T").isdigit():
+            sys.exit(f"bad --phase {spec!r}; use \"of Haste:4\"")
+        phases.append((name.strip(), int(tier.strip().lstrip("T"))))
+    if not phases:                       # default to plan_craft's own plan
+        plan = ihlib.plan_craft(base_item, ladders, floor=args.floor,
+                                preserve=preserve)
+        phases = [(name, to) for name, _frm, to, _c, _e in plan["steps"]]
+        print(f"  phases taken from plan_craft (pass --phase to override)")
+    if not phases:
+        sys.exit("no phases to run")
+
+    print("\n  contract (execution order matters -- see best_contract_order):")
+    for name, tier in phases:
+        cur = next((a.get("tier") for side in ("prefixes", "suffixes")
+                    for a in base_item.get(side) or []
+                    if a.get("name") == name), None)
+        if cur is None:
+            sys.exit(f"{base_item.get('name')} has no affix {name!r}")
+        att = sum(ihlib.vu_expected_attempts(x) for x in range(tier + 1, cur + 1))
+        stab = sum(ihlib.vu_expected_stability(x, preserve)
+                   for x in range(tier + 1, cur + 1))
+        print(f"    {name:22s} T{cur} -> T{tier}   exp {att:4.1f} attempts / "
+              f"{stab:4.1f} Stability")
+
+    sim = ihlib.simulate_contract(base_item, ladders, phases,
+                                  floor=args.floor, preserve=preserve,
+                                  trials=args.trials, baseline=baseline)
+    print(f"\n  outcome distribution over {sim['trials']:,} runs "
+          "(delta vs equipped):")
+    print(f"    mean {sim['mean']:+6.2f}   median {sim['median']:+6.2f}   "
+          f"p10 {sim['p10']:+6.2f}   p90 {sim['p90']:+6.2f}   "
+          f"worst {sim['min']:+6.2f}")
+    print(f"    P(> +{ihlib.UPGRADE_BAND:.0f} UPGRADE_BAND) "
+          f"{sim['p_upgrade']:6.1%}     P(> 0) {sim['p_positive']:6.1%}"
+          f"     P(all phases complete) {sim['p_complete']:6.1%}")
+    print("    Prefer this to the flat ~5-point contract discount when the "
+          "call is close;\n    a discount cannot see that phases are "
+          "non-separable (Stability spent cuts\n    Compile, which multiplies "
+          "everything) nor that the downside is bounded.")
+
+    if args.order and len(phases) > 1:
+        print("\n  phase-order search (best P(upgrade) first):")
+        for order, s in ihlib.best_contract_order(
+                base_item, ladders, phases, floor=args.floor,
+                preserve=preserve, trials=max(args.trials // 5, 2000),
+                baseline=baseline):
+            label = " -> ".join(n for n, _ in order)
+            print(f"    {label:52s} P(>+5) {s['p_upgrade']:5.1%}  "
+                  f"mean {s['mean']:+5.2f}  p10 {s['p10']:+5.2f}")
+
+
+def cmd_cadence(args):
+    """Fight cadence from the game's own death clock (mechanics.md §14)."""
+    rows = ihlib.fight_cadence()
+    if not rows:
+        sys.exit("no death records in the stream ledger")
+    values = sorted(s for _ms, s in rows)
+    mid = statistics.median(values)
+    print(f"  n={len(values)}  median {mid:.3f} s/fight  "
+          f"sd {statistics.pstdev(values):.3f}  "
+          f"range {values[0]:.3f}-{values[-1]:.3f}")
+    print(f"  -> {3600 / mid:.0f} fights/hour")
+    print("  Fight cadence is a fixed real-time tick. Attack speed does NOT")
+    print("  buy fights per hour -- it pays in rounds per fight. Rewards per")
+    print("  hour are set by streak depth. (mechanics.md §14)")
+
+
 def cmd_audit(args):
     """Anomaly sweep: things that are silently costing progress right now.
 
@@ -455,19 +583,47 @@ def cmd_audit(args):
     print(f"# {path.name}")
     flags = []
 
+    # the whole capture can be stale, not just a panel inside it: the
+    # auto-stream keeps running after the last capture click, so its newest
+    # `stats` record outranks everything in the file (27 Jul 2026: a capture
+    # showing 44,582 unspent chips against a streamed 4,140 — already spent)
+    lag, changed = ihlib.capture_stream_drift(cap)
+    if lag is not None and lag > 300:
+        detail = ("; ".join(f"{f} {was:,.0f} -> {now:,.0f}"
+                            if isinstance(was, (int, float)) else
+                            f"{f} {was} -> {now}"
+                            for f, was, now in changed)
+                  or "no streamed field changed, but homelab job progress and "
+                     "hardware levels are not streamed — assume both moved")
+        flags.append(("OUTDATED", f"capture is {lag / 60:,.0f} min behind the "
+                                  f"combat stream ({detail}) — recapture before "
+                                  f"spending anything"))
+
     for section, reason in ihlib.stale_panels(cap):
         flags.append(("STALE", f"{section}: {reason} — reopen that game tab "
                                f"and recapture before trusting it"))
+
+    # model self-check against the game's own numbers: if stat_total cannot
+    # reproduce a stat, every swap projection touching it is unsound
+    for stat, reported, modelled in ihlib.validate_stat_totals(cap):
+        flags.append(("MODEL", f"stat_total({stat}) = {modelled:,.4f} but the "
+                               f"game reports {reported:,.4f} — fix its family "
+                               f"in ihlib before trusting any projection using it"))
 
     hw = ihlib.hardware_state(cap)
     if hw:
         sb = hw.get("stats_breakdown") or {}
         locked = hw.get("locked_resources") or {}
-        free_chips = hw.get("chips") or 0
-        spendable = free_chips + (locked.get("chips") or 0)
+        spendable, free_chips, locked_chips = ihlib.chip_budget(cap)
+        # a "spend these chips" flag off an outdated capture is how a balance
+        # that is already spent gets re-recommended -- say so on the same line
+        streamed = dict((f, now) for f, _, now in changed).get("chips")
         if spendable > 20000:
+            correction = (f"; the stream says {streamed:,.0f} — already spent, "
+                          f"recapture" if streamed is not None else "")
             flags.append(("IDLE", f"{spendable:,.0f} chips unspent "
-                                  f"({locked.get('chips', 0):,.0f} shop-locked)"))
+                                  f"({locked_chips:,.0f} shop-locked)"
+                                  f"{correction}"))
         if locked.get("hackcoin"):
             flags.append(("IDLE", f"{locked['hackcoin']} shop-locked hackcoin — "
                                   f"unusable outside Hardware; spend or lose it"))
@@ -606,8 +762,14 @@ def cmd_ab(args):
             for era in ("pre", "post", "post-seg"):
                 b = mech[era]["brackets"].get((lo, hi))
                 if b:
+                    # hit rate is printed PER BRACKET on purpose: enemy
+                    # evasion scales with streak, so a pooled pre/post hit
+                    # rate compares streak composition, not accuracy
+                    hit = (f" hit {b['hit']*100:.1f}%" if b.get("hit")
+                           is not None else "")
                     parts.append(f"{era} n={b['n']} gross {b['gross']:.0f} "
-                                 f"net {b['net']:.0f} rnds {b['rounds']:.1f}")
+                                 f"net {b['net']:.0f} rnds {b['rounds']:.1f}"
+                                 f"{hit}")
             if parts:
                 print(f"    streak {lo}-{hi}:  " + "  |  ".join(parts))
         onset_parts = [f"{era} {mech[era]['onsets']}"
@@ -678,6 +840,22 @@ def main():
     p = sub.add_parser("ab")
     p.add_argument("--brief", action="store_true")
     p.set_defaults(fn=cmd_ab)
+
+    p = sub.add_parser("contract", help="simulate a craft contract's outcome")
+    p.add_argument("item")
+    p.add_argument("--phase", action="append", default=[],
+                   metavar="'of Haste:4'",
+                   help="affix:target_tier, repeatable, in execution order; "
+                        "defaults to plan_craft's own plan")
+    p.add_argument("--floor", type=int, default=8)
+    p.add_argument("--trials", type=int, default=20000)
+    p.add_argument("--order", action="store_true",
+                   help="search every phase permutation")
+    p.add_argument("--file")
+    p.set_defaults(fn=cmd_contract)
+
+    p = sub.add_parser("cadence", help="measured seconds per fight")
+    p.set_defaults(fn=cmd_cadence)
 
     p = sub.add_parser("potential")
     p.add_argument("--slot")

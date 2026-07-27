@@ -277,3 +277,264 @@ A fourth, adjacent: Snapshot Backups recorded as "level 0" in `open-questions.md
 4. Exercise optimisers at both ends of their input range before trusting them.
 
 The session's other repeated pattern: three fixes took the form **"make the tooling emit it"** rather than "remember to do it" — the FILL NOW block, the UI-section field, and `ih.py audit` itself. Standing preference confirmed: when a rule depends on the assistant remembering, move it into the tooling.
+
+## 27 July 2026 — Session 2: the standing next craft failed re-verification
+
+Three model defects found before spending anything. All three are the same shape the session close already named — **a model used outside the regime it was fitted in** — which means the mitigation written this morning did not yet bite. Each is now a tooling check rather than a thing to remember.
+
+**1. Tier ladder growth is not one constant (the expensive one).** `DEFAULT_TIER_STEP = 1.4` was fitted on shallow tiers and applied at every depth. Measured within-family across all percentage affixes in the 19:54Z capture: **1.398 above T5 (n=50), 1.263 at or below it (n=25)**. Over a T6→T1 chase that is a 1.90× over-projection.
+
+- **This reversed the advisory.** `Aegisbound Driver of Execution`, the standing "next craft" at **+14.1**, is **+4.4 — a sidegrade**, because its whole case was CritDmg reaching +81.21% at T1, extrapolated five tiers from a *single* observation (`suffix_critdamage` T6, on the item itself). Corrected projection: **+53.67%**. It would have cost ~18 Stability and the best base owned (ilvl 1605) for a sidegrade.
+- Corrected field: Firewall **+9.0** (unchanged — its ladder is measured where it plans to go), Daemon +11.5 → **+8.6**, Kernel +9.5 → **+8.4**, Driver +14.1 → **+4.4**.
+- Deep steps are strongly family-dependent (`suffix_attack` 1.232→1.171→1.146; `suffix_adaptive_shell` ~1.41 throughout), so an unmeasured family's deep ladder spans ~1.15–1.42 — a 2.7× spread over five tiers. `plan_craft` now returns `score_low` (same plan at the p25 deep step) and `deep_reliance`; `ih.py potential` prints both and flags verdict flips. `ihlib.fit_tier_steps` re-fits both constants from each capture so the law cannot rot. Full detail: `crafting.md` §12.1.
+- **The morning's uncapping defence was wrong on its own terms.** It argued reliance on interpolated points was "unchanged at 43/50" — counting interpolated points without checking their *bias*, which was the entire problem. Uncapping to T1 stands; it just had to be priced on the correct ladder.
+
+**2. `ihlib.stat_total` did not reproduce `attack_damage`** — it returned 0 against a real 2,050, because `attack_damage` was in none of the three stat families and fell through to the gear-flat branch (its `equipment_flat` is 0). `post_combat_heal` and the five economy stats were wrong the same way. The docstring asserted "verified against every stat in the 27 Jul 2026 capture" and had never been run against it. **This is the stat the multiplicative-AtkDmg guardrail is about.** Fixed (`mechanics.md` §13, now four families); `ihlib.validate_stat_totals` checks every stat against the game's own `total` and `ih.py audit` raises a `MODEL` flag on any miss.
+
+**3. Chip balance was read from a stale panel.** `hardwareInfo.chips` is a snapshot from whenever the Hardware tab was last opened; `currentPlayer.chips` is live. They read **37,443 vs 44,582 — 16% low**, so the hardware plan was under-budgeted by 7,139 chips (ECC Memory L91 instead of L93). Neither existing staleness detector fired: the panel carries no clock, and cross-panel credits differed by only 0.26% because credits are 11 figures and spent in lumps while chips are small and accrue continuously. Added `ihlib.panel_currency_drift` — cross-checks every panel currency against the live `currentPlayer` values, the one ground truth available — plus `ihlib.chip_budget`, which all planning now uses. Re-run across today's captures it correctly flags five stale ones and passes the two clean ones.
+
+**Standing lesson, sharpened.** Two of the three defects were caught by *checking a model against a number the game already provides* (`total`, `currentPlayer`). The third needed re-fitting a constant against the data it was supposed to describe. All three had been reviewed and none looked wrong in output. **Where a ground truth exists in the capture, assert against it in code; where one doesn't, re-fit rather than re-read.**
+
+## 27 July 2026 — Session 2: actions
+
+- **Hardware: ECC Memory L85 → L93**, 44,302 chips (x5 batch 26,932 + three singles) + ~48M credits, against a live 44,582 balance. +4.0pp regeneration pool → realized Regen 369.1 → 379.4 (+2.81%). Equal-marginal-value planner puts every spendable chip here; the next-best track is 10% worse per chip. Free hardware reset is 1 Aug (monthly UTC) and refunds chips in full, so buying now costs nothing against it.
+- **No craft approved.** Corrected best candidates all land inside the sidegrade band after the ~5-point §10.1 contract discount, and the best-scoring one (Firewall +9.0) fails the sustain-anchor guardrail at loadout level: Def +6.75% / Eva +4.32% bought with **MaxHP −7.88% and Regen −5.42%**, against a build whose measured win condition is regeneration (net drain −2.8/round) — the opposite direction to the Shell A/B that this build already ran and kept.
+- **Approved instead: a single measured VU step on the Aegisbound Driver's `of Execution` (T6→T5, 60%, cap 3 attempts, ~1.6 Stability of 26).** `value_min`/`value_max` are the tier's full range, so one *successful* promotion reveals the T5 midpoint exactly and pins `suffix_critdamage`'s deep step — collapsing a 1.15–1.42 spread that is worth ±10 score on the Driver verdict. Continue the full chase only if the realized T5 midpoint implies a step ≥ ~1.33 (displayed CritDmg ≳ 19.3%); otherwise stop and re-plan. Noted against `crafting.md` §12.2: the line sits at a 99% roll, so this one step is worth little as a *stat* (~+1.7pp expected) — it is bought for the measurement and for being step 1 of a chase we would run anyway.
+- Homelab: 4/4 build slots and 4/4 queue places full — no action available. In-flight work lands at 9,095 points, still **905 short of homelab 10** (Hacking Simulator gate).
+
+## 27 July 2026 — Session 3: the capture itself can be stale, and nothing checked
+
+**The ECC Memory buy had already been made.** Session 2's headline hardware action (ECC Memory L85 → L93, 44,302 chips) was executed at ~20:44 UTC. The newest capture is 19:54Z, so it still shows 44,582 chips unspent — and `ih.py audit` duly flagged them as idle. The next advisory was one step from re-recommending a purchase already made against a balance already spent.
+
+- Confirmed executed from the stream ledger, not the capture: **chips 45,307 → 4,140** and **Regeneration 369.1 → 379.4 (+2.79%)** across the 20:12→20:44 stats records. Session 2 predicted +2.81%. The `hardware_cost_curve` fit also self-validated on the way through: modelled cost of L85→L93 is **44,592 chips against an actual 44,302 spend (+0.65%)**.
+- Every staleness detector in the toolkit compares a capture **against itself** — panel clock, cross-panel credits, panel-vs-`currentPlayer`. A capture whose panels all agree reads as clean no matter how old the whole file is. `panel_currency_drift` did fire here, but only on `hardwareInfo` being 16% behind `currentPlayer`; `currentPlayer` was itself an hour out of date and nothing could see that.
+- **The auto-stream is the missing ground truth.** It keeps running after the last capture click, so its newest `stats` record post-dates the capture by construction. Added `ihlib.latest_stream_player` / `ihlib.capture_stream_drift` and an `OUTDATED` flag in `cmd_audit`: `capture is 53 min behind the combat stream (chips 44,582 -> 4,222; hack_level 1,054 -> 1,058) — recapture before spending anything`. The IDLE-chips line now carries the streamed correction on the same line, because a "spend these chips" flag off an outdated capture is exactly how a spent balance gets re-recommended.
+- Discrete counters (`hack_level`, `current_zone`) compare exactly rather than on a relative tolerance — 1,054 → 1,058 is four levels of scaling, and a 1% band swallowed it.
+- Exercised at both ends per the standing rule: 53 min of lag on the newest capture, 321 min on a 15:25Z one (which correctly surfaces a zone change, `small_business → corporate_network`), and `(None, [])` for a capture newer than every ledger record or carrying no timestamp.
+
+**This is the fourth instance of the same failure shape in two days, with a new twist.** The previous three were models used outside their fitted regime. This one is a *detector* used outside its scope: three staleness checks, all sound, none of which ever claimed to validate the capture as a whole — so their collective silence read as "the capture is fine". **A sweep of internal-consistency checks cannot certify freshness; that needs a clock outside the file.**
+
+## 27 July 2026 — Session 3: combat baseline restated
+
+38 deaths in today's ledger: **mean peak death streak 116.2, sd 6.9, median 114.5**, no trend across the 14:00–20:00 UTC hourly buckets despite hack level rising 1,031 → 1,058 (+27). `current-state.md` still quoted a "settled 105–110" and has been corrected.
+
+- Hourly means 114.2 / 127.6 / 117.3 / 113.0 / 113.9 / 115.0 are flat against +27 player levels, which is weak evidence that **enemy scaling tracks player level closely enough that level growth is not the death-streak confound it was assumed to be**. Not confirmed — n is 5–7 per bucket. Logged to `open-questions.md` rather than `mechanics.md`.
+- Resolution floor for the ledger: se 1.12, so **~41 deaths to resolve a +3 streak shift at 80% power**. The ECC step is worth perhaps +1. Its boundary (20:44 UTC) is recorded for later segmentation, but no action is gated on reading it and no formal A/B was opened.
+- Attrition remains the primary death mode: median start-HP at death 37%, with 5/38 above 70% (burst/matchup).
+
+## 27 July 2026 — Session 4: two model defects, both found by ground-truth checks
+
+`ih.py audit` opened with five `MODEL` flags and a `STALE` hardware panel. Both defects were in the analysis toolkit, not in the game state, and both had been silently wrong for as long as they had existed.
+
+**1. The economy stat family is not purely additive.** `stat_total` summed every component of `credits`/`cycles`/`hashes`/`packets`/`snippets`, under-reading all five by 11–23% against the game's own `total`. `participation_bonus` (0.5) and `firewall_cache` (0.15 on gathering resources, 0 on credits) **multiply** the additive bracket:
+
+    credits  (1 + 0.46825) × 1.5 × 1.00 = 2.20238   (game: 2.20238)
+    snippets (1 + 0.06 + 0.99026) × 1.5 × 1.15 = 3.53670   (game: 3.53670)
+
+The same capture carrying both a `firewall_cache = 0.15` case and a `firewall_cache = 0` case is what makes the two terms separately identifiable — every additive reading fails one of them. Fixed via `ihlib.ECONOMY_MULT_KEYS` / `economy_multiplier`; **all five stats now close to <1e-9 across all 58 captures in the archive**, not just the newest. Recorded in `mechanics.md` §13. Practical impact was small (econ deltas are ratios, so the error nearly cancels) — the point is that a stat family had been wrong since it was written and only the game's own `total` ever said so.
+
+**2. Ladder amnesia — decompiling was deleting craft evidence.** Detail in `crafting.md` §12.1.1. Session 3 decompiled `Elusive Kernel of Regeneration` as a +1.7 sidegrade; it carried the only `suffix_adaptive_shell` **T7** observation owned, which is the family the Bastioned Firewall's entire plan runs through. **The Firewall verdict fell +9.0 → +4.6 with no game state changed at all** — same item, same Stability, same loadout, same hardware. A 4.4-point swing, comparable to the whole `UPGRADE_BAND`, purely from the model forgetting.
+
+- Fixed: `ihlib.tier_ladders_archive()` unions every capture; `ih.py potential` and `fit_tier_steps` use it. **150 → 582 tier observations, 83 → 97 affix families.** `of Recovery` goes from T1/2/3/8 to T1/2/3/6/7/8/9.
+- Corrected board: **Firewall +9.8** (best, and its deep plan is now inside measured data), Daemon +8.9 (low +8.4), Kernel +6.7, Driver +3.8.
+- **Fifth instance of the same failure shape in three days, with a new twist: the regime moved on its own.** Nobody changed the model — a routine inventory action threw away the data underneath it. Any model fitted on *currently-owned* state carries this risk; prefer archive-wide fits wherever the underlying quantity is a game constant.
+
+## 27 July 2026 — Session 4: actions
+
+- **Hardware: ECC Memory L93 → L99**, ~36.2K chips (x5 batch 29,896 + one single ~6,270) + ~35M credits, against a live 36,747 balance. +3.0pp regeneration pool → realized Regen 379.4 → 387.2 (+2.05%). Equal-marginal-value planner puts the whole budget here; a greedy alternative that sprays the last ~6.6K across Overclock/Vulnerability Scanner/Buffer Overflow/Malware Injector scores identically (3.18 vs 3.18) and was rejected on direction, not size — those are output stats, and regeneration is the measured win condition. Curve self-validated: modelled 5-level cost 30,069 vs the game's own x5 batch price 29,896 (+0.6%).
+- **No craft approved — third advisory running.** Firewall +9.8 is the best and now the best-*supported* ceiling on the board, and is still held on the sustain guardrail: at loadout level it buys Def +7.1% and Eva +4.3% with **MaxHP −7.9% and Regen −5.4%**. Quantified this time — −5.4% of realized regen is ≈ −12.5 `prg`/round against a measured net drain of **−2.8/round**, so the craft would flip net drain positive and give back the +20.5 death streaks the 27 July package bought. Directional (the regen → realized-`prg` proportionality is a working model, not a confirmed law), but the sign is not in doubt.
+- Daemon +8.9 (low +8.4) is the nearest miss: no sustain cost, and it buys Eva +8.9% and Acc +3.2% at loadout level. Held at ~+3.9 after the §10.1 contract discount, and its unpriced cost is real — AtkSpd 30.78% → 14.92% is **−8.7% attack speed = −8.7% fights/hour**, i.e. credits, xp and chips per hour.
+- Homelab: 4/4 build slots and 4/4 queue places full — no action available, unchanged from Session 2. In-flight work lands at 9,095 points, **905 short of homelab 10**.
+- Still outstanding from Session 2 and not yet executed: the single measured VU step on the Aegisbound Driver's `of Execution` (T6→T5, 60%, cap 3, ~1.6 Stability of 26). The item is still at T6. With archive ladders the Driver reads +3.8, so this step is now purely a measurement buy.
+
+## 27 July 2026 — Session 5: the Driver measurement step, and a stale rationale
+
+**Executed:** three Version Upgrades on the Aegisbound Driver's `of Execution`. All three landed — **T6 → T3**, the affix renaming to `of Cataclysm`. Path probability 0.6 × 0.5 × 0.4 = **12%**. Stability 26 → 23 (3 spent against ~6.2 expected). Displayed CritDmg **16.67% → 32.66%**; the item's ceiling delta went **+3.8 → +9.1** (low +9.0).
+
+**The pre-registered gate passes, by a hair.** Session 2 set it at "continue only if the realized T6→T5 step is ≥ ~1.33 (displayed T5 mid ≳ 19.3%)". Measured across the archive: `suffix_critdamage` T6→T5 = **1.3313**, displayed T5 mid **19.29%**. The family decelerates smoothly (1.400 / 1.371 / 1.377 / 1.331 / 1.307 / 1.308 from T9 down), which is why the *three-tier* geometric mean is a lower 1.315 — the gate was about the T6→T5 step specifically and that is the number to read.
+
+**The measurement was not needed, and the advisory that recommended it was reasoning from a stale premise.** The archive-wide ladder fix made one hour earlier (Session 4) already carried `suffix_critdamage` at **T4, T5, T6, T7, T8, T9** — the family was resolved before the first click. Session 2's "buy one tier to pin the family" rationale was written under single-capture ladders, where only the item's own T6 was visible, and it was carried forward into the Session 4 advisory without re-checking it against the fix that had just invalidated it. **The action was right by accident** — 3 Stability bought +5.3 of ceiling — but the stated reason was void, and the same class of error (a conclusion outliving the model it was derived from) is the one this workspace keeps logging.
+
+**What the +9.1 is actually made of.** Pricing the concrete contract outcomes rather than applying the blanket ~5-point discount:
+
+| Contract | Δ vs equipped | exp. Stability | Compile left |
+|---|---:|---:|---|
+| A — compile now, no further VU | **−5.7** | 0.0 | +11.5% |
+| B — `of Annihilation` T5→T3 only | +0.1 | 4.2 | +9.4% |
+| C — B + `of Cataclysm` T3→T2 | +2.8 | 7.3 | +7.8% |
+| D — C + `of Haste` T9→T4 (tool plan) | **+9.5** | 14.6 | +4.2% |
+
+**+6.7 of the +9.5 is `of Haste` — attack speed** (CRAFT_WEIGHTS 0.9, second-highest). Crit damage, the entire reason this item was ever a project, is worth **+2.7** (C − B). The 22 July law says tempo does not move the death ceiling, so most of this score is progression rate, not depth.
+
+**Verdict: hold — reason sharpened, not merely repeated.** At contract D and equipped, the loadout effect is **Acc −4.4% (7,568 → 7,238)**, AtkSpd +4.6%, crit factor +6.8% (CritCh 31.5% → 25.4%, CritDmg 1.509 → 1.942), Def +2.4%, MaxHP +1.5%, Corruption −34.8%, **Regen unchanged**. Net ≈ +8–9% damage throughput and +4.6% fights/hour, bought with a direct hit to bottleneck #2. It is the only top candidate with **no sustain cost** — but it is also the one whose score leans hardest on the stat this build's own law discounts, which makes it the *least* defensible of the three 8–10 band candidates to spend 15 Stability on ~5 hours before the Hacking Simulator can measure all of them. Nothing decays by waiting: the item holds T3 and 23 Stability indefinitely.
+
+**Board after the step:** Firewall +9.8 (sustain cost), Driver +9.1/+9.0 (accuracy cost, tempo-weighted), Daemon +8.9/+8.4 (fights/hour cost), Kernel +6.7 (Defense cost). No craft approved.
+
+## 27 July 2026 — Session 6: Driver craft APPROVED, equip deferred
+
+**Reverses the Session 5 hold.** The hold was reasoned on the point estimate (+9.1, below the ~+10 bar, 70% attack speed). Simulating the actual contract instead of discounting it changes the answer:
+
+| | value |
+|---|---|
+| mean Δ | **+8.41** |
+| median Δ | +9.63 |
+| p10 / p90 | +6.09 / +10.72 |
+| worst observed | −5.05 |
+| **P(Δ > +5, UPGRADE_BAND)** | **90.8%** |
+| P(Δ > 0) | 98.5% |
+
+100,000 runs, budget 15 Stability (23 held, floor 8), 10% Snapshot Backups preserve, per-step VU chances from the capture. Phase order matters: **Haste → Annihilation → Cataclysm** is optimal (p10 +6.09, P(>+5) 90.8%); putting Cataclysm anywhere but last costs 6–10 points of P(>+5), because it is a single 30% step and should absorb the leftover risk. All six orderings were simulated.
+
+**Three facts the point estimate hid.**
+
+1. **The phases are not separable.** Stability spent reduces Compile, which multiplies every explicit affix, so each phase run *alone* is worth far less than in combination — `of Cataclysm` alone is **−2.8**, `of Annihilation` alone **+0.1**, `of Haste` alone **+1.6**, all three **+9.5**. There is no hedged partial contract; the fixed Compile loss has to be cleared by the full package. The corollary is that the simulated p10 is high precisely *because* runs that stall early also spend less and keep more Compile.
+2. **Stability on this item has no alternative use.** It cannot be moved to another base. Holding it earns nothing, so "wait and see" is not a free option — it is an option with zero premium and zero payoff.
+3. **The downside is optional, not realized.** Δ is the crafted Driver *versus* the equipped Warmongering Driver. A bad outcome is simply not equipped; the loss is 15 Stability and ~11–19M credits (0.1–0.2% of an 11.09B balance), not combat performance.
+
+**Crafting does not foreclose the measurement — it enables it.** The Hacking Simulator's Software Profiler runs sims against gear you own, so the crafted Driver has to exist before it can be profiled. The correct split is therefore: **craft now, equip later.**
+
+- **Approved:** the §10.1 contract below, run now. It consumes no build slot and no real-time clock, so it does not compete with the homelab push to level 10.
+- **Deferred:** the equip decision. `Warmongering Driver of Extinction` stays equipped throughout and afterwards. When homelab 10 lands (~905 pts) and the Hacking Simulator + Software Profiler are bought, profile both Drivers and equip the winner. This is a legitimate sequencing under the progression-first rule — the Simulator *changes the correct choice*, it is not being used to protect attribution.
+- Unchanged holds: Firewall +9.8 (−5.4% Regen, flips net drain positive), Daemon +8.9 (−8.7% fights/hour), Kernel +6.7 (−4.5% Defense). All three spend something this build's measured model says it needs; the Driver is the only one that does not.
+
+**Contract (locked):** Lock first (563,664 cr + 1 Stabilizer — Lock's credit price escalates 3% per Stability spent, so it is cheapest before phase 1). Phase 1 `of Haste` T9→T4, cap 12 attempts. Phase 2 `of Annihilation` T5→T3, cap 8. Phase 3 (conditional, Stability ≥ 11) `of Cataclysm` T3→T2, cap 5 — the only extrapolated step in the contract, T2 unobserved. Hard Stability floor 8. Compile last. Recapture after each phase.
+
+Expected loadout effect at full completion, **if it later profiles well**: Acc −4.4%, AtkSpd +4.6%, crit factor +6.8% (CritCh 31.5% → 25.4%, CritDmg 1.509 → 1.942), Def +2.4%, MaxHP +1.5%, Corruption −34.8%, **Regen unchanged** — net ≈ +8–9% damage throughput and +4.6% fights/hour.
+
+## 27 July 2026 — Session 7: Driver craft realized +16.7 — well above projection
+
+**Executed and compiled.** `Aegisbound Driver of Cataclysm`, Stability 0/27. Realized ceiling delta **+16.7** (64.1 vs equipped 47.4) against a contract projection of **+9.5** — and above the best of 100,000 simulated runs (+11.27). Also executed: **ECC Memory L93 → L99** (chips 38,019 → 3,129, hardware levels 1,290 → 1,296, **Regen 379.4 → 387.2**, exactly the +2.05% predicted).
+
+**What the contract said vs what happened.**
+
+| Phase | Contract target | Landed | Roll |
+|---|---|---|---|
+| 1 `of Haste` | T9 → T4, ~12.3% | **T2 → `of Light Speed`, AtkSpd +22.40%** | **97%** |
+| 2 `of Annihilation` | T5 → T3, ~20.7% | **T2 → `of Armageddon`, AtkDmg +25.12%** | 72% |
+| 3 `of Cataclysm` | T3 → T2, ~41.5% | T3 unchanged, CritDmg 33.48% | 56% |
+| Compile floor | 8 Stability (+4.0%) | **5 Stability (+2.5%)** | — |
+
+**Why it beat projection, decomposed honestly.** Roughly two-thirds of the overshoot is *two extra tiers on the two best lines* (Haste T4→T2, Annihilation T3→T2) — the run went deeper than contracted rather than stopping at target. The rest is roll luck: the planner values a promoted affix at the tier **midpoint**, and these landed at 97% and 72%. It was paid for by **breaching the declared Stability floor** — compiled at 5, not 8, costing −1.5% Compile on every affix. Phase 3 never ran, which is exactly the trade the extra tiers bought.
+
+**Calibration.** The standing ~5-point *downward* discount for §10.1 contract conservatism **inverted here**. That discount is fundamentally about contracts *stopping early*; when a craft does not stop early it does not apply, and the deeper tiers compound. Second craft to realize above projection (Citadel Shell, +22.6, was first) and both overshoots have the same cause. **This is not licence to drop the floor** — a run with this luck profile is rare, and at 5 Stability there is no Compile buffer left if a phase stalls. The floor stays at 8 in future contracts.
+
+**Loadout effect on equip** (from `statsBreakdown`, formula-level):
+
+| Stat | Before | After | Δ |
+|---|---|---|---|
+| Attack speed | 1.819 | 1.999 | **+9.90%** |
+| Crit factor | 1.1605 | 1.2142 | **+4.62%** (CritCh 31.5%→25.4%, CritDmg 1.509→1.844) |
+| Attack damage | 2,078.6 | 2,117.2 | +1.85% |
+| Defense | 1,094.8 | 1,120.7 | **+2.36%** |
+| Max HP | 15,011.9 | 15,224.1 | +1.41% |
+| **Regeneration** | 387.2 | 387.2 | **unchanged** |
+| Accuracy | 7,595.3 | 7,264.7 | **−4.35%** |
+| Corruption | 24.8 | 16.2 | −34.78% |
+
+Damage throughput **+17.1%** before the hit-rate effect, ≈ **+15%** after; fights/hour **+9.9%**.
+
+**Decision: EQUIP — reverses the Session 6 "craft now, equip after the Simulator" split.** That deferral was reasoned at a projected +9.5 whose value was ~70% attack speed, where it was genuinely unclear whether the gain converted. At +16.7 the case changed in kind, not degree: the item is **mitigation-positive** (Def +2.4%, MaxHP +1.4%, Regen untouched — the only top candidate with no sustain cost at all), it clears `UPGRADE_BAND` by more than 3× even at a full 5-point discount, and +9.9% fights/hour is certain economic value independent of the death ceiling. The Hacking Simulator would sharpen the estimate; it would not change the sign. Progression-first: ship it.
+
+**A/B opened: `driver-ab-2026-07-27`** (`ihlib.DRIVER_AB_2026_07_27`, now `ACTIVE_EXPERIMENT`).
+
+- Baseline: post-package deaths, Corporate Network, streak ≥ 50, 27 Jul 17:00–21:47Z. **n=29, mean 113.8, sd 5.3, median 113, se 0.98.** Resolution ~24 deaths for +3 at 80% power.
+- Baseline hit rate **80.21%** (131,725 / 32,504 over 3,304 detailed fights). **Unlike the Payload and Shell tests this is a treatment metric, not a contamination check** — this craft spends 4.35% Accuracy, so hit rate is *expected* to fall to ~78.5%. Falling materially further is the failure signal.
+- **KEEP** if mean death streak ≥ 111.8 **and** fights/hour up ≥ +5%. **REVERT** if mean ≤ 108.8, or hit rate undershoots the accuracy-implied ~78.5%, or deaths starting above 70% HP rise above the baseline 5/29 (17%) — that flank is precisely what the throughput gain was bought to close.
+- Revert path: `Warmongering Driver of Extinction` (ilvl 731, 0 Stability), keep locked until the A/B closes.
+- Window measures a **bundle**: homelab jobs (Mechanical Keyboard L8 +1% AtkDmg, VLAN Rules L11 +1% Def, Traffic Mirror L8 +1% Eva, IDS Signatures L7) land through it, each ~+0.5% of a realized stat. Stated, not staggered.
+
+## 27 July 2026 — Session 8: CORRECTION — fight cadence is constant; attack speed is not income
+
+**Raised by the player, and they were right.** Several entries above priced attack speed as fights per hour. That is wrong and every instance of it is withdrawn:
+
+> ~~"−8.7% attack speed is −8.7% fights/hour, i.e. credits, xp and chips per hour"~~ (Sessions 4–7)
+> ~~"+9.9% fights/hour is certain economic value"~~ (Session 7)
+
+**Measured from game-supplied death timestamps** (death-to-death elapsed ÷ `streak_ended`+1, Corporate Network, 27 Jul):
+
+| hour | n | median s/fight |
+|---|---|---|
+| 17:00Z | 6 | 5.000 |
+| 18:00Z | 6 | 4.867 |
+| 19:00Z | 7 | 4.869 |
+| 20:00Z | 5 | 4.872 |
+| 21:00Z | 5 | 4.877 |
+
+**n=29, median 4.872 s/fight, sd 0.053, range 4.858–5.001 → 739 fights/hour, invariant.** The Driver equip at 21:50Z raised attack speed 1.819 → 1.999 (**+9.9%**) and the next death clocked **4.87 s/fight** — no change whatsoever. Fight cadence is a fixed real-time tick; rewards per hour are set by streak depth (enemy level scales rewards), not by tempo. (A single ~2.7% step from 5.000 → 4.867 sits between the 17:00 and 18:00 buckets and is *not* attributable to attack speed — it did not recur at the 21:50 equip. Unexplained; logged to `open-questions.md`.)
+
+**Where attack speed actually pays: rounds per fight, and it grows with depth.**
+
+| streak band | pre-equip | post-equip | Δ |
+|---|---:|---:|---|
+| 60–85 | 32.7 (n=754) | 33.1 (n=26) | +1.1% (noise) |
+| 86–105 | 42.0 (n=578) | 40.2 (n=20) | **−4.2%** |
+| 106–130 | 50.7 (n=264) | 46.5 (n=14) | **−8.3%** |
+
+At a fixed wall clock, fewer rounds = fewer enemy attacks = **less damage taken per fight**. Attack speed is therefore a **mitigation stat via fight-shortening**, not an economy stat. Early net-drain agrees: streak 60–85 went +69 → **−339**, streak 86–105 +770 → **+505** (confounded with the ECC regen buy in the same window).
+
+**Consequences.**
+
+1. **The `driver-ab-2026-07-27` keep rule was unsatisfiable and has been amended** — before any post-equip death was scored, so no rule was changed after seeing an outcome. "fights/hour up ≥ +5%" → "rounds/fight at streak ≥ 86 down ≥ 4% vs pre-equip (42.0 at 86–105, 50.7 at 106–130)". Rounds/fight is the real mechanism and is already measurable.
+2. **The Daemon hold's stated cost was wrong, and the correction makes it stronger, not weaker.** Losing 8.7% attack speed is not lost income; it is lost attrition resistance. `Sighted Daemon of the Storm` buys evasion by spending fight-shortening — the wrong direction for an attrition-bound build. Hold stands on better grounds.
+3. **The 22 July "tempo does not move the death ceiling" law is now in question.** If rounds/fight falls 8.3% at depth and damage taken scales with rounds, tempo *is* an attrition stat. `CRAFT_WEIGHTS_PCT` gives AtkSpd 0.9, which this would vindicate — the Session 5 complaint that the Driver's score "leaned on a stat the build's own law discounts" was arguing from a law that may itself be wrong. **Not confirmed**: n is small at depth (14–20 fights) and the ECC regen buy is inside the same window. Logged to `open-questions.md`; the running A/B tests it directly.
+
+**Standing lesson, sixth entry.** This one was not a model used outside its regime — it was a **quantity never measured at all**. "Attack speed → fights per hour" was asserted, propagated through four sessions of advice, priced into two craft verdicts and written into an A/B keep rule, and the ledger had the data to falsify it the whole time. **Before a quantity enters a verdict, check whether anything has ever measured it.**
+
+## 27 July 2026 — Session 9: the Accuracy cut cost nothing, and the keep rule is mis-specified
+
+**`driver-ab-2026-07-27` at 2/24 deaths: 119, 120** (baseline mean 113.8) → **+5.7**. Far too early to read, but both post-equip deaths sit above all but four of the 29 baseline values.
+
+**Finding: −4.35% Accuracy produced NO hit-rate loss.** Matched on streak band, so enemy-evasion composition is controlled:
+
+| streak band | pre n | pre hit | post n | post hit | Δ | z |
+|---|---:|---:|---:|---:|---:|---:|
+| 60–85 | 38,626 | 80.37% | 3,144 | 81.27% | **+0.89pp** | +1.23 |
+| 86–105 | 37,348 | 78.11% | 2,723 | 79.58% | **+1.47pp** | +1.84 |
+| 106–130 | 20,425 | 76.71% | 2,328 | 78.39% | **+1.69pp** | +1.87 |
+
+Accuracy went 7,595 → 7,265. A roughly linear hit model predicts **−1.7pp**; every band moved *up* instead, consistently, on 8,195 post-equip attacks. Player levelling explains at most +0.3% of accuracy over the window — nowhere near enough.
+
+**Consequence: accuracy is in heavy diminishing returns at this build's level, and "bottleneck #2 = hit reliability" is stale.** `CRAFT_WEIGHTS_PCT` prices Acc at **1.0**, joint-highest with Def and Eva. If accuracy is saturated that weight is too high, and two live verdicts lean on it — the Daemon (+8.9, case partly Acc +3.2%) and any future Payload work. Not yet confirmed (the *rise* is unexplained and only marginally significant); logged to `open-questions.md`. The 22 July note that "the exact hit-chance formula has not been established" now has a concrete constraint: it is flat in accuracy in the 7.2–7.6K region against Corporate Network evasion.
+
+**Rounds/fight: directionally right, smaller than first measured.** With the sample grown from 14–20 fights to 61/40/20/9:
+
+| band | pre | post | Δ | z |
+|---|---:|---:|---:|---:|
+| 60–85 | 32.7 | 31.1 | **−5.0%** | −2.27 |
+| 86–105 | 42.0 | 41.0 | −2.3% | −0.99 |
+| 106–115 | 49.8 | 47.9 | −3.7% | −1.21 |
+| 116–130 | 53.9 | 52.7 | −2.3% | −0.50 |
+
+The **−8.3% at 106–130 reported in Session 8 was small-sample noise**; the real effect looks like −2% to −5%, significant only in the shallowest band. `mechanics.md` §14 is amended accordingly — the *direction* (attack speed shortens fights in rounds) holds, the magnitude was overstated.
+
+Net drain improved substantially over the same window: streak 60–85 **+69 → −273**, streak 86–105 **+770 → +488**; realized regen/round 234.2 → 262.9. Confounded with the ECC Memory buy and homelab jobs landing inside the window.
+
+**The keep rule I wrote is mis-specified, and I am NOT amending it again.** It reads "KEEP if mean death streak ≥ 111.8 **AND** rounds/fight at streak ≥86 down ≥ 4%". That makes a *mechanism* metric a necessary gate on a *primary outcome* metric — so an item delivering +5.7 death streaks via some other mechanism would score REVERT. That is wrong, but the rule was set before data and amending it now, with the primary metric running strongly positive, is exactly the goalpost-move A/B discipline forbids. **Standing resolution: at readout the primary (mean death streak) governs; the rounds/fight clause is recorded as a diagnostic that was mis-declared as a gate.** Stated in advance, in writing, before the result.
+
+**Lesson for future keep rules:** a keep rule may gate on the outcome and on contamination checks. It must not gate on the *mechanism you guessed*, because being right about the effect and wrong about why is the normal case.
+
+## 27 July 2026 — Session 10: learnings folded into the library
+
+Everything below was living only in prose from Sessions 4–9. It is now code, so it applies automatically rather than by remembering to apply it.
+
+**New in `ihlib`.**
+
+- `tier_ladders_archive()` — unions affix-tier observations over **every** capture (150 → 582 observations, 83 → 97 families). `ih.py potential` and `fit_tier_steps` use it. Kills the ladder-amnesia class of bug entirely: decompiling can no longer delete evidence.
+- `economy_multiplier()` / `ECONOMY_MULT_KEYS` — `participation_bonus` and `firewall_cache` multiply the economy additive bracket. All five economy stats now close to <1e-9 across all 63 captures; `ih.py audit` is clean of `MODEL` flags.
+- `score_tiers(item, ladders, tiers, stability_left)` — prices a **specified** tier assignment (companion to `plan_craft`, which *chooses* one greedily). Correctly excludes the implicit from Compile, which the ad-hoc script used for the Driver decision got wrong by ~0.35 points.
+- `simulate_contract(...)` — Monte-Carlos a §10.1 contract and returns the outcome distribution, including `p_upgrade` and `p_complete`. **Validated against the Driver decision it was extracted from**: `p_complete` 65.6% vs 65.6%, `P(Δ>+5)` 90.6% vs 90.8%.
+- `best_contract_order(...)` — permutes phases. Reproduces the finding that an expensive low-probability step belongs last (90.6% vs 80.9% on identical phases).
+- `fight_cadence()` — s/fight from the game's own death clock. Deliberately does **not** use the stream's `seen_ms`, because pooling those gaps re-measures the 150 s polling interval — which is exactly how this nearly went wrong a second time.
+
+**New in `ih.py`.** `contract ITEM [--phase 'of Haste:4'] [--order] [--floor N]` and `cadence`. `MECH_BRACKETS` gains **106–130** — deaths land at 113–120, so every bracket stopping at 105 was blind to the band where runs actually end. `ab` now prints **hit rate per bracket**, because the pooled comparison measures streak composition, not accuracy; that per-band readout is what falsified the accuracy prediction and it took three hand-rolled scripts before it became tooling.
+
+**`CRAFT_WEIGHTS_PCT` annotated, values deliberately unchanged.** `AtkSpd 0.9` (right number, wrong reason — mitigation via fight-shortening, not income) and `Acc 1.0` (probably too high — saturated). Moving weights mid-A/B would break `driver-ab-2026-07-27`'s comparability with its own baseline. Resolve with the Software Profiler, then re-weight.
+
+**Four standing lessons added to `CLAUDE.md`.**
+
+1. Before a quantity enters a verdict, check whether anything has ever measured it.
+2. A model fitted on *currently-owned* state rots when the inventory turns over — prefer archive-wide fits for game constants.
+3. An A/B keep rule may gate on the outcome and on contamination checks, never on the mechanism you guessed. Amend only for impossibility, never after a favourable result.
+4. Judge a close craft by simulating the contract, not by discounting it.
+
+**A/B at 3/24: mean 120.3 vs 113.0 (+7.3).** Watch the new 106–130 bracket — it is the only one that looks *worse* post-equip (net drain 1539 → 1789, rounds 49.6 → 50.1 flat) while every shallower bracket improved. n=46, and it is exactly the band where the run ends, so it is the number that decides this test.

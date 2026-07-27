@@ -5,7 +5,9 @@ docs/static-analysis-2026-07-22.md so analyses never re-derive them.
 Used by ih.py; import directly for bespoke analysis.
 """
 
+import itertools
 import json
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -240,6 +242,20 @@ def item_header(item, slot=None, where=None):
 # the current bottleneck model (late-streak attrition: sustain + tempo, see
 # docs/current-state.md), NOT a game formula. Retune when the bottleneck
 # changes. Keys are display labels (STAT_LABELS values).
+# Two of these are under active challenge as of 27 Jul 2026 -- values left
+# UNCHANGED on purpose, because driver-ab-2026-07-27 is mid-flight and moving
+# weights would break comparability with its own baseline:
+#   AtkSpd 0.9 -- the reason was wrong, the number may be right. Attack speed
+#     buys NO extra fights per hour (cadence is a fixed 4.872 s tick,
+#     mechanics.md §14); it pays by shortening fights in ROUNDS (-2% to -5%
+#     measured), which cuts enemy attacks per fight. It is a mitigation stat,
+#     not an economy one, and the 22 Jul "tempo does not move the death
+#     ceiling" law is in question (open-questions.md).
+#   Acc 1.0 -- probably TOO HIGH. Cutting Accuracy 7,595 -> 7,265 (-4.35%)
+#     produced no hit-rate loss at matched streak band (+0.9 to +1.7pp across
+#     three bands, 8,195 attacks) against a linear prediction of -1.7pp.
+#     Accuracy looks saturated in this region. Resolve with the Software
+#     Profiler before re-weighting; see open-questions.md.
 CRAFT_WEIGHTS_PCT = {   # value per +1 percentage point
     "Def": 1.0, "Eva": 1.0, "Acc": 1.0, "AtkSpd": 0.9,
     "AtkDmg": 0.7, "CritCh": 0.7, "MaxHP": 0.5, "CritDmg": 0.35,
@@ -258,7 +274,59 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 UPGRADE_BAND = 5.0   # delta > +5 -> genuine upgrade candidate
 INFERIOR_BAND = -5.0  # delta < -5 -> inferior; between -> sidegrade
 
-DEFAULT_TIER_STEP = 1.4  # mean observed adjacent-tier ratio; last-resort fallback
+# Adjacent-tier value ratio. NOT one constant: measured within-family across
+# every percentage affix in the 27 Jul 2026 capture, the step is region-
+# dependent, and the single 1.4 that stood here was fitted on shallow tiers
+# only -- the exact regime error this workspace keeps repeating.
+#
+#   upper tier >= 6   n=50   median 1.398   p25 1.341  p75 1.415
+#   upper tier <= 5   n=25   median 1.263   p25 1.250  p75 1.288
+#
+# Over a full T6->T1 chase, 1.4 instead of 1.263 over-projects the affix by
+# (1.4/1.263)^5 = 1.90x. Deep steps are also far more family-dependent than
+# shallow ones (1.15 on suffix_attack, 1.41 on suffix_adaptive_shell), so a
+# ceiling resting on an extrapolated deep ladder carries real spread -- see
+# `plan_craft`'s conservative score.
+TIER_STEP_SHALLOW = 1.398
+TIER_STEP_DEEP = 1.263
+TIER_STEP_DEEP_LOW = 1.250   # p25 -- the conservative bound for verdicts
+DEEP_TIER = 5                # tiers <= this promote at the deep step
+
+
+def tier_step(upper_tier, deep=TIER_STEP_DEEP):
+    """Value ratio for the promotion T(upper) -> T(upper - 1)."""
+    return TIER_STEP_SHALLOW if upper_tier > DEEP_TIER else deep
+
+
+def fit_tier_steps(capture, min_obs=6, ladders=None):
+    """(shallow, deep) adjacent-tier ratios measured from the ladder data.
+
+    Self-validating replacement for the hard-coded constants: re-fits from
+    every within-family adjacent-tier pair present, so the law cannot rot as
+    the inventory turns over. Falls back to the module constants for a region
+    with fewer than `min_obs` observations. Pass `ladders` (normally
+    `tier_ladders_archive()`) so the fit does not lose pairs to decompiling.
+    """
+    if ladders is None:
+        ladders = tier_ladders(capture)
+    shallow, deep = [], []
+    for key, ladder in ladders.items():
+        if key[2] != "mult_add":   # flat affixes scale too noisily to fit on
+            continue
+        tiers = sorted(ladder)
+        for lo, hi in zip(tiers, tiers[1:]):
+            step = (ladder[lo] / ladder[hi]) ** (1.0 / (hi - lo))
+            (shallow if hi > DEEP_TIER else deep).append(step)
+
+    def median(values, fallback):
+        if len(values) < min_obs:
+            return fallback
+        values = sorted(values)
+        mid = len(values) // 2
+        return (values[mid] if len(values) % 2
+                else (values[mid - 1] + values[mid]) / 2)
+
+    return (median(shallow, TIER_STEP_SHALLOW), median(deep, TIER_STEP_DEEP))
 
 
 def weighted_score(totals):
@@ -313,9 +381,8 @@ def stability_preserve_chance(capture):
     return 0.0
 
 
-def tier_ladders(capture):
-    """Empirical {(affix_id, resource, type): {tier: normalized mid value}}."""
-    raw = {}
+def _collect_ladder_obs(capture, raw):
+    """Accumulate {(affix_id, resource, type): {tier: [normalized mids]}}."""
     for _, _, item in iter_items(capture):
         for side in ("prefixes", "suffixes"):
             for affix in item.get(side) or []:
@@ -328,25 +395,85 @@ def tier_ladders(capture):
                     mid = (e["value_min"] + e["value_max"]) / 2 / scale
                     key = (affix.get("affix_id"), e.get("resource"), e.get("type"))
                     raw.setdefault(key, {}).setdefault(affix["tier"], []).append(mid)
+    return raw
+
+
+def tier_ladders(capture):
+    """Empirical {(affix_id, resource, type): {tier: normalized mid value}}.
+
+    Single-capture view: only tiers currently sitting on an owned item. Prefer
+    `tier_ladders_archive` for craft planning -- see the warning there.
+    """
     return {key: {t: sum(v) / len(v) for t, v in tiers.items()}
-            for key, tiers in raw.items()}
+            for key, tiers in _collect_ladder_obs(capture, {}).items()}
 
 
-def ladder_value(ladder, tier):
-    """(normalized mid value at tier, measured?) — log-linear interp/extrap."""
+_LADDER_ARCHIVE_CACHE = {}
+
+
+def tier_ladders_archive(paths=None):
+    """Tier ladders unioned over EVERY capture, not just the latest.
+
+    An affix's per-tier value range is a game constant, so an observation stays
+    valid after the item carrying it is gone -- but `tier_ladders(capture)`
+    forgets it, which makes craft verdicts silently decay as inventory is
+    cleared. Measured 27 Jul 2026: decompiling `Elusive Kernel of Regeneration`
+    (a +1.7 sidegrade) removed the ONLY `suffix_adaptive_shell` T7 observation
+    owned, and the Bastioned Firewall of Infection verdict fell +9.0 -> +4.6 an
+    hour later with no game state changed at all. Unioning the archive makes
+    the ladder monotonically improve and immune to decompiling.
+
+    Regime: valid only while the game does not rebalance affix ranges. If it
+    ever does, old captures become contaminating rather than informative --
+    re-fit from captures after the change and note the boundary here.
+    """
+    paths = [Path(p) for p in (paths if paths is not None else capture_paths())]
+    signature = tuple(sorted(str(p) for p in paths))
+    if signature in _LADDER_ARCHIVE_CACHE:
+        return _LADDER_ARCHIVE_CACHE[signature]
+    raw = {}
+    for path in paths:
+        try:
+            _collect_ladder_obs(json.loads(path.read_text()), raw)
+        except (OSError, ValueError, KeyError):
+            continue                 # a malformed capture must not blind the fit
+    ladders = {key: {t: sum(v) / len(v) for t, v in tiers.items()}
+               for key, tiers in raw.items()}
+    _LADDER_ARCHIVE_CACHE[signature] = ladders
+    return ladders
+
+
+def _walk_tiers(value, from_tier, to_tier, deep_step):
+    """Extrapolate a ladder value between tiers, one region-aware step at a time."""
+    tier = from_tier
+    while tier > to_tier:            # going deeper: value grows
+        value *= tier_step(tier, deep_step)
+        tier -= 1
+    while tier < to_tier:            # going shallower: value shrinks
+        tier += 1
+        value /= tier_step(tier, deep_step)
+    return value
+
+
+def ladder_value(ladder, tier, deep_step=TIER_STEP_DEEP):
+    """(normalized mid value at tier, measured?).
+
+    Log-linear *interpolation* between two observations — bounded by data, so
+    the region question does not arise. *Extrapolation* beyond the observed
+    range instead walks the region-aware `tier_step` ladder: projecting a
+    shallow-fitted slope into T1-T5 was a systematic ~1.9x over-projection at
+    full depth (see TIER_STEP_SHALLOW/DEEP).
+    """
     import math
     if tier in ladder:
         return ladder[tier], True
     ts = sorted(ladder)
-    if len(ts) == 1:
-        return ladder[ts[0]] * DEFAULT_TIER_STEP ** (ts[0] - tier), False
-    if tier < ts[0]:
-        a, b = ts[0], ts[1]
-    elif tier > ts[-1]:
-        a, b = ts[-2], ts[-1]
-    else:
-        a = max(t for t in ts if t < tier)
-        b = min(t for t in ts if t > tier)
+    if tier < ts[0]:                                   # deeper than observed
+        return _walk_tiers(ladder[ts[0]], ts[0], tier, deep_step), False
+    if tier > ts[-1]:                                  # shallower than observed
+        return _walk_tiers(ladder[ts[-1]], ts[-1], tier, deep_step), False
+    a = max(t for t in ts if t < tier)
+    b = min(t for t in ts if t > tier)
     la, lb = math.log(ladder[a]), math.log(ladder[b])
     slope = (lb - la) / (b - a)
     return math.exp(la + slope * (tier - a)), False
@@ -365,7 +492,8 @@ def augment_state(item):
     return True, "either"
 
 
-def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
+def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0,
+               deep_step=TIER_STEP_DEEP, deep_step_low=TIER_STEP_DEEP_LOW):
     """Greedy expected-Stability Version-Upgrade plan + Compile projection.
 
     Model assumptions (conservative, documented):
@@ -385,19 +513,28 @@ def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
         T9->T8 0.360   T7->T6 0.549   T5->T4 0.768   T3->T2 0.904  <- peak
         T8->T7 0.448   T6->T5 0.659   T4->T3 0.861   T2->T1 0.843
 
-    (affix value compounds ~1.4x per tier while expected attempts only grow as
+    (affix value compounds per tier while expected attempts only grow as
     10/tier). Measured 27 Jul 2026 across 50 candidate plans: uncapping raised
     the best candidate in every slot, flipped Firewall and Kernel from
-    sidegrade/inferior to UPGRADE and lifted the Router candidate +8.3 -> +22.8,
-    while leaving reliance on interpolated ladder points unchanged at 43/50 —
-    so the "no data that deep" objection does not hold. Pass tier_cap=3 to
-    reproduce pre-27-Jul projections.
+    sidegrade/inferior to UPGRADE and lifted the Router candidate +8.3 -> +22.8.
+    Pass tier_cap=3 to reproduce pre-27-Jul projections.
 
     Note the calibration consequence: the cap was a systematic UNDER-projection
     that partly cancelled the contract-conservatism OVER-projection. With it
     gone, the ~5-point discount for contract conservatism matters MORE, not
     less — a §10.1 contract with attempt caps and a hard floor is deliberately
     less ambitious than this plan.
+
+    The uncapping argument above was defended at the time on the grounds that
+    reliance on interpolated ladder points was "unchanged at 43/50". That
+    counted interpolated points without checking their BIAS, and the bias is
+    the whole problem: deep tiers advance ~1.263x per step, not the ~1.4x
+    fitted on shallow tiers. `score` uses the measured deep median;
+    `score_low` re-values the SAME plan at the p25 deep step
+    (`deep_step_low`). A candidate whose verdict does not survive `score_low`
+    is resting on extrapolation, not on evidence — check `deep_reliance`,
+    which counts planned promotions into tiers the ladder has never observed.
+
     Returns dict with steps, expected_spend, augment info, compile_pct,
     projected totals {label: (pct, flat)} and weighted scores.
     """
@@ -424,8 +561,8 @@ def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
             ladder = ladders.get(key)
             if not ladder:
                 continue
-            cur, m1 = ladder_value(ladder, tier)
-            nxt, m2 = ladder_value(ladder, tier - 1)
+            cur, m1 = ladder_value(ladder, tier, deep_step)
+            nxt, m2 = ladder_value(ladder, tier - 1, deep_step)
             estimated = estimated or not (m1 and m2)
             label = stat_label(e.get("resource") or "?")
             if e.get("type") == "flat_add":
@@ -466,39 +603,48 @@ def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
     # place, implicit untouched, ranges unchanged) — never re-apply it.
     compile_pct = 0.005 * compile_left if stability > 0 else 0.0
 
-    # projected totals
-    totals = {}
-    def add(label, etype, value):
-        pct, flat = totals.get(label, (0.0, 0.0))
-        if etype == "flat_add":
-            flat += value
-        else:
-            pct += value
-        totals[label] = (pct, flat)
+    # projected totals, valued twice: at the median deep step and at the p25
+    # deep step, so the verdict carries the ladder's own extrapolation spread
+    totals, totals_low = {}, {}
+    def add(label, etype, value, value_low=None):
+        for target, v in ((totals, value),
+                          (totals_low, value if value_low is None else value_low)):
+            pct, flat = target.get(label, (0.0, 0.0))
+            if etype == "flat_add":
+                flat += v
+            else:
+                pct += v
+            target[label] = (pct, flat)
 
     implicit = item.get("implicit_info")
     if implicit:
         add(stat_label(implicit.get("stat_type") or "?"),
             implicit.get("effect_type"), implicit.get("value", 0))
-    any_estimated = False
+    any_estimated, deep_reliance = False, 0
     for entry in state:
         affix = entry["affix"]
         for e in affix.get("effects") or []:
             label = stat_label(e.get("resource") or "?")
+            value_low = None
             if entry["up"]:
                 key = (affix.get("affix_id"), e.get("resource"), e.get("type"))
                 ladder = ladders.get(key)
                 if ladder:
-                    norm, measured = ladder_value(ladder, entry["tier"])
+                    norm, measured = ladder_value(ladder, entry["tier"], deep_step)
+                    low, _ = ladder_value(ladder, entry["tier"], deep_step_low)
                     any_estimated = any_estimated or not measured
+                    if not measured and entry["tier"] <= DEEP_TIER:
+                        deep_reliance += 1
                     scale = (flat_scale(ilvl) if e.get("type") == "flat_add"
                              else mult_scale(ilvl))
                     value = norm * scale
+                    value_low = low * scale
                 else:
                     value = e.get("value", 0)
             else:
                 value = e.get("value", 0)
-            add(label, e.get("type"), value * (1 + compile_pct))
+            add(label, e.get("type"), value * (1 + compile_pct),
+                None if value_low is None else value_low * (1 + compile_pct))
 
     # merge upgraded steps per affix for compact display
     merged = {}
@@ -518,7 +664,10 @@ def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0):
         "augment_side": forced_side,
         "compile_pct": compile_pct,
         "totals": totals,
+        "totals_low": totals_low,
         "score": weighted_score(totals),
+        "score_low": weighted_score(totals_low),
+        "deep_reliance": deep_reliance,   # promotions into unobserved deep tiers
         "estimated": any_estimated,
     }
 
@@ -531,6 +680,147 @@ RESOURCE_SHORT = {
     "credits": "cr", "chips": "chips", "hackcoin": "hc",
     "snippets": "snip", "cycles": "cyc", "hashes": "hash", "packets": "pkt",
 }
+
+
+def score_tiers(item, ladders, tiers, stability_left, deep_step=TIER_STEP_DEEP):
+    """Weighted score of `item` with affixes forced to `tiers` and a Compile.
+
+    `tiers` maps affix display name -> target tier; affixes absent from it keep
+    their current tier and roll. Promoted affixes are valued at the target
+    tier MIDPOINT (roll is lost on promotion, crafting.md §12.2). Compile adds
+    0.5% per remaining Stability to every explicit affix.
+
+    Companion to `plan_craft`: that one CHOOSES a plan greedily, this one
+    PRICES a plan you specify -- which is what `simulate_contract` needs to
+    value the many partial outcomes a real contract actually produces.
+    """
+    ilvl = item.get("item_level") or 0
+    compile_pct = 0.005 * max(stability_left, 0.0)
+    totals = {}
+
+    def add_effect(label, etype, value):
+        pct, flat = totals.get(label, (0.0, 0.0))
+        if etype == "flat_add":
+            flat += value
+        else:
+            pct += value
+        totals[label] = (pct, flat)
+
+    implicit = item.get("implicit_info")
+    if implicit:                      # implicit is NOT compiled (22 Jul)
+        add_effect(stat_label(implicit.get("stat_type") or "?"),
+                   implicit.get("effect_type"), implicit.get("value", 0))
+    for side in ("prefixes", "suffixes"):
+        for affix in item.get(side) or []:
+            target = tiers.get(affix.get("name"))
+            promoted = target is not None and target != affix.get("tier")
+            for e in affix.get("effects") or []:
+                label = stat_label(e.get("resource") or "?")
+                if promoted:
+                    key = (affix.get("affix_id"), e.get("resource"),
+                           e.get("type"))
+                    ladder = ladders.get(key)
+                    if ladder:
+                        norm, _ = ladder_value(ladder, target, deep_step)
+                        scale = (flat_scale(ilvl) if e.get("type") == "flat_add"
+                                 else mult_scale(ilvl))
+                        value = norm * scale
+                    else:
+                        value = e.get("value", 0)
+                else:
+                    value = e.get("value", 0)
+                add_effect(label, e.get("type"), value * (1 + compile_pct))
+    return weighted_score(totals)
+
+
+def simulate_contract(item, ladders, phases, floor=8, preserve=0.0,
+                      trials=20000, seed=1, baseline=None):
+    """Monte-Carlo a §10.1 craft contract. Returns the OUTCOME DISTRIBUTION.
+
+    `phases` is [(affix display name, target tier), ...] IN EXECUTION ORDER.
+    Each promotion succeeds with chance tier/10; a failure costs 1 Stability
+    unless Snapshot Backups preserves it. The run stops when the next attempt
+    would break the Compile `floor`, so partial contracts are priced the way
+    they actually happen -- including the fact that a run which stalls early
+    also SPENDS less and therefore keeps more Compile.
+
+    Why this exists (27 Jul 2026): the standing practice was to take
+    `plan_craft`'s optimal-plan ceiling and subtract a flat ~5 points for
+    "contract conservatism". On the Aegisbound Driver that heuristic said
+    +9.1 - 5 = +4.1, a sidegrade, and the craft was held. Simulating the same
+    contract said mean +8.4, median +9.6, p10 +6.1, **P(delta > +5) = 90.8%**
+    -- and it was approved and realized +16.7. A blanket discount cannot see
+    that the phases are not separable (Stability spent cuts Compile, which
+    multiplies everything, so each phase alone is worth far less than in
+    combination) nor that the downside is bounded. Prefer this to the
+    discount whenever the decision is close.
+
+    `baseline` defaults to the equipped item's score if you pass one; results
+    are expressed as deltas against it.
+    """
+    rng = random.Random(seed)
+    start = {a.get("name"): a.get("tier")
+             for side in ("prefixes", "suffixes")
+             for a in item.get(side) or []}
+    stability = item.get("stability") or 0
+    budget = stability - floor
+    results, completed = [], 0
+    for _ in range(trials):
+        spent, tiers = 0.0, dict(start)
+        finished = True
+        for name, target in phases:
+            tier = start.get(name)
+            if tier is None:
+                continue
+            while tier > target:
+                won = False
+                while spent + 1 <= budget:
+                    spent += 1                      # the attempt itself
+                    if rng.random() < tier / 10.0:
+                        won = True
+                        break
+                    if rng.random() < preserve:     # failure refunded
+                        spent -= 1
+                if not won:
+                    finished = False
+                    break
+                tier -= 1
+                tiers[name] = tier
+            if not finished:
+                break
+        completed += finished
+        results.append(score_tiers(item, ladders, tiers,
+                                   max(stability - spent, 0.0)))
+    results.sort()
+    if baseline is not None:
+        results = [r - baseline for r in results]
+    n = len(results)
+    return {
+        "mean": sum(results) / n,
+        "median": results[n // 2],
+        "p10": results[n // 10],
+        "p90": results[(9 * n) // 10],
+        "min": results[0],
+        "max": results[-1],
+        "p_upgrade": sum(1 for r in results if r > UPGRADE_BAND) / n,
+        "p_positive": sum(1 for r in results if r > 0) / n,
+        "p_complete": completed / trials,
+        "trials": trials,
+    }
+
+
+def best_contract_order(item, ladders, phases, **kw):
+    """[(order, sim)] over every phase permutation, best P(upgrade) first.
+
+    Order is not cosmetic. On the Aegisbound Driver the best ordering scored
+    P(>+5) 90.8% and the worst 81.0% on identical phases -- an expensive
+    single low-probability step belongs LAST, where it absorbs whatever
+    Stability the earlier phases left rather than starving them.
+    """
+    out = [(order, simulate_contract(item, ladders, list(order), **kw))
+           for order in itertools.permutations(phases)]
+    out.sort(key=lambda r: (-r[1]["p_upgrade"], -r[1]["mean"]))
+    return out
 
 
 def fmt_cost(cost):
@@ -658,6 +948,24 @@ def hardware_state(capture):
     return capture["state"].get("hardwareInfo") or None
 
 
+def chip_budget(capture):
+    """(spendable, free, locked) chips, preferring the live `currentPlayer`.
+
+    `hardwareInfo.chips` is a panel snapshot and understates the balance
+    whenever the Hardware tab was opened before the capture click -- 37,443 vs
+    a live 44,582 on 27 Jul 2026, a 19% under-plan. `locked_resources` exists
+    only on the panel, so that half stays panel-sourced (it changes only on a
+    reset, so it cannot drift the same way).
+    """
+    hw = hardware_state(capture) or {}
+    player = capture["state"].get("currentPlayer") or {}
+    free = player.get("chips")
+    if free is None:
+        free = hw.get("chips") or 0
+    locked = (hw.get("locked_resources") or {}).get("chips") or 0
+    return free + locked, free, locked
+
+
 def hardware_track_value(defn, stats_breakdown):
     """Heuristic bottleneck value of +1 level, on the CRAFT_WEIGHTS scale.
 
@@ -706,8 +1014,16 @@ def hardware_track_value(defn, stats_breakdown):
 # ---- Panel freshness -------------------------------------------------------
 # Lazy sections hold whatever the game panel last read, which can badly predate
 # the capture click (observed 27 Jul 2026: a homelabInfo block 1,348s stale, and
-# a hardwareInfo block reporting a credit balance 3.5B out of date). Two
+# a hardwareInfo block reporting a credit balance 3.5B out of date). Three
 # independent detectors, because only homelabInfo carries a server clock.
+#
+# The third is the strongest and the only one with a game-provided ground truth:
+# `currentPlayer` is a live binding, so any currency a panel also reports must
+# match it. Added 27 Jul 2026 after the two clock/credit detectors both passed a
+# hardwareInfo block whose chip balance was 16% low (37,443 vs a live 44,582) --
+# credits had drifted only 0.26%, under the cross-panel tolerance, because
+# credits are huge and chips are small. Cross-panel agreement proves nothing
+# when both panels were read at the same stale moment.
 
 def panel_freshness(capture):
     """[(section, age_seconds_or_None, credits_or_None)] for lazy sections.
@@ -734,14 +1050,62 @@ def panel_freshness(capture):
     return rows
 
 
-def stale_panels(capture, max_age_s=300, credit_tolerance=0.005):
-    """Sections that look stale, as [(section, reason)]."""
+# Currencies a lazy panel snapshots that `currentPlayer` also holds live.
+# Chips are the sensitive probe: they accrue continuously from combat drops and
+# the balance is small, so a stale panel shows percent-level drift while credits
+# (11 figures, spent in lumps) stay inside any sane tolerance.
+PANEL_LIVE_CURRENCIES = ("chips", "hackcoin", "credits")
+
+
+def panel_currency_drift(capture, tolerance=0.01, min_abs=1):
+    """[(section, currency, panel_value, live_value)] where a panel disagrees.
+
+    `currentPlayer` is live at capture time; a lazy panel holds whatever the
+    game tab last read. Any gap beyond `tolerance` (relative) and `min_abs`
+    (absolute) means the panel is stale, regardless of what its clock says.
+    """
+    state = capture["state"]
+    player = state.get("currentPlayer") or {}
+    rows = []
+    for section in ("homelabInfo", "hardwareInfo"):
+        info = state.get(section) or {}
+        if not info:
+            continue
+        for currency in PANEL_LIVE_CURRENCIES:
+            panel = info.get(currency)
+            live = player.get(currency)
+            if panel is None or live is None:
+                continue
+            gap = abs(panel - live)
+            if gap >= min_abs and gap > tolerance * max(abs(live), 1):
+                rows.append((section, currency, panel, live))
+    return rows
+
+
+def stale_panels(capture, max_age_s=300, credit_tolerance=0.005,
+                 drift_tolerance=0.01):
+    """Sections that look stale, as [(section, reason)].
+
+    Three detectors, strongest last: the panel's own server clock (homelabInfo
+    only), cross-panel credit disagreement, and disagreement with the live
+    `currentPlayer` currencies. One reason per section -- the worst one.
+    """
     rows = panel_freshness(capture)
     credits = [c for _, _, c in rows if c]
+    drift = {}
+    for section, currency, panel, live in panel_currency_drift(
+            capture, tolerance=drift_tolerance):
+        pct = (panel - live) / max(abs(live), 1) * 100
+        # keep the largest relative gap per section -- it is the clearest signal
+        if abs(pct) > abs(drift.get(section, (0, ""))[0]):
+            drift[section] = (pct, f"reports {panel:,.0f} {currency} vs a live "
+                                   f"{live:,.0f} ({pct:+.0f}%)")
     worst = []
     for section, age, credit in rows:
         if age is not None and age > max_age_s:
             worst.append((section, f"panel data {age:,.0f}s older than capture"))
+        elif section in drift:
+            worst.append((section, drift[section][1]))
         elif credits and credit and max(credits) - min(credits) > \
                 credit_tolerance * max(credits) and credit != min(credits):
             worst.append((section, f"reports {credit:,.0f} credits vs "
@@ -749,36 +1113,186 @@ def stale_panels(capture, max_age_s=300, credit_tolerance=0.005):
     return worst
 
 
+# ---- Capture freshness vs the stream ledger --------------------------------
+# `stale_panels` only ever compares a capture against ITSELF, so a capture whose
+# panels all agree reads as clean no matter how old the whole file is. The
+# auto-stream keeps running after the last capture click, which makes its newest
+# `stats` record a live ground truth for the capture as a whole.
+#
+# Added 27 Jul 2026 after the audit passed a 19:54Z capture as "44,582 chips
+# unspent" while the 20:44Z stream record showed 4,140 -- the ECC Memory buy had
+# already been made an hour earlier, and every hardware number in the advisory
+# was about to be re-derived from a spent balance. The capture was internally
+# consistent; only the ledger knew.
+
+# Scalars the stream's `stats` record and `currentPlayer` both carry.
+STREAM_LIVE_FIELDS = ("chips", "hackcoin", "credits", "hack_level",
+                      "current_zone")
+# Discrete counters where a relative tolerance is meaningless -- 1,054 -> 1,058
+# hack levels is four levels of scaling, not a 0.4% rounding wobble.
+STREAM_EXACT_FIELDS = {"hack_level", "current_zone"}
+
+
+def latest_stream_player(before_ms=None):
+    """(seen_ms, player) of the newest ledger `stats` record, or (None, None)."""
+    best_ms, best = None, None
+    for record in stream_records():
+        if record.get("kind") != "stats":
+            continue
+        ms, player = record.get("seen_ms"), record.get("player") or {}
+        if ms is None or not player:
+            continue
+        if before_ms is not None and ms > before_ms:
+            continue
+        if best_ms is None or ms > best_ms:
+            best_ms, best = ms, player
+    return best_ms, best
+
+
+def captured_ms(capture):
+    stamp = capture.get("capturedAt")
+    if not stamp:
+        return None
+    return datetime.fromisoformat(
+        stamp.replace("Z", "+00:00")).timestamp() * 1000
+
+
+def capture_stream_drift(capture, tolerance=0.01, min_abs=1):
+    """(lag_seconds, [(field, capture_value, stream_value)]) vs the ledger.
+
+    Returns (None, []) when the ledger holds nothing newer than the capture.
+    `lag_seconds` is how far the capture trails the newest streamed state; the
+    field list is what demonstrably changed since. An empty field list with a
+    large lag still matters -- homelab job progress and hardware levels are not
+    streamed, so they can only be assumed stale.
+    """
+    cap_ms = captured_ms(capture)
+    stream_ms, player = latest_stream_player()
+    if cap_ms is None or stream_ms is None or stream_ms <= cap_ms:
+        return None, []
+    live = capture["state"].get("currentPlayer") or {}
+    changed = []
+    for field in STREAM_LIVE_FIELDS:
+        was, now = live.get(field), player.get(field)
+        if was is None or now is None:
+            continue
+        if isinstance(was, str) or isinstance(now, str):
+            if was != now:
+                changed.append((field, was, now))
+            continue
+        gap = abs(now - was)
+        if gap < min_abs:
+            continue
+        if field in STREAM_EXACT_FIELDS or gap > tolerance * max(abs(was), 1):
+            changed.append((field, was, now))
+    return (stream_ms - cap_ms) / 1000, changed
+
+
 # ---- Stat composition (mechanics.md §13, formula-level) --------------------
-# Hardware %, homelab % and equipment % share ONE additive pool. Three families
-# differ only in what that pool multiplies.
-SCALING_STATS = {"max_hp", "defense", "accuracy", "evasion"}
+# Hardware %, homelab % and equipment % share ONE additive pool. Four families
+# differ only in what that pool multiplies. Membership is not guessable from the
+# stat name -- always confirm with `validate_stat_totals` against the capture's
+# own `total`, which is the ground truth. `attack_damage` sat outside all three
+# families until 27 Jul 2026 and silently returned 0 (its real total is 2,050),
+# which is exactly the stat the AtkDmg guardrail depends on.
+SCALING_STATS = {"max_hp", "defense", "accuracy", "evasion",
+                 "attack_damage", "post_combat_heal"}
 DIRECT_STATS = {"attack_speed", "crit_chance", "crit_damage"}
+# Economy stats (credits, cycles, hashes, packets, snippets) use a DIFFERENT
+# schema: no `equipment_pct`/`level`, an `equipment` key instead. Most
+# components sum on top of base, but two of them multiply the sum instead --
+# see ECONOMY_MULT_KEYS. Detected by key, not by name, so a new economy stat is
+# handled automatically.
+ECONOMY_KEY = "equipment"
+# Multiplicative, NOT additive, on top of the economy additive bracket:
+#   total = (base + additive components) * (1 + participation) * (1 + cache)
+# Confirmed formula-level 27 Jul 2026 against the game's own totals on the
+# 21:07 capture -- all five economy stats reproduce to <1e-9 with this and to
+# -11% .. -23% without it. Identifiable because the capture carries both a
+# firewall_cache=0.15 case (the four gathering resources) and a
+# firewall_cache=0 case (credits) against a constant participation_bonus=0.5;
+# every additive reading of either term fails both. Regime: only these two
+# values have been observed -- if a capture ever shows a different
+# participation_bonus or firewall_cache, `validate_stat_totals` re-checks it.
+ECONOMY_MULT_KEYS = ("participation_bonus", "firewall_cache")
 # everything else in stats_breakdown is gear-flat (regeneration, corruption,
 # thorns, damage_barrier, armor_penetration) -> pool multiplies equipment_flat.
 
 
+def is_economy_breakdown(breakdown):
+    """True for the additive multiplier schema (credits, cycles, ...)."""
+    return ECONOMY_KEY in (breakdown or {})
+
+
 def stat_pool(breakdown):
-    """Additive pool multiplier for one stats_breakdown entry."""
-    return (1 + (breakdown.get("equipment_pct") or 0)
-            + (breakdown.get("hardware") or 0) + (breakdown.get("homelab") or 0))
+    """Additive pool multiplier for one stats_breakdown entry.
+
+    For economy stats this is the additive bracket only -- the two
+    ECONOMY_MULT_KEYS terms multiply it and are applied by `economy_multiplier`.
+    """
+    b = breakdown or {}
+    if is_economy_breakdown(b):
+        # every numeric component except the reported total and the
+        # multiplicative terms is additive here; `flat`/`homelab_flat` are both
+        # 0 in every capture so far, so their footing is unconfirmed -- revisit
+        # if either ever goes non-zero.
+        return sum(v for k, v in b.items()
+                   if k != "total" and k not in ECONOMY_MULT_KEYS
+                   and isinstance(v, (int, float)))
+    return (1 + (b.get("equipment_pct") or 0)
+            + (b.get("hardware") or 0) + (b.get("homelab") or 0))
+
+
+def economy_multiplier(breakdown):
+    """Product of the multiplicative economy terms; 1.0 for combat stats."""
+    b = breakdown or {}
+    if not is_economy_breakdown(b):
+        return 1.0
+    mult = 1.0
+    for key in ECONOMY_MULT_KEYS:
+        mult *= 1 + (b.get(key) or 0)
+    return mult
 
 
 def stat_total(breakdown, stat, d_equipment_pct=0.0, d_hardware=0.0,
                d_homelab=0.0, d_equipment_flat=0.0):
     """Recompute a stat under pool/flat deltas. Reproduces the live total at 0.
 
-    Verified against every stat in the 27 Jul 2026 capture; use this instead of
-    re-deriving the arithmetic per analysis.
+    Use this instead of re-deriving the arithmetic per analysis. Correctness is
+    not assumed: `validate_stat_totals(capture)` checks every stat against the
+    game's own reported `total` and is the check that caught `attack_damage`.
     """
     b = breakdown or {}
     pool = stat_pool(b) + d_equipment_pct + d_hardware + d_homelab
+    if is_economy_breakdown(b):
+        # deltas land inside the additive bracket, so they scale with it
+        return pool * economy_multiplier(b)
     if stat in DIRECT_STATS:
         return (b.get("base") or 0) + pool - 1
     flat = (b.get("equipment_flat") or 0) + d_equipment_flat
     if stat in SCALING_STATS:
         return ((b.get("base") or 0) + (b.get("level") or 0) + flat) * pool
     return flat * pool
+
+
+def validate_stat_totals(capture, tolerance=1e-6):
+    """[(stat, reported, modelled)] where `stat_total` misses the game's total.
+
+    Self-validation against a game-provided ground truth. An empty list means
+    every stat in `statsBreakdown` is reproduced; anything returned is a stat
+    whose family membership above is wrong, and any analysis touching it is
+    unsound until fixed.
+    """
+    breakdowns = capture["state"].get("statsBreakdown") or {}
+    bad = []
+    for stat, b in sorted(breakdowns.items()):
+        if not isinstance(b, dict) or "total" not in b:
+            continue
+        reported, modelled = b["total"], stat_total(b, stat)
+        scale = max(abs(reported), 1e-9)
+        if abs(modelled - reported) / scale > tolerance:
+            bad.append((stat, reported, modelled))
+    return bad
 
 
 # ---- Hardware shop cost model and allocation planner -----------------------
@@ -959,10 +1473,52 @@ SHELL_AB_2026_07_23 = {
                  "Barrier 221->0 is the exposed flank)",
 }
 
-# No experiment currently running (set to a dict like the concluded ones
-# above when the next A/B starts). Concluded experiments stay importable for
-# retrospective analysis: experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = None
+DRIVER_AB_2026_07_27 = {
+    "name": "driver-ab-2026-07-27",
+    "item": "Aegisbound Driver of Cataclysm",
+    "slot": "Driver",
+    # crafted and compiled by 21:46:57Z; equip immediately after
+    "equip_ms": 1785189000000,          # 2026-07-27T21:50:00Z
+    "boundary_fight_id": 114,            # last pre-equip fight id (21:46 capture)
+    # post-Analyzer/Router/hardware-package deaths, Corporate Network only,
+    # streak >= 50 (drops one 6 from a zone switch and one 129 pre-package
+    # outlier), 27 Jul 17:00Z -> 21:47Z. n=29, mean 113.8, sd 5.3, se 0.98.
+    "baseline_deaths": [110, 114, 117, 107, 120, 117, 111, 105, 112, 123,
+                        113, 108, 114, 113, 110, 116, 121, 107, 109, 107,
+                        118, 112, 117, 116, 112, 122, 120, 122, 106],
+    # pooled detailed-fight hit counts over the same window. UNLIKE the
+    # Payload/Shell tests this is NOT a contamination check -- this craft
+    # spends Accuracy (-4.35%), so hit rate is a TREATMENT metric and is
+    # expected to fall. It falling further than the accuracy cut implies is
+    # the failure signal.
+    "baseline_hits": (131725, 32504),   # 80.21% over 3,304 detailed fights
+    "target_deaths": 24,                # ~24 to resolve +3 at 80% power (sd 5.3)
+    "baseline_recent_ms": 1785164400000,  # 27 Jul 17:00Z -- same-loadout era
+    # Homelab jobs land through the window (Mechanical Keyboard L8 +1% AtkDmg,
+    # VLAN Rules L11 +1% Def, Traffic Mirror L8 +1% Eva, IDS Signatures L7).
+    # Each is ~+0.5% of a realized stat -- inside the noise, but the window
+    # measures a BUNDLE and is not a clean single-item read. Stated, not fixed.
+    "segment_ms": 1785189000000,        # = equip; no mid-test segment declared
+    # Amended 27 Jul 22:0xZ, BEFORE any post-equip death was scored: the
+    # original clause read "fights/hour up >= +5%", which is unsatisfiable --
+    # fight cadence is a fixed 4.872 s/fight (n=29, sd 0.053, invariant across
+    # every loadout change today including this +9.9% AtkSpd equip). Attack
+    # speed pays in ROUNDS per fight, not fights per hour. Replaced with the
+    # real mechanism, which is also already visible: rounds/fight -8.3% at
+    # streak 106-130, -4.2% at 86-105.
+    "keep_rule": "KEEP if mean death streak >= 111.8 (baseline 113.8 - 2) AND "
+                 "rounds/fight at streak >=86 down >= 4% vs pre-equip "
+                 "(42.0 at 86-105, 50.7 at 106-130); REVERT if mean <= 108.8, "
+                 "or if rounds/fight is flat at depth, or if hit rate "
+                 "falls materially below the ~78.5% the -4.35% Accuracy cut "
+                 "implies, or if deaths starting above 70% HP RISE above the "
+                 "baseline 5/29 (17%) -- that flank is what the +17% "
+                 "throughput was bought to close",
+}
+
+# Concluded experiments stay importable for retrospective analysis:
+# experiment_status(SHELL_AB_2026_07_23).
+ACTIVE_EXPERIMENT = DRIVER_AB_2026_07_27
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -1018,6 +1574,44 @@ def stream_records():
             line = line.strip()
             if line:
                 yield json.loads(line)
+
+
+def fight_cadence(since_ms=None, zone="corporate_network", max_gap_s=900):
+    """[(ended_at_ms, seconds_per_fight)] measured from the game's own clock.
+
+    Elapsed between consecutive deaths divided by the fights between them
+    (`streak_ended` + 1). Deaths carry a server `ended_at_ms`, so this is the
+    only wall-clock measure in the toolkit that does not go through the
+    auto-stream's 150 s polling interval -- pooling `seen_ms` gaps instead
+    just re-measures the poll rate, which is how this was nearly got wrong.
+
+    Measured 27 Jul 2026: **4.872 s/fight, sd 0.053, n=29 -> 739 fights/hour,
+    invariant** across every loadout change that day, including a +9.9%
+    Attack Speed equip that moved it 0%. See mechanics.md §14: fight cadence
+    is a fixed real-time tick, so **attack speed is not income** -- it pays in
+    rounds per fight, i.e. fewer enemy attacks per fight, i.e. mitigation.
+    Anything claiming a stat buys "fights per hour" is wrong until this
+    function says otherwise.
+    """
+    deaths = {}
+    for record in stream_records():
+        if record.get("kind") != "death":
+            continue
+        entry = record.get("death") or {}
+        if entry.get("ended_at_ms"):
+            deaths[entry["ended_at_ms"]] = entry
+    out = []
+    ordered = sorted(deaths.items())
+    for (ms0, _prev), (ms1, entry) in zip(ordered, ordered[1:]):
+        if since_ms is not None and ms1 < since_ms:
+            continue
+        if zone and entry.get("zone_id") != zone:
+            continue
+        gap = (ms1 - ms0) / 1000.0
+        fights = (entry.get("streak_ended") or 0) + 1
+        if 0 < gap <= max_gap_s and fights > 1:
+            out.append((ms1, gap / fights))
+    return out
 
 
 def experiment_status(experiment=None):
@@ -1101,7 +1695,9 @@ def experiment_status(experiment=None):
     }
 
 
-MECH_BRACKETS = ((24, 42), (60, 85), (86, 105))
+# Deaths now land at 113-120, so a ladder stopping at 105 misses the band
+# where the run actually ends. 106-130 added 27 Jul 2026.
+MECH_BRACKETS = ((24, 42), (60, 85), (86, 105), (106, 130))
 
 
 def experiment_mechanism(status):
@@ -1136,12 +1732,21 @@ def experiment_mechanism(status):
             sel = [f for f in det if lo <= (f["streak"] or 0) <= hi]
             if sel:
                 n = len(sel)
+                ph = sum(f["ph"] for f in sel)
+                pm = sum(f["pm"] for f in sel)
                 brackets[(lo, hi)] = {
                     "n": n,
                     "gross": sum(f["dmg"] for f in sel) / n,
                     "net": sum(f["dmg"] - f["rg"] - f["soak"]
                                for f in sel) / n,
                     "rounds": sum(f["rounds"] or 0 for f in sel) / n,
+                    # hit rate MUST be compared within a bracket: enemy
+                    # evasion scales with streak, so a pooled pre/post hit
+                    # rate is confounded by streak composition alone. This
+                    # is the comparison that falsified "Accuracy -4.35%
+                    # costs ~1.7pp of hit rate" on 27 Jul 2026.
+                    "ph": ph, "pm": pm,
+                    "hit": ph / (ph + pm) if ph + pm else None,
                 }
         deep_rounds = sum(f["rounds"] or 0 for f in det
                           if (f["streak"] or 0) >= 60)

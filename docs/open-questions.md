@@ -151,6 +151,12 @@ In the streak-96 loss compact log, realised per-round regen (`prg`) declined wit
 Observed and behaviorally described, but exact scaling/rounding remains unresolved.
 Measured 22 July (streak-96 death fight): player Corruption 12 dealt `sum(ecd)` 990 vs 5,368 direct — ~15.6% of output, ramping over the fight (`ecd` 22→110/round). Corruption is a significant outgoing-DoT stat in long fights; per-point scaling and stack mechanics still unknown.
 
+### 13. Does player level actually confound a death-streak baseline?
+
+Every A/B in this workspace has been read as if hack-level growth inside the window inflates death streaks, so windows are kept short. The 27 July ledger is weak evidence against that: across 38 deaths in 14:00–20:00 UTC, hourly mean peak death streak ran 114.2 / 127.6 / 117.3 / 113.0 / 113.9 / 115.0 — **flat, while hack level rose 1,031 → 1,058 (+27)**. If enemy scaling tracks player level closely, level growth cancels out and long baselines are cheaper than assumed, which matters because the ledger needs ~41 deaths to resolve a +3 shift at 80% power (se 1.12, sd 6.9).
+
+Not confirmed: n is 5–7 per bucket, the day also contains a zone change and the Analyzer/hardware/Router bundle, and enemy level at death ranged 1,673–1,843 without an obvious trend. Needs: peak death streak regressed on hack level within one zone and one gear configuration, over a window with no equipment change. Until then keep segmenting baselines at gear boundaries, but stop treating a multi-hour window as automatically spoiled by levelling.
+
 ## Decision record
 
 ### 21 July 2026 — candidate requests redefined
@@ -252,3 +258,37 @@ Every zone carries one (Small Business Server 120, Corporate Network 200). The c
 **PARKED 27 July 2026 — the measurement window closed.** Resolving this needed fights above the cap, and the move to Corporate Network raises the cap to 200 while costing ~4 streaks of depth. Streaks will sit near 129 against a 200 cap, so no data above a cap will accrue again until depth roughly doubles. That is the right trade — the question is low-value and the transition case never depended on it (`mechanics.md` §15) — but it is the reason the ~34 fights banked above 120 on 27 July are the only such sample that will exist for a long time. If the question ever matters, those fights plus the 90–119 bands are the sample; compare drop rate, `drop_rarity` distribution and `chips_drop` per fight, normalised by enemy level.
 
 General lesson worth more than the question: **a progression step can close a measurement window.** When a move changes the regime being measured, bank the observation first or accept losing it — and say which, rather than discovering it later.
+
+### 17. Deep tier-ladder growth per affix family — OPEN, cheap to resolve (27 July 2026)
+
+How much an affix gains per tier below T5 varies by family and is only measured for the families the inventory happens to cover. Observed deep steps span **1.146 (`suffix_attack`) to 1.417 (`suffix_adaptive_shell`)**, median 1.263 (n=25). Over a five-tier chase that is a 2.7× spread in the final value — larger than any other uncertainty in a craft verdict, and it silently decided the Driver verdict (`crafting.md` §12.1).
+
+Unknown: whether the step is a per-family constant, decelerates toward T1 in some families and not others, or tracks something visible (effect count, stat type, affix rarity). `suffix_attack` decelerates monotonically (1.232 → 1.171 → 1.146); `suffix_adaptive_shell` and `suffix_regeneration` hold ~1.40 to T1. No hypothesis yet separates them.
+
+**Resolution is cheap and self-densifying:** `value_min`/`value_max` in every capture are the tier's full range, so *one successful Version Upgrade* pins that family's next step exactly — no repeated sampling needed. Every craft already run therefore pays down this debt for the families it touches. `ihlib.fit_tier_steps` re-fits the two region constants from each capture automatically.
+
+Immediate probe: `of Execution` T6→T5 on the Aegisbound Driver (`suffix_critdamage`, currently a **single** observation and the family with the most riding on it).
+
+
+## Does tempo move the death ceiling? (opened 27 July 2026)
+
+The 22 July law says it does not, and `current-state.md` treats output/tempo as "the deliberate cost". Session 8 measured fight cadence as a **fixed 4.872 s tick** (`mechanics.md` §14), which means attack speed cannot buy income — but the same measurement found rounds/fight down **−8.3%** at streak 106–130 and **−4.2%** at 86–105 after a +9.9% attack-speed equip. Fewer rounds at fixed wall clock = fewer enemy attacks per fight = less damage taken. That makes attack speed an **attrition** stat, which the 22 July law denies.
+
+- Status: **unresolved, and it matters.** `CRAFT_WEIGHTS_PCT` prices AtkSpd at 0.9 (second-highest); if the law is right the weight is too high, if this reading is right the weight is justified and several past verdicts under-valued tempo.
+- Confounds: n is 14–20 fights at the deep bands, and the ECC Memory L93→L99 regen buy (+2.05%) landed inside the same window.
+- Test in flight: `driver-ab-2026-07-27`, whose amended keep rule scores rounds/fight at streak ≥ 86 directly.
+- Resolves cleanly once the **Hacking Simulator** lands (homelab 10) — a gear-customised full-streak sim isolates attack speed from regeneration.
+
+## Unexplained 2.7% fight-cadence step (opened 27 July 2026)
+
+Fight cadence read **5.000 s/fight** in the 17:00Z bucket (n=6, range 4.991–5.001) and **4.867** from 18:00Z onward (n=23). A one-time ~2.7% speed-up with no obvious cause. It is *not* attack speed — the +9.9% AtkSpd equip at 21:50Z produced no cadence change at all. Candidates: a homelab upgrade completing, a zone or enemy-class effect, or a client/server tick change. Low stakes (it is worth ~2.7% of all income) but it is the only known lever on a quantity otherwise believed constant, so it is worth identifying.
+
+
+## Is Accuracy saturated at this build's level? (opened 27 July 2026)
+
+Cutting Accuracy 7,595 → 7,265 (**−4.35%**) with the Driver equip produced **no hit-rate loss at matched streak band** — +0.89pp / +1.47pp / +1.69pp at bands 60–85 / 86–105 / 106–130 on 8,195 post-equip attacks, against a roughly-linear prediction of −1.7pp. Player levelling accounts for at most +0.3% of accuracy over the window.
+
+- Status: **the loss is falsified; the rise is unexplained.** Each band is only z ≈ +1.2 to +1.9, but all three move the same way.
+- Why it matters: `CRAFT_WEIGHTS_PCT` prices Accuracy at **1.0**, joint-highest with Defense and Evasion, and `current-state.md` still lists hit reliability as bottleneck #2. If accuracy is saturated in the 7.2–7.6K region against Corporate Network evasion, both are wrong and the Daemon verdict (+8.9, part of whose case is Acc +3.2%) is overstated.
+- Constraint this puts on the unknown hit-chance formula (§7/§8): it is **flat in accuracy** across 7.2–7.6K at these enemy evasion levels — consistent with a ratio-based curve deep in diminishing returns, not a linear or additive one.
+- Cheapest resolution: the **Software Profiler** (homelab 10) runs 100 sims against a chosen enemy level, which isolates hit rate from streak composition entirely.

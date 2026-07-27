@@ -426,19 +426,51 @@ This result did not prove the full Augment tier distribution or exact affix weig
 
 Decoded from `hardwareInfo.stats_breakdown` in the 27 Jul 14:48Z capture; every
 stat closes exactly. **Hardware %, homelab % and equipment % occupy one shared
-additive pool** (open-questions §13 resolved). Three families:
+additive pool** (open-questions §13 resolved). Four families:
 
 | Family | Stats | Formula |
 |---|---|---|
-| **Scaling** | max_hp, defense, accuracy, evasion | `(base + level) × (1 + equipment_pct + hardware + homelab)` |
+| **Scaling** | max_hp, defense, accuracy, evasion, **attack_damage**, **post_combat_heal** | `(base + level + equipment_flat) × (1 + equipment_pct + hardware + homelab)` |
 | **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + equipment_pct + hardware + homelab` (no scaling term) |
 | **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `equipment_flat × (1 + equipment_pct + hardware + homelab)` |
+| **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache)` |
+
+**Family membership is not guessable from the stat name.** `attack_damage` was
+absent from all three families until 27 July 2026, so `ihlib.stat_total`
+silently returned **0** for it against a real total of 2,050 — and it is exactly
+the stat the multiplicative-AtkDmg guardrail depends on. `post_combat_heal` and
+the five economy stats were wrong the same way. The docstring claiming the
+function "reproduces every stat" was never checked against the capture.
+`ihlib.validate_stat_totals(capture)` now checks all of them against the game's
+own `total` and `ih.py audit` reports any miss as a `MODEL` flag; membership is
+detected by key (`equipment` vs `equipment_pct`), so a new economy stat is
+handled automatically.
 
 Verifications (27 Jul capture): defense `518.5 × 2.05260 = 1064.27`; accuracy
 `3181 × 1.96780 = 6259.71`; evasion `2104 × 1.85898 = 3911.29`; max_hp
 `10370 × 1.35358 = 14036.61`; attack_speed `1 + 0.5471 + 0.065 + 0.03 = 1.6421`;
 crit_chance `0.05 + 0.3939 + 0.066 = 0.5099`; regeneration `194 × 1.24 = 240.56`.
-`post_combat_heal = 5 × hack_level` (5,135 at level 1,027), unaffected by pools.
+`post_combat_heal` carries `5 × hack_level` in its `level` term (5,270 at level
+1,054) and is pool-multiplied like any other scaling stat — currently
+indistinguishable from a constant only because nothing grants it pool.
+
+**The economy family is not purely additive** (corrected 27 Jul 2026, 21:07Z
+capture). Two of its components — `participation_bonus` and `firewall_cache` —
+**multiply** the additive bracket rather than joining it. Treating them as
+additive under-read every economy stat by 11–23%, which `validate_stat_totals`
+flagged and nothing else would have: the error is invisible in `potential`'s
+econ deltas because those are ratios and it very nearly cancels.
+
+    credits  (1 + 0.46825) × 1.5 × 1.00 = 2.20238   (game: 2.20238)
+    snippets (1 + 0.06 + 0.99026) × 1.5 × 1.15 = 3.53670   (game: 3.53670)
+
+The two terms are separately identifiable because the same capture carries a
+`firewall_cache = 0.15` case (the four gathering resources) and a
+`firewall_cache = 0` case (credits) against a constant
+`participation_bonus = 0.5`; every additive reading of either term fails one of
+them. All five economy stats now close to <1e-9 across all 58 captures.
+Regime: only these two values have ever been observed — a capture with
+different ones re-tests the form automatically via `validate_stat_totals`.
 
 **Corollaries.**
 
@@ -542,3 +574,19 @@ stated multiplier.
 `reward_streak_soft_cap` semantics are **not yet measured** — see
 `open-questions.md` §17. No break is visible in credits at the 120 cap, but only
 34 fights past it exist so far.
+
+
+## 14. Fight cadence is a fixed real-time tick — measured 27 July 2026
+
+**Fights resolve on a constant ~4.872 s wall-clock interval, independent of every combat stat.** Measured from game-supplied death timestamps (elapsed between consecutive deaths ÷ `streak_ended`+1), Corporate Network, 27 July: **n=29, median 4.872 s/fight, sd 0.053, range 4.858–5.001 → 739 fights/hour.** Flat across every hourly bucket 17:00–22:00Z.
+
+The decisive test: the Driver equip at 21:50Z moved attack speed **1.819 → 1.999 (+9.9%)** and the next death clocked **4.87 s/fight** — zero change.
+
+**Consequences.**
+
+- **Rewards per hour are set by streak depth, not tempo.** Credits/xp/chips scale with enemy level, which scales with streak. Anything that deepens the streak is income; attack speed is not income by itself.
+- **Attack speed pays in `rounds` per fight.** Post-equip, rounds/fight fell **−5.0%** at streak 60–85 (z −2.27), **−2.3%** at 86–105 and **−3.7%** at 106–115 (Session 9, larger sample; the −8.3% first reported at 106–130 was small-sample noise — direction holds, magnitude was overstated). At a fixed wall clock, fewer rounds means fewer enemy attacks per fight, so **attack speed is a mitigation stat that acts by shortening fights** — it reduces damage taken per fight rather than increasing fights taken.
+- `rounds` is therefore a *simulated* combat count resolved inside the fixed tick, not a wall-clock measure. Do not read rounds as duration.
+- This puts the 22 July "tempo does not move the death ceiling" law in question — see `open-questions.md`. `driver-ab-2026-07-27` tests it directly.
+
+One unexplained ~2.7% step (5.000 → 4.867 s/fight) sits between the 17:00 and 18:00Z buckets. It did not recur at the 21:50 attack-speed change, so it is not tempo-driven. Cause unknown — logged in `open-questions.md`.

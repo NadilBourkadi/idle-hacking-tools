@@ -98,7 +98,8 @@ P(success from Tn to T(n-1)) = 10 × n percent, for n = 2..9
 - Resources are consumed on failure.
 - Normally 1 Stability is also consumed.
 - The Homelab **Snapshot Backup** upgrade can sometimes prevent Stability loss on a failed attempt.
-- The player's Snapshot Backups upgrade is level 0 (resolved 22 July 2026, `open-questions.md` §1), so the no-backup budget is currently exact, not conservative. Re-check if the upgrade is ever levelled (+5%/level, max 5).
+- Snapshot Backups is +5%/level, max 5. **Never state its level here — read it from the capture** (`ihlib.stability_preserve_chance`; level 2 = 10% preserve as of 27 July 2026). This line previously asserted "level 0", which was true on 22 July and silently rotted for five days, leaving every Stability budget ~6% over-conservative (`open-questions.md` §16).
+- Because a preserved failure costs an attempt but no Stability, **attempts and Stability diverge above level 0**; `plan_craft` budgets in Stability and reports both.
 
 ### Useful cumulative budgets
 
@@ -293,6 +294,42 @@ These remain unknown and must not silently become facts:
 - Augment's tier distribution.
 
 A fresh before/after export can resolve the first three operationally.
+
+### 12.1 Tier ladder growth is family-specific — 27 July 2026
+
+How much an affix gains per tier is **not one constant**, and the single 1.4 the toolkit used was fitted on shallow tiers only. Measured within-family across every percentage affix in the 27 July capture:
+
+| Region | n | median | p25 | p75 |
+|---|---:|---:|---:|---:|
+| upper tier ≥ 6 | 50 | **1.398** | 1.341 | 1.415 |
+| upper tier ≤ 5 | 25 | **1.263** | 1.250 | 1.288 |
+
+Deep steps are also far more **family-dependent** than shallow ones — `suffix_attack` decelerates hard (1.232 → 1.171 → 1.146 approaching T1) while `suffix_adaptive_shell` and `suffix_regeneration` hold ~1.41 all the way down. So the spread on an *unmeasured* family's deep ladder is roughly 1.15–1.42, which over a five-tier chase is a 2.7× spread in the final affix value.
+
+Consequences, all now in tooling:
+
+- `ihlib.ladder_value` walks a region-aware step when it extrapolates; log-linear interpolation is kept only *between* observations, where it is bounded by data.
+- `ihlib.fit_tier_steps(capture)` re-fits both constants from the capture, so the law cannot rot as the inventory turns over.
+- `plan_craft` returns `score_low` (the same plan re-valued at the p25 deep step) and `deep_reliance` (planned promotions into tiers that family has never been observed at). **A verdict that only clears `UPGRADE_BAND` at the median is resting on extrapolation, not evidence.**
+- The 27 July uncapping argument — that reliance on interpolated points was "unchanged at 43/50" — counted interpolated points without checking their **bias**, which was the whole problem. Uncapping to T1 remains right; it just has to be priced on the correct ladder.
+
+**The cheapest way to resolve a family is to buy one tier of it.** `value_min`/`value_max` in the capture are the tier's full range, so a *single successful* Version Upgrade reveals the next tier's exact midpoint — a deterministic measurement, not a noisy sample.
+
+### 12.1.1 Ladder amnesia — decompiling used to delete the evidence
+
+`tier_ladders(capture)` read one capture, so a tier was "observed" only while an owned item still carried it. **Decompiling therefore silently degraded craft verdicts**, and did:
+
+- 27 Jul 19:54Z → 20:57Z, three sidegrades were decompiled. One of them, `Elusive Kernel of Regeneration` (+1.7), held `of Regeneration` **T7 — the only `suffix_adaptive_shell` T7 observation owned.**
+- That is the family the Bastioned Firewall of Infection's whole plan runs through. With T7 present the greedy planned `of Recovery` T8→T1 inside measured data and scored **+9.0**; without it the T4–T7 region became interpolated, the greedy flipped to a shallower `of the Bastion` T5→T2 plan, and the same item on the same build scored **+4.6**.
+- **No game state changed at all** — not the item, not its Stability, not the loadout, not hardware. A 4.4-point verdict swing, comparable to the entire `UPGRADE_BAND`, came purely from the model forgetting.
+
+An affix's per-tier range is a game constant, so an observation stays valid after the item is gone. `ihlib.tier_ladders_archive()` unions every capture in `data/captures/` and is what `ih.py potential` now uses: **150 → 582 tier observations, 83 → 97 affix families**, and the ladder can only improve from here. `fit_tier_steps` takes the same archive ladders. Regime caveat: this is sound only while the game does not rebalance affix ranges — if it ever does, pre-change captures become contaminating and the fit must be re-based from the boundary.
+
+This is the same failure shape as the T3 tier cap and the zone transition cost: **a model quietly used outside the regime it was fitted in.** The new twist is that the regime moved on its own — nobody changed the model, the data under it was thrown away by a routine inventory action.
+
+### 12.2 Roll position is lost on promotion — plan around it
+
+`plan_craft` values an upgraded affix at the new tier's **midpoint**. When the current roll is high, one promotion can therefore be worth much less than the ladder step suggests, and adjacent tier ranges overlap: the Aegisbound Driver's `of Execution` sits at 99% of the T6 range (0.1667 of 0.1231–0.1670), while a bottom-of-range T5 roll would land near 0.156 — **a downgrade**. This does not bias a *ceiling* comparison (which compares final-tier midpoint against the equipped item's actual values), but it does bias the marginal "is this one step worth the Stability" question. Check the roll before spending on a single step.
 
 ## 13. Realized-craft calibration — 22 July 2026 (Vital Driver)
 
