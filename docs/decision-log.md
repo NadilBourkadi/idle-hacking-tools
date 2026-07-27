@@ -256,3 +256,24 @@ Two test streaks (deaths at 98 and 96, enemy lvl 1383/1366) vs same-session old-
 - Verified across budgets: 37,443 → 32,790 spent; 100,000 → 93,286; 500,000 → 483,836, all within budget and rebalancing sensibly at the larger sizes.
 - The bug was latent because the planner had only ever been run at a full-reset budget (~1.08M chips), where the unconstrained optimum sits above every current level and the clamp never binds. **Any optimiser validated only at one budget scale should be re-run at a small one before it is trusted.**
 - Note the model tracking reality: ECC Memory's value/level rose 0.41 → **0.55** after the Router craft, because the hardware regen pool multiplies gear flat regen and that went 194 → 259. The planner picks it up automatically.
+
+## 27 July 2026 — Session close: the recurring failure shape
+
+Three separate errors today shared one cause — **a model used outside the regime it was fitted in**, each producing plausible-looking output that nothing flagged:
+
+| Model | Fitted in | Used in | Cost |
+|---|---|---|---|
+| `plan_craft` T3 tier cap | never tested at all | every craft verdict since 22 Jul | excluded the two highest value-per-Stability steps on the ladder; hid a +22.8 Router and a +9.0 Firewall |
+| Zone transition cost | a handful of high-streak Small Business fights | across a zone boundary | predicted −4 streaks, actual **−17.9** |
+| `hardware_plan` | a ~1.08M-chip full-reset budget | a 37K-chip balance | returned a plan costing 108,575 chips |
+
+A fourth, adjacent: Snapshot Backups recorded as "level 0" in `open-questions.md` §1 was correct when written on 22 July and rotted silently as the homelab advanced, leaving every Stability budget ~6% over-conservative for five days.
+
+**Mitigations now standing** (`CLAUDE.md`, Analysis rules):
+
+1. State the regime a model was fitted in; re-validate before applying it elsewhere.
+2. Prefer models that **self-validate against a game-provided ground truth**. `hardware_cost_curve` checks its whole-build cumulative against the game's own reset refund figure (±1.5%) and would surface its own drift; nothing else in the toolkit has that property yet, and adding it where possible is worth more than another heuristic.
+3. Read levels and state from the capture, never hard-code them — a "current level: N" in prose is a decaying assertion.
+4. Exercise optimisers at both ends of their input range before trusting them.
+
+The session's other repeated pattern: three fixes took the form **"make the tooling emit it"** rather than "remember to do it" — the FILL NOW block, the UI-section field, and `ih.py audit` itself. Standing preference confirmed: when a rule depends on the assistant remembering, move it into the tooling.
