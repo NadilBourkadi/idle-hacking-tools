@@ -552,6 +552,45 @@ def homelab_state(capture):
     return info.get("homelab"), info.get("definitions"), info
 
 
+def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
+    """Concrete jobs to put in free build slots / queue places, best first.
+
+    Ranked by **total progress points**, not points per slot-hour. For a slot
+    that will run unattended the idle time after a short job costs more than
+    its better nominal rate: a 1.0h/95pt job beats a 0.5h/110pt-per-hour job
+    outright if nobody is there to refill at the 30-minute mark. Excludes jobs
+    already active or queued, gated jobs, and (by default) anything costing
+    hackcoin, which is reserved for install gates.
+    """
+    homelab, definitions, info = homelab_state(capture)
+    if not homelab:
+        return []
+    level = homelab.get("level", 0)
+    tick_s = info.get("tick_seconds") or 5
+    busy = {j.get("target") for j in (homelab.get("active_jobs") or [])
+            + (homelab.get("pending_jobs") or [])}
+    out = []
+    for u in iter_homelab_upgrades(homelab, definitions):
+        d, nxt = u["def"], u["next"]
+        if (d.get("unlock_level", 0) > level or not u["install_present"]
+                or not nxt or d["type"] in busy):
+            continue
+        cost = nxt.get("cost") or {}
+        if cost.get("hackcoin") and not allow_hackcoin:
+            continue
+        if (cost.get("credits") or 0) > (info.get("credits") or 0):
+            continue
+        out.append({
+            "name": d.get("name"), "type": d["type"],
+            "level": u["level"], "target_level": u["level"] + 1,
+            "points": nxt.get("progress_points", 0),
+            "hours": (nxt.get("duration_ticks") or 0) * tick_s / 3600,
+            "cost": cost, "description": d.get("description") or "",
+        })
+    out.sort(key=lambda r: (-r["points"], -r["hours"]))
+    return out[:limit]
+
+
 def homelab_level_threshold(definitions, target_level):
     """Progress points required to reach target_level (None if uncharted)."""
     thresholds = definitions.get("level_thresholds") or []

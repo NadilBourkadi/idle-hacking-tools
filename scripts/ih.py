@@ -349,6 +349,20 @@ def cmd_homelab(args):
                      for d in (installs if isinstance(installs, list)
                                else installs.values())}
     tick_s = info.get("tick_seconds") or 5
+    free = (info.get("max_build_slots") or 0) - len(jobs)
+    room = (info.get("max_queue_jobs") or 0) - len(pending)
+    if free or room:
+        picks = ihlib.homelab_fill_suggestions(cap, limit=free + room)
+        print(f"\n  FILL NOW ({free} slot(s), {room} queue place(s) free) — "
+              f"ranked by total points, because an idle slot costs more than a "
+              f"better hourly rate:")
+        for p in picks:
+            print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
+                  f"+{p['points']:>3}pts  {p['hours']:.1f}h  "
+                  f"{ihlib.fmt_cost(p['cost'])}")
+        if not picks:
+            print("    nothing affordable left un-queued")
+
     print("\n  purchasable now (gate <= level, install present, below max),")
     print("  by progress points per slot-hour (slot time, not cost, is the")
     print("  binding constraint on progress while credits are plentiful):")
@@ -470,9 +484,20 @@ def cmd_audit(args):
         free = (info.get("max_build_slots") or 0) - active
         room = (info.get("max_queue_jobs") or 0) - pend
         if free or room:
-            flags.append(("IDLE", f"homelab has {free} build slot(s) and {room} "
-                                  f"queue place(s) empty — progress points are "
-                                  f"slot-time bound, refill them"))
+            picks = ihlib.homelab_fill_suggestions(cap, limit=free + room)
+            if picks:
+                # name the exact jobs -- "refill them" is not an action
+                named = "; ".join(
+                    f"{p['name']} -> L{p['target_level']} (+{p['points']}pts, "
+                    f"{p['hours']:.1f}h, {ihlib.fmt_cost(p['cost'])})"
+                    for p in picks)
+                flags.append(("IDLE", f"homelab has {free} build slot(s) and "
+                                      f"{room} queue place(s) empty — fill with: "
+                                      f"{named}"))
+            else:
+                flags.append(("IDLE", f"homelab has {free} build slot(s) and "
+                                      f"{room} queue place(s) empty, and nothing "
+                                      f"affordable is left un-queued"))
         gates = [(d.get("name"), (d.get("cost") or {}).get("hackcoin") or 0)
                  for d in (definitions.get("installs") or [])
                  if not (homelab.get("installed") or {}).get(d.get("type"))]
