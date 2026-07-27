@@ -302,5 +302,6 @@ Third contract executed end-to-end; first to realize **above** projection (+22.6
 | Targeted Payload (22 Jul) | +6.9 | +1.7 | Phase-1 cap-out; on-cap replan rule |
 | Bastioned Payload (23 Jul) | +30.2 (post-Augment) | ~+10 realized score, A/B KEEP | unlucky VU run (13 fails) |
 | Phoenix Shell (23 Jul) | +20.2 (post-Augment) | +22.6, A/B KEEP | lucky VU run (17 attempts / 12 promotions vs ~22 expected) |
+| Targeted Analyzer (27 Jul) | +13.5 (post-Augment) | **+24.9** | best on record; all three suffix targets overshot T3 to **T2** on 19 VU attempts for 12 promotions vs ~28 expected |
 
-Spread vs projection is roll luck (±5–10); the ~5-point contract-conservatism discount on `potential` projections stands. Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).
+Spread vs projection is roll luck (±5–10, and ±12 once a run overshoots its tier targets); the ~5-point contract-conservatism discount on `potential` projections stands. **`potential` caps its plan at T3, so a lucky run that pushes to T2 realizes far above projection — the tool systematically under-projects the upside tail.** Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).

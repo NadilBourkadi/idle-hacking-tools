@@ -421,3 +421,73 @@ The Fortified Firewall probe directly showed:
 - Duplicate affix families are possible: two `of Sandboxing` suffixes coexisted.
 
 This result did not prove the full Augment tier distribution or exact affix weighting.
+
+## 13. Stat composition — RESOLVED formula-level, 27 July 2026
+
+Decoded from `hardwareInfo.stats_breakdown` in the 27 Jul 14:48Z capture; every
+stat closes exactly. **Hardware %, homelab % and equipment % occupy one shared
+additive pool** (open-questions §13 resolved). Three families:
+
+| Family | Stats | Formula |
+|---|---|---|
+| **Scaling** | max_hp, defense, accuracy, evasion | `(base + level) × (1 + equipment_pct + hardware + homelab)` |
+| **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + equipment_pct + hardware + homelab` (no scaling term) |
+| **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `equipment_flat × (1 + equipment_pct + hardware + homelab)` |
+
+Verifications (27 Jul capture): defense `518.5 × 2.05260 = 1064.27`; accuracy
+`3181 × 1.96780 = 6259.71`; evasion `2104 × 1.85898 = 3911.29`; max_hp
+`10370 × 1.35358 = 14036.61`; attack_speed `1 + 0.5471 + 0.065 + 0.03 = 1.6421`;
+crit_chance `0.05 + 0.3939 + 0.066 = 0.5099`; regeneration `194 × 1.24 = 240.56`.
+`post_combat_heal = 5 × hack_level` (5,135 at level 1,027), unaffected by pools.
+
+**Corollaries.**
+
+- A hardware or homelab track whose gear-flat multiplicand is **0 produces
+  exactly 0**. On 27 Jul, Packet Shield (L40, damage_barrier) and Exploit
+  Framework (L41, armor_penetration) were multiplying zero — 81,295 chips of
+  dead weight, invisible in the shop UI.
+- Tracks granting `additive_per_level` 0.001 (attack_speed, crit_chance,
+  crit_damage) cost the same per level as the 0.005 tracks and deliver one
+  fifth of the pool.
+- Homelab combat upgrades are +0.01 pool per level ≈ **+0.5% of the realized
+  stat** — inside the noise of a 10-death A/B.
+- **Hardware shop chip cost**: `cost(L) = 27.97 × L^1.177` for combat tracks,
+  `10.97 × L^1.082` for economy tracks (fit spread 1.001 across six and four
+  tracks). Cumulative over the whole build predicts 1,012,105 chips against the
+  game's own reset refund of 1,002,284 — **+1.0%**. Cumulative to level N is
+  `A/(p+1) × N^(p+1)`.
+- `prg` (regeneration) and enemy damage are both **per round**; attack speed is
+  wall-clock throughput. Trading attack speed for regeneration therefore
+  improves per-fight attrition even though it lengthens real time — unless
+  attack speed also governs the player:enemy action ratio, which is untested.
+
+## 14. Hardware shop reset — refunds are LOCKED to the shop (27 July 2026)
+
+A hardware reset refunds every resource spent (`reset_preview_loss` is all zeros
+for the free monthly reset), but the refund arrives **locked to the Hardware
+Shop** and can never be spent anywhere else. `hardwareInfo.locked_resources`
+carries the locked balance; the top-level `chips`/`hackcoin`/resource fields in
+`hardwareInfo` report the **free** balance only, so total shop spending power is
+`locked + free`.
+
+Observed 27 Jul after the free reset: locked chips 89,900, snippets 665,832,
+cycles 126,811, hashes 725,401, packets 169,536, **hackcoin 8**. Resetting again
+simply re-locks the refund — locked resources can never escape the shop.
+
+**Consequences.**
+
+- **A reset's hackcoin refund cannot fund Homelab install gates.** Budget the
+  install reserve from *free* hackcoin only.
+- Locked snippets/cycles/hashes/packets are spendable only on CPU / RAM / GPU /
+  Network / Loot Filter / Drop Rate Amplifier — the only tracks that consume
+  them. Everything else costs chips + credits.
+- Chips have no use outside the shop, so their lock is immaterial.
+- Cooldown is `monthly_utc`: `reset_available_at_ms` gave 1 Aug 2026 immediately
+  after the 27 Jul free reset. A **paid** reset (`can_paid_reset`) was available
+  at once and costs credits only — 346.6M for All Hardware at 418 held levels,
+  with sectioned options (Combat / Resources) priced separately. Suboptimal
+  allocations are therefore cheap to undo.
+- All tracks restart at level 0 after a reset, and cost curves are convex
+  (`cost(L) ∝ L^~1.15`), so early levels are far cheaper per point than the tail
+  — a reset is the moment to abandon over-levelled low-value tracks rather than
+  rebuild them.

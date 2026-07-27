@@ -294,24 +294,36 @@ def cmd_homelab(args):
 
     names = {u["def"]["type"]: u["def"].get("name") or u["def"]["type"]
              for u in ihlib.iter_homelab_upgrades(homelab, definitions)}
+    # Queued jobs are charged at queue time (credits/resources verified
+    # 27 Jul 2026) and hold their cost_snapshot, so they count as spent and
+    # as in-flight points just like running ones.
     jobs = homelab.get("active_jobs") or []
+    pending = homelab.get("pending_jobs") or []
+    tick_s = info.get("tick_seconds") or 5
     in_flight_points = 0
-    if jobs:
-        print("\n  active jobs:")
-        tick_s = info.get("tick_seconds") or 5
-        for job in jobs:
+    for label, group in (("active jobs", jobs), ("queued jobs", pending)):
+        if not group:
+            continue
+        print(f"\n  {label}:")
+        for job in group:
             done = job.get("progress_ticks") or 0
             total = job.get("duration_ticks") or 1
-            eta_min = (total - done) * tick_s / 60
             pts = job.get("progress_points") or 0
             in_flight_points += pts
+            eta = f"{(total - done) * tick_s / 60:.0f}min"
+            when = f"{done / total * 100:3.0f}%  ~{eta}" if group is jobs \
+                else f"     {eta} once started"
             print(f"    {names.get(job.get('target'), job.get('target')):28s} "
-                  f"-> L{job.get('target_level')}  {done / total * 100:3.0f}%  "
-                  f"~{eta_min:.0f}min  +{pts}pts  "
+                  f"-> L{job.get('target_level')}  {when}  +{pts}pts  "
                   f"[{ihlib.fmt_cost(job.get('cost_snapshot'))}]")
-        print(f"    (in-flight progress points: +{in_flight_points})")
+    if in_flight_points:
+        free = (info.get("max_build_slots") or 0) - len(jobs)
+        room = (info.get("max_queue_jobs") or 0) - len(pending)
+        print(f"    (in-flight progress points: +{in_flight_points}"
+              f" -> {points + in_flight_points:,}; "
+              f"{free} slot(s) free, {room} queue place(s) free)")
 
-    queued_targets = {job.get("target") for job in jobs}
+    queued_targets = {job.get("target") for job in jobs + pending}
     installs = definitions.get("installs") or []
     install_names = {d.get("type"): d.get("name")
                      for d in (installs if isinstance(installs, list)
@@ -363,7 +375,7 @@ def cmd_hardware(args):
     if not hw:
         sys.exit("no hardwareInfo in capture (open the Hardware Shop tab and recapture)")
     print(f"# {path.name}")
-    combat_stats = (cap["state"].get("currentPlayer") or {}).get("combat_stats") or {}
+    stats_breakdown = hw.get("stats_breakdown") or {}
     print(f"  chips {hw.get('chips'):,.0f}  hackcoin {hw.get('hackcoin')}  "
           f"levels held {hw.get('hardware_purchased')}")
     if hw.get("can_reset"):
@@ -372,11 +384,11 @@ def cmd_hardware(args):
         print(f"  RESET AVAILABLE ({hw.get('reset_preview_mode')}, "
               f"{hw.get('reset_cooldown_mode')}): all-hardware refund "
               f"{ihlib.fmt_cost(refund)}")
-    print("\n  combat tracks by value per 1K chips (heuristic: CRAFT_WEIGHTS on the")
-    print("  current build; assumes hardware % pools with gear % — unverified):")
+    print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
+    print("  current build; additive pooling confirmed — mechanics.md §13):")
     combat_rows, economy_rows = [], []
     for d in hw.get("definitions") or []:
-        value = ihlib.hardware_track_value(d, combat_stats)
+        value = ihlib.hardware_track_value(d, stats_breakdown)
         cost = d.get("next_cost") or {}
         if value:
             per_1k = value / max(cost.get("chips", 0), 1) * 1000
@@ -394,6 +406,80 @@ def cmd_hardware(args):
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
               f"next {ihlib.fmt_cost(d.get('next_cost'))}  "
               f"{(d.get('description') or '')[:60]}")
+
+
+def cmd_audit(args):
+    """Anomaly sweep: things that are silently costing progress right now.
+
+    Every check here exists because a real one was missed. 27 Jul 2026: four
+    homelab build slots idle for 3.5 days; 81K chips on two hardware tracks
+    whose multiplicand was zero; a finished craft sitting unequipped; a
+    homelabInfo panel 1,348s stale. Run before optimizing anything.
+    """
+    cap, path = ihlib.load_capture(args.file)
+    print(f"# {path.name}")
+    flags = []
+
+    for section, reason in ihlib.stale_panels(cap):
+        flags.append(("STALE", f"{section}: {reason} — reopen that game tab "
+                               f"and recapture before trusting it"))
+
+    hw = ihlib.hardware_state(cap)
+    if hw:
+        sb = hw.get("stats_breakdown") or {}
+        locked = hw.get("locked_resources") or {}
+        free_chips = hw.get("chips") or 0
+        spendable = free_chips + (locked.get("chips") or 0)
+        if spendable > 20000:
+            flags.append(("IDLE", f"{spendable:,.0f} chips unspent "
+                                  f"({locked.get('chips', 0):,.0f} shop-locked)"))
+        if locked.get("hackcoin"):
+            flags.append(("IDLE", f"{locked['hackcoin']} shop-locked hackcoin — "
+                                  f"unusable outside Hardware; spend or lose it"))
+        for d in hw.get("definitions") or []:
+            level = d.get("current_level") or 0
+            value = ihlib.hardware_track_value(d, sb)
+            if level and value == 0:
+                flags.append(("DEAD", f"{d.get('name')} L{level} scores 0 — its "
+                                      f"multiplicand is zero; those chips do nothing"))
+
+    homelab, definitions, info = ihlib.homelab_state(cap)
+    if homelab:
+        active = len(homelab.get("active_jobs") or [])
+        pend = len(homelab.get("pending_jobs") or [])
+        free = (info.get("max_build_slots") or 0) - active
+        room = (info.get("max_queue_jobs") or 0) - pend
+        if free or room:
+            flags.append(("IDLE", f"homelab has {free} build slot(s) and {room} "
+                                  f"queue place(s) empty — progress points are "
+                                  f"slot-time bound, refill them"))
+        gates = [(d.get("name"), (d.get("cost") or {}).get("hackcoin") or 0)
+                 for d in (definitions.get("installs") or [])
+                 if not (homelab.get("installed") or {}).get(d.get("type"))]
+        need = sum(hc for _, hc in gates)
+        # locked hackcoin cannot fund installs (mechanics.md §14) -- free only
+        if need and (info.get("hackcoin") or 0) < need:
+            flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
+                                     f"{need} needed for pending installs"))
+
+    equipped = {slot: item for where, slot, item in ihlib.iter_items(cap)
+                if where == "equipped"}
+    for where, slot, item in ihlib.iter_items(cap):
+        if where != "inventory" or slot not in equipped:
+            continue
+        mine = ihlib.weighted_score(ihlib.stat_totals(item))
+        theirs = ihlib.weighted_score(ihlib.stat_totals(equipped[slot]))
+        if mine > theirs + ihlib.UPGRADE_BAND and not item.get("stability"):
+            flags.append(("UNEQUIPPED", f"{slot}: {item.get('name')} scores "
+                                        f"{mine:.1f} vs equipped {theirs:.1f} and "
+                                        f"has 0 Stability (finished) — equip it"))
+
+    if not flags:
+        print("  no anomalies")
+        return
+    width = max(len(k) for k, _ in flags)
+    for kind, message in flags:
+        print(f"  [{kind:<{width}}] {message}")
 
 
 def cmd_ab(args):
@@ -527,6 +613,10 @@ def main():
     p = sub.add_parser("hardware")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_hardware)
+
+    p = sub.add_parser("audit")
+    p.add_argument("--file")
+    p.set_defaults(fn=cmd_audit)
 
     p = sub.add_parser("ab")
     p.add_argument("--brief", action="store_true")

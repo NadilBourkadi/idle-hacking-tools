@@ -206,16 +206,20 @@ A forced-suffix Augment:
 
 ### 12. Rarity promotion on 6th affix
 
-Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Second observation 23 July (10:00 capture): Citadel Shell of Recovery, rare with 5 affixes, flipped to **epic** on its Augment adding a 6th. The rare→epic-on-6th-affix pattern is now 2/2; still unknown whether rarity is purely an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield.
+Vital Driver of Precision displayed rare with 5 affixes; after Augment added a 6th (22 July, 21:25 capture) it displays **epic**. Second observation 23 July (10:00 capture): Citadel Shell of Recovery, rare with 5 affixes, flipped to **epic** on its Augment adding a 6th. Third 27 July (15:25 capture): Targeted Analyzer of Lightning, rare with 5, flipped to **epic** when Augment added Ravaging. The rare→epic-on-6th-affix pattern is now **3/3**; still unknown whether rarity is purely an affix-count display, whether promotion unlocks a Signature affix slot, or whether it affects drops/decompile yield.
 
-### 13. Hardware/homelab percentage stacking (added 23 July 2026)
+### 13. Hardware/homelab percentage stacking — RESOLVED 27 July 2026
 
-`ih.py hardware` scores shop tracks assuming a hardware track's %-per-level joins the **same additive multiplier pool** as gear percentage affixes (and similarly for homelab stat upgrades, e.g. VLAN Rules +1% Defense/level). Plausible from the shared `mult_add`-style data shapes but unverified — multiplicative stacking or a separate pool would change per-chip value rankings materially. Test: buy one cheap level on a big-base stat track (e.g. Encryption Module with Defense visible) and diff `combat_stats` before/after; two captures resolve it. Until then, treat hardware-vs-craft value comparisons as directional only.
+Confirmed formula-level from `stats_breakdown`: hardware, homelab and equipment percentages share one additive pool, in three stat families. Moved to `docs/mechanics.md` §13, together with the decoded hardware chip cost curve.
 
 ### 14. Version Upgrade tier-roll behaviour — strong evidence 23 July 2026 (was: unresolved item 2)
 
 During the Bastioned Payload craft (08:26 → 08:28 captures), of Infection went roll 100% → of Decay roll 50%, and of Targeting roll 82% → of Unerring roll 60% across multi-step promotions. Strong evidence that a successful Version Upgrade **rerolls the value within the new tier** rather than preserving relative roll position. Not yet formula-level (no per-step captures); one single-step before/after capture would finish it.
 
-### 14. Hackcoin deduction timing (added 23 July 2026)
+### 15. Hackcoin deduction timing (added 23 July 2026; narrowed 27 July)
 
-Homelab job hackcoin costs do not visibly deduct at queue time (11 hc held at 09:44 with Worker Orchestrator +3 and QoS +1 queued; still 11 at 10:33 after queueing Snapshot Backups +1; 9 by 11:52 after QoS completed). Working model: deduction at job completion, not queueing. Matters for the advisory's ≥6 hc install-gate reserve — until confirmed, treat queued-but-incomplete hc jobs as unpaid liabilities when computing the reserve.
+Homelab job hackcoin costs did not visibly deduct at queue time (11 hc held at 09:44 with Worker Orchestrator +3 and QoS +1 queued; still 11 at 10:33 after queueing Snapshot Backups +1; 9 by 11:52 after QoS completed).
+
+**27 July — credits and resources ARE charged at queue time.** Queueing 8 homelab jobs (4 `active_jobs` + 4 `pending_jobs`) dropped credits by exactly 3,544,295,863 against a summed `cost_snapshot` of 3.55B across both groups, and every pending job carries a full `cost_snapshot`. The general model is therefore **charge-on-queue**, which makes the 23 July hackcoin observation a *hackcoin-specific* anomaly rather than a general deferral — either hackcoin alone defers to completion, or the earlier reading was confounded.
+
+Still unresolved, and it decides the install-gate reserve: until a queued hackcoin job is watched against a known balance, treat queued-but-incomplete hc costs as unpaid liabilities. One queued hc job plus a before/after capture settles it.

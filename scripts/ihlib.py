@@ -549,36 +549,223 @@ def hardware_state(capture):
     return capture["state"].get("hardwareInfo") or None
 
 
-# currentPlayer.combat_stats keys for the flat-weighted labels, used to turn
-# a hardware track's %-per-level into flat points on the current build.
-COMBAT_STATS_KEYS = {
-    "Regen": "Regeneration", "Corrupt": "Corruption",
-    "ArmorPen": "ArmorPenetration", "Thorns": "Thorns",
-    "Barrier": "DamageBarrier",
-}
-
-
-def hardware_track_value(defn, combat_stats):
+def hardware_track_value(defn, stats_breakdown):
     """Heuristic bottleneck value of +1 level, on the CRAFT_WEIGHTS scale.
 
-    Returns None for pure economy tracks (no combat_stat effect). Assumes a
-    hardware percentage joins the same additive multiplier pool as gear
-    percentages — plausible but UNVERIFIED (docs/open-questions.md).
+    Returns None for pure economy tracks (no combat_stat effect).
+
+    Hardware %, homelab % and equipment % share ONE additive pool — confirmed
+    formula-level 27 Jul 2026 (`docs/mechanics.md` §13), so the pooling
+    assumption here is no longer a guess; only the CRAFT_WEIGHTS behind it
+    remain heuristic. Scores are in gear-affix units:
+
+    - percentage stats: a gear affix of +1% adds 0.01 to the pool, so a level
+      granting `additive_per_level` is worth `per_level * 100` affix points.
+    - gear-flat stats (Regen, Corrupt, Thorns, Barrier, ArmorPen): the pool
+      multiplies the item flat total, so a level yields
+      `equipment_flat * per_level` realised points; dividing by the pool
+      multiplier converts back to affix points (a gear +1 becomes 1*pool
+      realised). A track whose `equipment_flat` is 0 is worth exactly 0 —
+      e.g. Packet Shield and Exploit Framework on 27 Jul 2026, which were
+      multiplying zero while holding 81K chips.
     """
     value = None
     for effect in defn.get("effects") or []:
         stat = effect.get("combat_stat")
         if not stat:
             continue
-        value = value or 0.0
         label = stat_label(stat)
         per_level = effect.get("additive_per_level") or effect.get("mult_per_level") or 0
+        # `combat_stat` also covers drop-economy multipliers (item_rarity,
+        # drop_boost) that CRAFT_WEIGHTS does not model and that have no
+        # stats_breakdown entry. Leave those unscored (None) rather than 0, so
+        # callers can tell "not modelled" from "modelled and worth nothing".
+        if label not in CRAFT_WEIGHTS_PCT and label not in CRAFT_WEIGHTS_FLAT:
+            continue
+        value = value or 0.0
         if label in CRAFT_WEIGHTS_PCT:
             value += per_level * 100 * CRAFT_WEIGHTS_PCT[label]
-        elif label in CRAFT_WEIGHTS_FLAT:
-            base = (combat_stats or {}).get(COMBAT_STATS_KEYS.get(label, ""), 0)
-            value += per_level * base * CRAFT_WEIGHTS_FLAT[label]
+        else:
+            b = (stats_breakdown or {}).get(stat) or {}
+            flat = b.get("equipment_flat") or 0
+            pool = (1 + (b.get("equipment_pct") or 0) + (b.get("hardware") or 0)
+                    + (b.get("homelab") or 0))
+            value += per_level * flat * CRAFT_WEIGHTS_FLAT[label] / pool
     return value
+
+
+# ---- Panel freshness -------------------------------------------------------
+# Lazy sections hold whatever the game panel last read, which can badly predate
+# the capture click (observed 27 Jul 2026: a homelabInfo block 1,348s stale, and
+# a hardwareInfo block reporting a credit balance 3.5B out of date). Two
+# independent detectors, because only homelabInfo carries a server clock.
+
+def panel_freshness(capture):
+    """[(section, age_seconds_or_None, credits_or_None)] for lazy sections.
+
+    `age` compares the section's own server clock to the capture timestamp.
+    Differing `credits` across sections proves at least one is stale even when
+    no clock is present.
+    """
+    state = capture["state"]
+    stamp = capture.get("capturedAt")
+    captured_ms = None
+    if stamp:
+        captured_ms = datetime.fromisoformat(
+            stamp.replace("Z", "+00:00")).timestamp() * 1000
+    rows = []
+    for section in ("homelabInfo", "hardwareInfo"):
+        info = state.get(section) or {}
+        if not info:
+            continue
+        server_ms = info.get("server_time_ms")
+        age = ((captured_ms - server_ms) / 1000
+               if server_ms and captured_ms else None)
+        rows.append((section, age, info.get("credits")))
+    return rows
+
+
+def stale_panels(capture, max_age_s=300, credit_tolerance=0.005):
+    """Sections that look stale, as [(section, reason)]."""
+    rows = panel_freshness(capture)
+    credits = [c for _, _, c in rows if c]
+    worst = []
+    for section, age, credit in rows:
+        if age is not None and age > max_age_s:
+            worst.append((section, f"panel data {age:,.0f}s older than capture"))
+        elif credits and credit and max(credits) - min(credits) > \
+                credit_tolerance * max(credits) and credit != min(credits):
+            worst.append((section, f"reports {credit:,.0f} credits vs "
+                                   f"{min(credits):,.0f} elsewhere"))
+    return worst
+
+
+# ---- Stat composition (mechanics.md §13, formula-level) --------------------
+# Hardware %, homelab % and equipment % share ONE additive pool. Three families
+# differ only in what that pool multiplies.
+SCALING_STATS = {"max_hp", "defense", "accuracy", "evasion"}
+DIRECT_STATS = {"attack_speed", "crit_chance", "crit_damage"}
+# everything else in stats_breakdown is gear-flat (regeneration, corruption,
+# thorns, damage_barrier, armor_penetration) -> pool multiplies equipment_flat.
+
+
+def stat_pool(breakdown):
+    """Additive pool multiplier for one stats_breakdown entry."""
+    return (1 + (breakdown.get("equipment_pct") or 0)
+            + (breakdown.get("hardware") or 0) + (breakdown.get("homelab") or 0))
+
+
+def stat_total(breakdown, stat, d_equipment_pct=0.0, d_hardware=0.0,
+               d_homelab=0.0, d_equipment_flat=0.0):
+    """Recompute a stat under pool/flat deltas. Reproduces the live total at 0.
+
+    Verified against every stat in the 27 Jul 2026 capture; use this instead of
+    re-deriving the arithmetic per analysis.
+    """
+    b = breakdown or {}
+    pool = stat_pool(b) + d_equipment_pct + d_hardware + d_homelab
+    if stat in DIRECT_STATS:
+        return (b.get("base") or 0) + pool - 1
+    flat = (b.get("equipment_flat") or 0) + d_equipment_flat
+    if stat in SCALING_STATS:
+        return ((b.get("base") or 0) + (b.get("level") or 0) + flat) * pool
+    return flat * pool
+
+
+# ---- Hardware shop cost model and allocation planner -----------------------
+# Chip cost per level is a clean power law, fitted live off next_cost so it
+# tracks the game rather than a hard-coded constant. Validated 27 Jul 2026:
+# whole-build cumulative predicted 1,012,105 chips vs the game's own reset
+# refund of 1,002,284 (+1.0%).
+
+GATHER_RESOURCES = ("snippets", "cycles", "hashes", "packets")
+
+
+def hardware_cost_family(defn):
+    """'combat' | 'economy' | 'special', by the SHAPE of next_cost.
+
+    Tracks sharing a cost shape share a cost curve; mixing them wrecks the fit
+    (spread 13x when all tracks are pooled). Combat tracks bill chips+credits,
+    economy tracks bill chips+one gathering resource, and the hackcoin-gated
+    drop/rarity/XP tracks are on their own much steeper curve.
+    """
+    cost = defn.get("next_cost") or {}
+    if cost.get("hackcoin"):
+        return "special"
+    resources = sum(1 for r in GATHER_RESOURCES if cost.get(r))
+    if resources > 1:
+        return "special"
+    return "economy" if resources else "combat"
+
+
+def hardware_cost_curve(hardware_info, types=None, key="chips",
+                        family="combat", min_level=10):
+    """Fit cost(L) = A * L**p over one cost family. Returns (A, p, spread).
+
+    `spread` is max/min of the implied A across the sampled tracks — a fit
+    quality check. Under ~1.05 is a good single-family fit; higher means the
+    sample does not share one curve and the result should not be trusted.
+    Pass `types` to override the family selection explicitly. Tracks below
+    `min_level` are excluded from the sample: they carry a cost floor that
+    bends the low end (fitting them in moved whole-build error 1.0% -> 4.1%).
+    """
+    defs = [d for d in hardware_info.get("definitions") or []
+            if (d.get("type") in types if types is not None
+                else hardware_cost_family(d) == family)
+            and (d.get("current_level") or 0) >= min_level
+            and (d.get("next_cost") or {}).get(key)]
+    if len(defs) < 2:
+        return None
+    best = None
+    for p in (x / 2000 for x in range(1400, 3000)):
+        implied = [d["next_cost"][key] / d["current_level"] ** p for d in defs]
+        spread = max(implied) / min(implied)
+        if best is None or spread < best[2]:
+            best = (sum(implied) / len(implied), p, spread)
+    return best
+
+
+def hardware_cumulative(curve, level):
+    """Total cost to take a track from 0 to `level` under a fitted curve."""
+    A, p, _ = curve
+    return A * level ** (p + 1) / (p + 1) if level > 0 else 0.0
+
+
+def hardware_plan(hardware_info, stats_breakdown, budget_chips, curve=None):
+    """Equal-marginal-value-per-chip allocation across combat tracks.
+
+    Returns [(name, type, current_level, target_level, value_per_level,
+    chip_delta)] sorted by value. `budget_chips` is spendable chips (locked +
+    free); current levels are never reduced, so this plans purchases only --
+    for a full re-allocation, call it with the post-reset level-0 state.
+    """
+    rows = []
+    for d in hardware_info.get("definitions") or []:
+        value = hardware_track_value(d, stats_breakdown)
+        if value is None:
+            continue
+        rows.append([d.get("name"), d.get("type"), d.get("current_level") or 0,
+                     value])
+    if curve is None:
+        curve = hardware_cost_curve(hardware_info, family="combat")
+    if curve is None:
+        return []
+    p = curve[1]
+    sunk = sum(hardware_cumulative(curve, r[2]) for r in rows)
+    lo, hi = 0.0, 10.0
+    for _ in range(300):                     # bisect the marginal-value line
+        lam = (lo + hi) / 2
+        cost = sum(hardware_cumulative(curve, (r[3] / lam) ** (1 / p))
+                   for r in rows if r[3] > 0)
+        lo, hi = (lam, hi) if cost > sunk + budget_chips else (lo, lam)
+    lam = (lo + hi) / 2
+    out = []
+    for name, typ, level, value in rows:
+        target = max(level, round((value / lam) ** (1 / p)) if value > 0 else 0)
+        out.append((name, typ, level, target, value,
+                    hardware_cumulative(curve, target)
+                    - hardware_cumulative(curve, level)))
+    return sorted(out, key=lambda r: -r[4])
 
 
 # ---- Active A/B experiment tracking ----------------------------------------
