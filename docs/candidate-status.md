@@ -1,64 +1,61 @@
-# Candidate and Craft Status — 23 July 2026
+# Candidate and Craft Status — 27 July 2026
 
-> **23 July note:** the 22 July inventory was mass-decompiled overnight (including previously locked items — Targeted Daemon of Quarantine, Vital Driver of the Hawk, the Firewall alternates); holds below that reference them are void. Current inventory is the ~17 fresh drops; re-rank with `ih.py potential`.
+> Rewritten from scratch. The 23 July version described an inventory that no longer exists: 43 of 52 items were decompiled on 27 July after an explicit audit, leaving 12. Every hold, safe-decompile list and ceiling verdict in the previous version is void.
 
-## Finished or spent projects
+## Main set (all eight slots)
 
-| Item | Status | Action |
+| Slot | Item | Origin |
 |---|---|---|
-| Citadel Shell of the Phoenix | **Crafted + equipped 23 Jul; A/B KEEP** (death mean +7.0, ceiling ~110, net drain and onset improved) | Main set |
-| Overclocked Shell of the Monolith | Revert path for the above | Keep decompile-locked |
-| Bastioned Payload of Perfect Strike | **Crafted + equipped 23 Jul; A/B KEEP** (+2.3 death depth, 77% vs 70% hit) | Main set |
-| Enduring Payload of Armageddon | Revert path for the above | Keep decompile-locked |
-| Citadel Firewall of the Bastion | Coherent alternate; not main streak upgrade | Keep locked as alternate/test item |
-| Aggressive Kernel of Renewal | Failed main-set combat trial | Revert to Hearty; keep only for alternate/test |
-| Fortified Firewall of the Giant | Failed Augment gate | Decompile or use as disposable mechanics-test base |
-| Aligned Firewall of Bastion | Strong speed/barrier alternate base | Hold; no blind main-set craft |
+| Payload | Bastioned Payload of Perfect Strike | crafted 23 Jul, A/B KEEP |
+| Firewall | Brutal Firewall of Perpetuity | original baseline — **the weakest slot**, ilvl 314 |
+| Analyzer | Targeted Analyzer of Light Speed | crafted 27 Jul (+24.9), A/B KEEP |
+| Shell | Citadel Shell of the Phoenix | crafted 23 Jul (+22.6), A/B KEEP |
+| Driver | Warmongering Driver of Extinction | original baseline |
+| Router | Titanic Router of the Undying | crafted 27 Jul (**+38.7**, best on record), A/B KEEP |
+| Daemon | Targeted Daemon of the Storm | crafted 22 Jul, A/B KEEP |
+| Kernel | Hearty Kernel of Decay | original baseline |
 
-## Remaining project holds
+Five of eight are now contract crafts. The three baselines (Firewall, Driver, Kernel) are exactly where the remaining upgrades sit.
 
-- Aggressive Kernel of Piercing: lower-priority offensive project. Existing high Armor Penetration is attractive, but it loses too much Defense, Regeneration, Accuracy, Attack Speed and Corruption unless Augment is exceptional.
-- Warmongering Shell of Vengeance: high thorns/evasion alternate; current Shell's Defense is too valuable for main set.
-- Immortal Driver of Velocity: speed/HP/barrier alternate; loses major damage and Accuracy.
-- Vital Driver of Precision: speculative Accuracy/Crit project; needs a meaningful damage line.
-- Intangible Daemon of Light Speed: zero-Stability speed alternate.
-- Spectral Kernel of Perpetuity: zero-Stability full-HP alternate.
+## Inventory — all 12 items, ranked by ceiling delta vs equipped
 
-## Farming holds
+Regenerate with `python3 scripts/ih.py potential`. Figures below are from the
+19:46Z capture, with the Snapshot Backups 10% Stability preserve modelled.
 
-- Overflowing Kernel of Blight — Drop Boost.
-- Prolific Kernel of Piercing — Drop Boost.
-- Coveted Kernel of Health — Item Rarity.
+| Δ | Slot | Item | ilvl | Stab | Status |
+|---|---|---|---|---|---|
+| **+14.1** | Driver | **Aegisbound Driver of Execution** | 1605 | 26 | **next craft** — locked |
+| **+11.5** | Daemon | Sighted Daemon of the Storm | 1382 | 29 | craft base — locked |
+| **+9.5** | Kernel | Elusive Kernel of Spikes | 1474 | 24 | craft base — locked, see caveat |
+| **+9.0** | Firewall | Bastioned Firewall of Infection | 1032 | 28 | craft base — locked |
+| +1.7 | Kernel | Elusive Kernel of Regeneration | 1243 | 29 | new drop, sidegrade |
+| +0.7 | Payload | Titanic Payload of Precision | 1591 | 30 | new drop, sidegrade — highest ilvl and full Stability, keep as a blank |
+| −3.6 | Daemon | Vital Daemon of Quarantine | 1362 | 25 | new drop, decompile |
+| −8.6 | Payload | Targeted Payload of Perfect Strike | 1126 | 0 | spent alternate, releasable |
+| −10.3 | Payload | Enduring Payload of Armageddon | 749 | 0 | Payload revert path (A/B concluded KEEP) — releasable |
+| −22.6 | Shell | Overclocked Shell of the Monolith | 628 | 0 | Shell revert path (A/B concluded KEEP) — releasable |
+| −24.9 | Analyzer | **Aligned Analyzer of Light Speed** | 406 | 0 | **revert path, A/B not formally closed — keep locked** |
+| −38.7 | Router | **Aligned Router of the Undying** | 445 | 0 | **revert path — keep locked.** Two T1-maxed affixes (Regen +35, Def +18.05%); the only Defense-heavy Router owned |
 
-## Safe-decompile list from the 21 July full export
+## Next craft: Aegisbound Driver of Execution
 
-> **⚠ 22 July revision:** this list predates the post-craft ceiling model (`ih.py potential`). It was built from current rolls and is NOT safe as-is: **Resilient Analyzer of the Bulwark** ranks *above* the equipped Analyzer at ceiling, and **Keen Shell of Barbs**, **Vital Driver of Precision** and others rank as top ceiling bases in their slots. Re-run `ih.py potential --slot <s>` and keep anything within ~10 score of equipped before decompiling.
+**+14.1 at ceiling** (61.5 vs equipped 47.4), 26 Stability, ilvl 1605 — the highest item level owned. Plan: `of Execution` T6→T1, `of Annihilation` T5→T3. Expected ~17.8 Stability / ~19 attempts.
 
-Payloads: Pinpoint Payload of Precision; Targeted Payload of Rending; Fortified Payload of Puncturing.
+Projection: AtkDmg +22.69%, AtkSpd +11.68%, **CritDmg +81.21%**, MaxHP +3.56%, Def +4.89%.
 
-Firewalls: Hearty Firewall of the Fortress; Resilient Firewall of Hardening. Fortified Firewall of the Giant is now also decompile-eligible after the failed Augment unless retained as a test mule.
+This is the right next craft for a reason beyond its score. The 27 July zone readout found a **damage floor in tank matchups** — three Corporate deaths from ≥79% starting HP against 19–23K HP Trojan Wall / Rootkit enemies, losing not to burst but to fights the build could not close before in-fight regen decayed. That is the day's crit sacrifice (51% → 31.5% crit chance) surfacing. Crit damage currently has **no gear contribution at all** (base 1.5 + 0.009 hardware); +81.21% would take crit damage to ~2.32 and the crit factor from 1.16 to ~1.42 — roughly **+22% damage** — while holding AtkDmg essentially flat (23.24% → 22.69%), so the multiplicative-AtkDmg guardrail does not bite.
 
-Analyzers: Resilient Analyzer of Bulwark; Reinforced Analyzer of Hardening; Stalwart Analyzer of Accuracy.
+Requires a full `crafting.md` §10.1 contract before spending.
 
-Shells: Reinforced Shell of Spikes; Assault Shell of Recovery; Leviathan's Shell of Retribution; Keen Shell of Barbs.
+## Holds and caveats
 
-Drivers: Slippery Driver of Destruction; Bulwarked Driver of Unerring; Cataclysmic Driver of Precision.
+- **Bastioned Firewall of Infection (+9.0)** was the recommended next craft earlier on 27 July, before the Snapshot Backups preserve fix re-ranked the field. It is still the fix for the weakest slot (ilvl 314) and adds Def +13.8pp / Eva +9.1pp — but it costs **Regen −14 and MaxHP −11pp**, and regen is what is currently working (net drain per round is −2.8). Needs a fresh contract pass, not the stale +9.0 headline.
+- **Elusive Kernel of Spikes (+9.5)** projects MaxHP +38.7% but strips the Kernel's Def and cuts Regen 53 → 37. Gear Defense is already down to 44.26% with none on the Router. **Craft the Firewall before any Kernel** — it puts 13.8pp back first.
+- **Sighted Daemon of the Storm (+11.5)** is a clean tempo/evasion craft with no sustain cost, and the second-best base owned.
+- Revert paths: keep **Aligned Analyzer of Light Speed** and **Aligned Router of the Undying** locked until both 27 July A/Bs are formally closed against the new Corporate Network baseline. The Payload and Shell revert paths are releasable whenever inventory pressure appears (currently 12/102 slots — no pressure).
 
-Daemons: Keen Daemon of Wind; Fortified Daemon of Barbs.
+## Safe to decompile now
 
-Kernels: Aggressive Kernel of Recovery; Vital Kernel of Contagion; Pinpoint Kernel of Blight; Ghosted Kernel of Mending; Guided Kernel of Colossus.
+`Vital Daemon of Quarantine` (−3.6). Everything else is either locked, a live craft base, or a sidegrade worth keeping as a blank while inventory is empty.
 
-Before decompiling, compare against a fresh inventory export because this list reflects the 21 July snapshot and subsequent known craft outcomes only.
-
-## 22 July 2026 — post-calibration ceiling verdicts (21:32 capture)
-
-From `ih.py potential` with calibrated weights (Corrupt 0.6, verdict bands ±5). Full output is regenerable; this records the decisions:
-
-| Slot | Verdict | Notes |
-|---|---|---|
-| Daemon | **Targeted Daemon of the Storm +8.0 UPGRADE** — approved next craft project | Preserves AtkDmg density (18% at ceiling) while adding ~+31% AtkSpd; the tempo profile the loss analysis wants |
-| Daemon | Intangible Daemon of Thorns +10.6 (top score) — **held, not approved** | Repeats the Hawk mistake shape: dumps AtkDmg 21→0.9 (~−12% output multiplicatively, which linear weights under-penalize) for Eva/HP/Thorns |
-| Payload | **Targeted Payload of Deadliness +6.9 UPGRADE** — approved second project | Keeps AtkDmg 23%, adds CritCh 12.5/AtkSpd 11.4/ArmorPen 105; econ cost: −15% hack XP (slows level → heal_base) |
-| Firewall | Aligned Firewall of Bastion +6.5 — **conditional**, guardrail-gated | Score driven by interpolated Corrupt T3~ + Barrier 314; loses Regen −31 / MaxHP −11 vs Brutal — sustain-anchor rule applies, craft only with explicit A/B test plan |
-| Driver | Vital Driver of the Hawk (crafted, compiled) | Anti-evasion alternate; decompile-locked; also the designated hit-formula measurement instrument |
-| Analyzer/Shell/Router/Kernel | No upgrades at ceiling | Equipped anchors hold; Resilient Analyzer of the Bulwark downgraded to sidegrade (+1.7) after calibration |
+**Do not reuse the pre-27-July safe-decompile lists.** They were built against an inventory that no longer exists and against ceiling verdicts computed under the old T3 tier cap.

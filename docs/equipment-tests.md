@@ -1,4 +1,4 @@
-# Equipment Test Results — 21 July 2026
+# Equipment Test Results — last updated 27 July 2026
 
 **Purpose:** Preserve exact measured evidence from equipment trials without converting noisy A/B data into invented formulas.
 
@@ -130,3 +130,50 @@ Abort. The Augment did not supply Regeneration, the item is now full, and furthe
 | Hit rate (control — Shell touches no Acc) | 77.9% | 77.6% |
 
 **Decision: KEEP.** Confounds: VLAN Rules +1% Def landed mid-test (5/10 deaths after; segmented, conclusion holds either way); player level 955→963; Malware Injector +15 levels pre-boundary. Methodology notes: (1) `damage_taken` is **gross** incoming (verified) and Σ`pbs` is probably per-round barrier absorption (working model; the full accounting identity does not close exactly — see data-dictionary) — never compare `damage_taken` across a mitigation↔recovery trade without netting out prg and absorption (keep-rule clause amended at 4/10, logged pre-outcome); (2) the tracker banked 1,051 post-equip fights with full round detail, zero manual bookkeeping; (3) one burst-shaped death (76% start-HP, Trojan Wall eff_acc 5,899) shows the thinner Def/Barrier flank exists but did not dominate.
+
+## Test — 27 July bundle: hardware reallocation + Analyzer + Router (27 July 2026)
+
+Four changes shipped in ~2 hours with no staging, by explicit player priority (progression over attribution). The death record still segments cleanly at the equip boundaries, all in **Small Business Server**, same player level band.
+
+| Window | Deaths | Mean |
+|---|---|---|
+| Pre-bundle (14:50–15:36) | 110, 108, 114, 110, 109, 112 | **110.5** |
+| Post hardware + Analyzer (15:46–16:38) | 121, 113, 122, 124, 123, 131 | **122.3 (+11.8)** |
+| Post Router (16:49–17:00) | 133, 129 | **131.0 (+20.5)** |
+
+**+20.5 death streaks — by far the largest measured gear effect in the project** (previous best: Citadel Shell of the Phoenix at +7.0).
+
+Mechanism, 2,079 fights with round detail at streak ≥60:
+
+| | pre | post hw+Analyzer | post Router |
+|---|---|---|---|
+| Realised `prg`/round | 171.3 | 194.7 (+13.6%) | **231.8 (+35.3%)** |
+| `damage_taken`/round | 205 | 208 | 229 |
+| **Net drain/round** | **33.7** | **13.3** | **−2.8** |
+
+**Net drain went negative** — regeneration now exceeds incoming damage per round in the deep-streak band. That is the whole explanation for a 20-streak ceiling move.
+
+Calibration notes: the hardware step tracked its listed regen gain almost exactly (+13.6% realised vs +14.9% listed); the Router step realised +19.1% against +33.5% listed, at least partly because its window sits at deeper streaks where in-fight regen decays harder (open-questions §11). **Listed Regeneration ≠ realised `prg`** — guardrail holds. Gross intake rising 11.7% post-Router is the deeper streak band, not a mitigation failure: Defense finished the day flat (1,064.3 → 1,067.3) because the hardware reallocation offset the Router's Defense loss almost exactly.
+
+**Decision: KEEP all three.** Revert paths (Aligned Analyzer of Light Speed, Aligned Router of the Undying) stay decompile-locked until re-confirmed against the Corporate Network baseline.
+
+## Test — zone transition, Small Business Server → Corporate Network (27 July 2026)
+
+Not a gear test, but the same measurement discipline and the source of the current baseline.
+
+| | Small Business (post-Router) | Corporate |
+|---|---|---|
+| Mean death streak | 131.0 (n=3) | **113.1 (n=16)** |
+| Credits per enemy level | 8.81 | **11.47 (+30%)** |
+| Credits/hr | 9.78M | 11.08M (+13.3%) |
+| XP/hr | 35.6M | 33.0M (−7.3%) |
+| Chips/hr | 3,207 | 2,889 (−9.9%) |
+| Deaths starting >60% HP | 0 of 14 | **3 of 16 (19%)** |
+
+Cost **−17.9 streaks against a predicted −4** — see `mechanics.md` §15 for why the prediction failed (`level_offset` is not additive on enemy level, and enemy level is not a sufficient statistic for difficulty across zones). Reward side beat expectations: zone rewards scale by more than the stated `credit_multiplier` ratio.
+
+**Decision: keep the move.** Caveat: the Small Business baseline is 15 minutes / 204 fights / 3 deaths — only the credits-per-enemy-level figure is solid.
+
+**New standing baseline: 113.1 mean death streak, Corporate Network** (n=16, 17:10–19:30Z). Nothing here compares to a Small Business figure; `ih.py audit` flags any death window spanning a zone change.
+
+**New failure mode logged:** 3 of 16 Corporate deaths start above 60% HP (89%, 100%, 79%), all against 19–23K HP Trojan Wall / Rootkit tanks whose attack damage is *lower* than the attrition-death enemies. Not burst — the build cannot close those HP pools before in-fight regen decays. This is the day's crit sacrifice (51% → 31.5%) appearing as a damage floor, and it is why the next craft target moved from the Firewall to the Aegisbound Driver (CritDmg +81.21%).
