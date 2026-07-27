@@ -517,8 +517,27 @@ hack level ~1,037. So a zone's `level_offset` is a reward multiplier as much as 
 difficulty one: +50 offset means higher-level enemies at the same streak, and
 higher-level enemies pay proportionally more.
 
-Transition cost is therefore small and computable: **+50 offset ≈ 4 streaks of
-lost depth** (50 levels ÷ 12 levels per streak).
+~~Transition cost is therefore small and computable: +50 offset ≈ 4 streaks of
+lost depth (50 levels ÷ 12 levels per streak).~~ **Wrong — measured 27 July 2026.**
+
+The Small Business → Corporate move cost **−17.9 death streaks** (131.0 → 113.1),
+4.5× the predicted 4. Two errors:
+
+1. **`level_offset` is not a simple additive term on enemy level.** Fitted
+   separately per zone, both the intercept *and* the slope differ, and enemy
+   level is non-linear in streak — the ~12/streak figure came from a handful of
+   high-streak fights in one zone and does not generalise.
+2. **Enemy level is not a sufficient statistic for difficulty across zones.**
+   Deaths in Corporate happen at enemy level **~1,730**, *below* the ~1,880 of
+   Small Business deaths — the player dies to weaker-on-paper enemies. At
+   matched streak (≥80) Corporate enemies carry ~6% more HP and fights run ~7%
+   longer, and the class mix differs (Stealth Worm appears).
+
+**Rule going forward: do not predict a zone transition's streak cost from
+`level_offset`. Measure it after the fact.** The reward side of the arithmetic
+held up — credits per enemy level rose 8.81 → 11.47 (+30%) against a
+`credit_multiplier` ratio of only 1.125, so zone rewards scale by more than the
+stated multiplier.
 
 `reward_streak_soft_cap` semantics are **not yet measured** — see
 `open-questions.md` §17. No break is visible in credits at the 120 cap, but only
