@@ -303,6 +303,7 @@ Third contract executed end-to-end; first to realize **above** projection (+22.6
 | Bastioned Payload (23 Jul) | +30.2 (post-Augment) | ~+10 realized score, A/B KEEP | unlucky VU run (13 fails) |
 | Phoenix Shell (23 Jul) | +20.2 (post-Augment) | +22.6, A/B KEEP | lucky VU run (17 attempts / 12 promotions vs ~22 expected) |
 | Targeted Analyzer (27 Jul) | +13.5 (post-Augment) | **+24.9** | best on record; all three suffix targets overshot T3 to **T2** on 19 VU attempts for 12 promotions vs ~28 expected |
+| Titanic Router (27 Jul) | +22.8 (uncapped planner) | **+38.7** | new best; first craft planned under the uncapped planner. `of Regeneration` completed the full T7→T1 chase (Regen +92 [79%]) and `of Alacrity` overshot T6→**T3** (AtkSpd +17.47%). 12 promotions on ~20 attempts vs ~25.8 expected |
 
 Spread vs projection had two sources pulling opposite ways: roll luck (±5–10, symmetric) and the planner's old T3 cap (one-directional, always understating). **The cap was removed 27 July 2026**; every row above was computed under it and its projected-Δ column is not comparable to future ones.
 

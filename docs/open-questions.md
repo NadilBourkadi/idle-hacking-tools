@@ -223,3 +223,16 @@ Homelab job hackcoin costs did not visibly deduct at queue time (11 hc held at 0
 **27 July — credits and resources ARE charged at queue time.** Queueing 8 homelab jobs (4 `active_jobs` + 4 `pending_jobs`) dropped credits by exactly 3,544,295,863 against a summed `cost_snapshot` of 3.55B across both groups, and every pending job carries a full `cost_snapshot`. The general model is therefore **charge-on-queue**, which makes the 23 July hackcoin observation a *hackcoin-specific* anomaly rather than a general deferral — either hackcoin alone defers to completion, or the earlier reading was confounded.
 
 Still unresolved, and it decides the install-gate reserve: until a queued hackcoin job is watched against a known balance, treat queued-but-incomplete hc costs as unpaid liabilities. One queued hc job plus a before/after capture settles it.
+
+### 16. Version-Upgrade success rate may beat the documented table (added 27 July 2026)
+
+`vu_expected_attempts` uses the documented per-tier chances (T7→T6 70% … T2→T1 20%), i.e. 10/tier expected attempts. Contract crafts have now run:
+
+| Craft | promotions | attempts | expected | ratio |
+|---|---|---|---|---|
+| Bastioned Payload (23 Jul) | 8 | 21 | ~6 | 2.6× worse |
+| Phoenix Shell (23 Jul) | 12 | 17 | ~22 | 1.3× better |
+| Targeted Analyzer (27 Jul) | 12 | 19 | ~28 | 1.5× better |
+| Titanic Router (27 Jul) | 12 | ~20 | ~25.8 | 1.3× better |
+
+Three consecutive runs beating expectation by 1.3–1.5× after one that badly missed. Sample sizes are ~12 promotions each, so this is well within variance and is **not** yet evidence of anything — but if it continues it would mean the planner systematically over-states Stability cost and contracts are being written more conservatively than they need to be. Watch the ratio on the next two crafts before touching the model. Distinguishing hypotheses: plain luck; the chance table being better than documented at low tiers; or failed attempts not always consuming Stability (Snapshot Backups is level 0, so that is not the cause here).
