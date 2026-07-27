@@ -304,6 +304,15 @@ Third contract executed end-to-end; first to realize **above** projection (+22.6
 | Phoenix Shell (23 Jul) | +20.2 (post-Augment) | +22.6, A/B KEEP | lucky VU run (17 attempts / 12 promotions vs ~22 expected) |
 | Targeted Analyzer (27 Jul) | +13.5 (post-Augment) | **+24.9** | best on record; all three suffix targets overshot T3 to **T2** on 19 VU attempts for 12 promotions vs ~28 expected |
 
-Spread vs projection had two sources pulling opposite ways: roll luck (±5–10, symmetric) and the planner's old T3 cap (one-directional, always understating — it is why the Phoenix Shell and Targeted Analyzer both realized *above* plan). **The cap was removed 27 July 2026**; every row above was computed under it and its projected-Δ column is not comparable to future ones.
+Spread vs projection had two sources pulling opposite ways: roll luck (±5–10, symmetric) and the planner's old T3 cap (one-directional, always understating). **The cap was removed 27 July 2026**; every row above was computed under it and its projected-Δ column is not comparable to future ones.
+
+Re-running both over-realizing crafts against their pre-craft captures separates the two causes, and they turn out to be different:
+
+| Craft | capped projection | uncapped projection | realized |
+|---|---|---|---|
+| Phoenix Shell (23 Jul) | 61.5 | **69.8** | 63.8 |
+| Targeted Analyzer (27 Jul) | 65.8 | **65.8** | 77.3 |
+
+The Shell was a genuine cap artifact — uncapped projection minus the ~5-point contract discount is 64.8 against 63.8 realized, near-exact. The Analyzer was **not**: its Stability budget was binding either way, so the cap cost nothing there and the whole +11.4 was roll luck (12 promotions in 19 attempts against ~28 expected). The general shape: **the cap never reduced the budget, it constrained how the budget was allocated** — neutral when the budget binds early, expensive when the greedy would rather go deep on one line than broad across three (Titanic Router of Regeneration, +8.3 capped vs +22.8 uncapped on the same ~19.7 Stability).
 
 With the cap gone the remaining bias points one way: a §10.1 contract, with attempt caps and a hard Compile floor, is deliberately less ambitious than the planner's optimal plan. **The ~5-point contract-conservatism discount therefore matters more now, not less** — the cap had been partly cancelling it. Re-derive the discount and `UPGRADE_BAND` after the next two or three crafts. Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).
