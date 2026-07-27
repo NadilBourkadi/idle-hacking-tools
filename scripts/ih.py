@@ -471,6 +471,16 @@ def cmd_audit(args):
             flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
                                      f"{need} needed for pending installs"))
 
+    # Death streaks are only comparable within one zone: a zone's level_offset
+    # shifts enemy level at equal streak (mechanics.md 15), so a baseline that
+    # spans a zone change is measuring the move, not the gear.
+    deaths = cap["state"].get("recentLossStreaks") or []
+    zones = {d.get("zone_name") for d in deaths if d.get("zone_name")}
+    if len(zones) > 1:
+        flags.append(("ZONES", f"the recent death window spans {len(zones)} zones "
+                               f"({', '.join(sorted(zones))}) — segment any "
+                               f"baseline at the zone change before comparing"))
+
     equipped = {slot: item for where, slot, item in ihlib.iter_items(cap)
                 if where == "equipped"}
     for where, slot, item in ihlib.iter_items(cap):
