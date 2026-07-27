@@ -860,17 +860,35 @@ def hardware_plan(hardware_info, stats_breakdown, budget_chips, curve=None):
     if curve is None:
         return []
     p = curve[1]
-    sunk = sum(hardware_cumulative(curve, r[2]) for r in rows)
-    lo, hi = 0.0, 10.0
+
+    def spend(lam):
+        """Incremental chips to buy up to the lambda-optimal levels.
+
+        Levels can never be reduced, so a track already above its optimum
+        contributes zero rather than a refund. Solving without that clamp
+        lets the optimiser "fund" purchases by notionally selling down
+        over-levelled tracks — it returned a 108K-chip plan against a 37K
+        budget before this was fixed.
+        """
+        total = 0.0
+        for _n, _t, level, value in rows:
+            if value <= 0:
+                continue
+            target = max(level, (value / lam) ** (1 / p))
+            total += (hardware_cumulative(curve, target)
+                      - hardware_cumulative(curve, level))
+        return total
+
+    lo, hi = 1e-9, 10.0
     for _ in range(300):                     # bisect the marginal-value line
         lam = (lo + hi) / 2
-        cost = sum(hardware_cumulative(curve, (r[3] / lam) ** (1 / p))
-                   for r in rows if r[3] > 0)
-        lo, hi = (lam, hi) if cost > sunk + budget_chips else (lo, lam)
+        lo, hi = (lam, hi) if spend(lam) > budget_chips else (lo, lam)
     lam = (lo + hi) / 2
     out = []
     for name, typ, level, value in rows:
-        target = max(level, round((value / lam) ** (1 / p)) if value > 0 else 0)
+        # floor, not round: rounding up a fractional optimum put the plan ~3%
+        # over budget, and a plan you cannot afford is not a plan
+        target = max(level, int((value / lam) ** (1 / p)) if value > 0 else 0)
         out.append((name, typ, level, target, value,
                     hardware_cumulative(curve, target)
                     - hardware_cumulative(curve, level)))

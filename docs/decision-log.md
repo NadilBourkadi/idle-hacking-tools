@@ -248,3 +248,11 @@ Two test streaks (deaths at 98 and 96, enemy lvl 1383/1366) vs same-session old-
 - Player: the recommended upgrade must **always** carry the section it sits under. The rule was already in memory ("attach the UI section/panel to every purchasable", 23 Jul) and I was following it in prose while the tooling emitted bare names — so it survived only as long as I remembered.
 - `ihlib.homelab_fill_suggestions` now resolves each job's install to its display name and returns it as `section`; `ih.py audit` prints `Virtual Desktops [Command Workstation] -> L3 (…)` and `ih.py homelab`'s FILL NOW block prints `under [Command Workstation]` with the effect description.
 - General form recorded in `CLAUDE.md` and the advise skill: an action is name + target + cost + duration + **where it lives**. A name without its panel still means hunting.
+
+## 27 July 2026 — `hardware_plan` budget bug fixed
+
+- Running the planner against a real 37,443-chip balance returned a plan costing **108,575 chips**. Cause: the bisection solved an *unconstrained* marginal-value optimum, which wants to rebalance down over-levelled tracks (Tracking/TOR/Encryption 100 → ~90) and spend the proceeds on ECC Memory. Levels cannot be sold back, so the output clamped those to their current level while the budget arithmetic had already counted the notional refund.
+- Fixed: the bisection now costs only **incremental purchases** with a `max(level, target)` clamp inside the objective, so a track already above its optimum contributes zero rather than a refund. Targets also **floor** instead of rounding — rounding a fractional optimum up left the plan ~3% over budget, and a plan you cannot afford is not a plan.
+- Verified across budgets: 37,443 → 32,790 spent; 100,000 → 93,286; 500,000 → 483,836, all within budget and rebalancing sensibly at the larger sizes.
+- The bug was latent because the planner had only ever been run at a full-reset budget (~1.08M chips), where the unconstrained optimum sits above every current level and the clamp never binds. **Any optimiser validated only at one budget scale should be re-run at a small one before it is trusted.**
+- Note the model tracking reality: ECC Memory's value/level rose 0.41 → **0.55** after the Router craft, because the hardware regen pool multiplies gear flat regen and that went 194 → 259. The planner picks it up automatically.
