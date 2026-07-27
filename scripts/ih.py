@@ -220,9 +220,13 @@ def cmd_potential(args):
     cap, path = ihlib.load_capture(args.file)
     ladders = ihlib.tier_ladders(cap)
     print(f"# {path.name}")
-    print("# Projected post-craft ceilings (Version Upgrade to T"
-          f"{args.cap} cap, Compile floor {args.floor}); score = bottleneck "
-          "planning heuristic (ihlib.CRAFT_WEIGHTS_*), not a game formula.")
+    depth = ("depth set by Stability budget" if args.cap <= 1
+             else f"planned no deeper than T{args.cap}")
+    print(f"# Projected post-craft ceilings ({depth}, Compile floor "
+          f"{args.floor}); score = bottleneck planning heuristic "
+          "(ihlib.CRAFT_WEIGHTS_*), not a game formula.")
+    print("# These are optimal-plan ceilings; a §10.1 contract with attempt "
+          "caps and a hard floor lands ~5 points lower — discount accordingly.")
     slot_filter = args.slot.lower() if args.slot else None
     slots = [s for s in ihlib.SLOT_DISPLAY.values()
              if slot_filter is None or s.lower() == slot_filter]
@@ -627,7 +631,9 @@ def main():
     p.add_argument("--file")
     p.add_argument("--top", type=int, default=3)
     p.add_argument("--floor", type=int, default=8)
-    p.add_argument("--cap", type=int, default=3)
+    p.add_argument("--cap", type=int, default=1,
+                   help="deepest tier to plan to (default 1 = the game max; "
+                        "pass 3 to reproduce pre-27-Jul-2026 projections)")
     p.set_defaults(fn=cmd_potential)
 
     args = parser.parse_args()

@@ -29,7 +29,7 @@ Next levers are recovery *systems*, not more gear regen: WAF Rules, Snapshot Rol
 
 - **Targeted Analyzer of Light Speed** — equipped 27 July, A/B not yet read. Expected mechanism: realized `prg`/round is unchanged by it (no Regen), so barrier soak appearing from zero is its signature; accuracy is bundled with the same day's hardware reallocation and is not separately attributable.
 - Revert paths held decompile-locked: Aligned Analyzer of Light Speed, Overclocked Shell of the Monolith, Enduring Payload of Armageddon.
-- No candidate is currently approved for a blind full craft. Re-rank with `ih.py potential --slot <slot>` (and `--cap 2` for the upside tail) against the current bottleneck before spending.
+- No candidate is currently approved for a blind full craft. Re-rank with `ih.py potential --slot <slot>` against the current bottleneck before spending. The 27 July uncapping surfaced two candidates that the old T3 cap hid: **Titanic Router of Regeneration +22.8** (Regen 43 → ~98, but Def 19.33% → 0.83% — sustain-anchor rule applies) and **Bastioned Firewall of Infection +7.3** on the long-flagged ilvl-314 Firewall. Neither is approved; both need the §10 contract treatment.
 - Stranded by design: ~1.47M shop-locked gathering resources after the reset. Worth ≈2.9M credits at market rate against an 11.1B balance; clearing them would cost ~90% of the chip budget. Leave them.
 
 ## Standing decisions

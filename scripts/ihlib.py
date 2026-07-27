@@ -327,7 +327,7 @@ def augment_state(item):
     return True, "either"
 
 
-def plan_craft(item, ladders, floor=8, tier_cap=3):
+def plan_craft(item, ladders, floor=8, tier_cap=1):
     """Greedy expected-Stability Version-Upgrade plan + Compile projection.
 
     Model assumptions (conservative, documented):
@@ -337,8 +337,29 @@ def plan_craft(item, ladders, floor=8, tier_cap=3):
       - Compile multiplies explicit affixes only (implicit treatment unknown);
       - one Stability is reserved for Augment when a slot is open, but the
         unknown augmented affix contributes NO projected value (pure upside);
-      - targets capped at T{tier_cap}; T2/T1 chase deliberately excluded;
       - `floor` Stability is preserved for Compile (+0.5%/point).
+
+    `tier_cap` defaults to T1 — the game's own maximum — so the Stability
+    budget alone decides depth. It used to default to T3, which was wrong in
+    the expensive direction: gain per expected Stability point RISES all the
+    way down the ladder and peaks at exactly the excluded step.
+
+        T9->T8 0.360   T7->T6 0.549   T5->T4 0.768   T3->T2 0.904  <- peak
+        T8->T7 0.448   T6->T5 0.659   T4->T3 0.861   T2->T1 0.843
+
+    (affix value compounds ~1.4x per tier while expected attempts only grow as
+    10/tier). Measured 27 Jul 2026 across 50 candidate plans: uncapping raised
+    the best candidate in every slot, flipped Firewall and Kernel from
+    sidegrade/inferior to UPGRADE and lifted the Router candidate +8.3 -> +22.8,
+    while leaving reliance on interpolated ladder points unchanged at 43/50 —
+    so the "no data that deep" objection does not hold. Pass tier_cap=3 to
+    reproduce pre-27-Jul projections.
+
+    Note the calibration consequence: the cap was a systematic UNDER-projection
+    that partly cancelled the contract-conservatism OVER-projection. With it
+    gone, the ~5-point discount for contract conservatism matters MORE, not
+    less — a §10.1 contract with attempt caps and a hard floor is deliberately
+    less ambitious than this plan.
     Returns dict with steps, expected_spend, augment info, compile_pct,
     projected totals {label: (pct, flat)} and weighted scores.
     """

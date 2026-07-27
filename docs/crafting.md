@@ -9,7 +9,7 @@ A candidate export is primarily a set of **crafting bases**. The correct questio
 
 > Can this item's fixed structure and finite Stability budget be converted into a better whole-loadout contribution than the current item?
 
-`ih.py potential` mechanizes the first pass of this: it projects each candidate's realistic post-craft package from empirical tier ladders (per-tier normalized affix values measured across the whole inventory; interpolated tiers marked `~`) under a greedy Version-Upgrade plan (T3 cap, Compile floor, one Stability reserved when an Augment slot is open). Its score weights (`ihlib.CRAFT_WEIGHTS_*`) encode the current bottleneck model and are a planning heuristic, not a game formula. Use it for ranking; use this document's §10 contract before actually spending.
+`ih.py potential` mechanizes the first pass of this: it projects each candidate's realistic post-craft package from empirical tier ladders (per-tier normalized affix values measured across the whole inventory; interpolated tiers marked `~`) under a greedy Version-Upgrade plan (tier depth limited only by the Stability budget, Compile floor, one Stability reserved when an Augment slot is open). Its score weights (`ihlib.CRAFT_WEIGHTS_*`) encode the current bottleneck model and are a planning heuristic, not a game formula. Use it for ranking; use this document's §10 contract before actually spending.
 
 Evaluate in this order:
 
@@ -304,4 +304,6 @@ Third contract executed end-to-end; first to realize **above** projection (+22.6
 | Phoenix Shell (23 Jul) | +20.2 (post-Augment) | +22.6, A/B KEEP | lucky VU run (17 attempts / 12 promotions vs ~22 expected) |
 | Targeted Analyzer (27 Jul) | +13.5 (post-Augment) | **+24.9** | best on record; all three suffix targets overshot T3 to **T2** on 19 VU attempts for 12 promotions vs ~28 expected |
 
-Spread vs projection is roll luck (±5–10, and ±12 once a run overshoots its tier targets); the ~5-point contract-conservatism discount on `potential` projections stands. **`potential` caps its plan at T3, so a lucky run that pushes to T2 realizes far above projection — the tool systematically under-projects the upside tail.** Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).
+Spread vs projection had two sources pulling opposite ways: roll luck (±5–10, symmetric) and the planner's old T3 cap (one-directional, always understating — it is why the Phoenix Shell and Targeted Analyzer both realized *above* plan). **The cap was removed 27 July 2026**; every row above was computed under it and its projected-Δ column is not comparable to future ones.
+
+With the cap gone the remaining bias points one way: a §10.1 contract, with attempt caps and a hard Compile floor, is deliberately less ambitious than the planner's optimal plan. **The ~5-point contract-conservatism discount therefore matters more now, not less** — the cap had been partly cancelling it. Re-derive the discount and `UPGRADE_BAND` after the next two or three crafts. Verdicts near the band remain coin flips — reserve craft spend for double-band margins (the two ~+20 projections both delivered).
