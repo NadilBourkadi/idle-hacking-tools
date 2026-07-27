@@ -240,3 +240,11 @@ Corrected model (`vu_expected_stability` = `1 + ((1-p)/p) × (1-preserve)`), app
 **Geometric mean 0.944 — 5.9% better than model across four crafts, well inside noise at ~12 promotions each. The documented chance table needs no revision.** The apparent trend was three favourable runs read without the one badly unfavourable run that preceded them, plus an un-modelled 6% discount. Snapshot Backups alone is worth −6.2% Stability on a T7→T1 chase, −4.3% on T8→T3, and the saving grows with depth because deeper steps fail more often.
 
 Method note worth keeping: this was found because the player knew a game system the capture-derived model had silently outgrown. Any hard-coded "current level: N" in these docs is a decaying assertion — read levels from the capture.
+
+### 17. What `reward_streak_soft_cap` actually caps (added 27 July 2026)
+
+Every zone carries one (Small Business Server 120, Corporate Network 200). The community new-player guide advises moving zone once you can exceed the current cap by ~10%, which presupposes rewards stop scaling past it.
+
+**Not visible in credits.** Across 5,325 winning fights, credits per enemy level are flat at 8.25 → 8.45 through every streak band 60–129, including the 120–129 band that sits past the cap. Either the cap applies to a different reward axis (drop chance, drop rarity, chips, contract progress — `rarity_multiplier` being a separate zone field points this way), or it softens gradually, or 34 fights past the cap is simply too few to see it.
+
+Resolvable cheaply now that streaks routinely pass 120: bank ~200 fights above the cap and compare drop rate, `drop_rarity` distribution and `chips_drop` per fight against the 90–119 bands, normalised by enemy level. Until then treat the +10% guidance as external advice that our own data neither confirms nor refutes — the zone-transition case stands on the multipliers and offset arithmetic (`mechanics.md` §15), which do not depend on it.

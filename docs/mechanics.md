@@ -491,3 +491,35 @@ simply re-locks the refund — locked resources can never escape the shop.
   (`cost(L) ∝ L^~1.15`), so early levels are far cheaper per point than the tail
   — a reset is the moment to abandon over-levelled low-value tracks rather than
   rebuild them.
+
+## 15. Hacking zones (27 July 2026)
+
+`hackingZones` carries the full ladder. Fields: `min_level` (gate), `level_offset`
+(added to enemy level, so a higher-offset zone is harder *and* pays more per
+fight), `reward_streak_soft_cap`, `credit_multiplier`, `rarity_multiplier`.
+
+| Zone | min level | offset | soft cap | credit × | rarity × |
+|---|---|---|---|---|---|
+| Local Network | 1 | 0 | 50 | 1.00 | 1.00 |
+| Coffee Shop WiFi | 50 | 10 | 75 | 1.10 | 1.15 |
+| **Small Business Server** | 250 | 50 | 120 | 1.20 | 1.30 |
+| **Corporate Network** | 600 | 100 | 200 | 1.35 | 1.50 |
+| Data Center | 1,500 | 250 | 400 | 1.50 | 1.70 |
+| Government Mainframe | 4,000 | 600 | 800 | 1.75 | 1.90 |
+| Megacorp Nexus | 10,000 | 800 | 1,200 | 2.00 | 2.20 |
+| ReBooted Mainframe | 30,000 | 1,500 | 1,500 | 2.10 | 2.40 |
+| s-Kai.Net | 75,000 | 3,000 | 2,000 | 2.20 | 2.60 |
+
+**Measured reward scaling** (5,325 winning fights): credits per fight track
+**enemy level**, at a near-constant **≈8.3–8.45 credits per enemy level** across
+every streak band from 60 to 129. Enemy level itself rises **≈12 per streak** at
+hack level ~1,037. So a zone's `level_offset` is a reward multiplier as much as a
+difficulty one: +50 offset means higher-level enemies at the same streak, and
+higher-level enemies pay proportionally more.
+
+Transition cost is therefore small and computable: **+50 offset ≈ 4 streaks of
+lost depth** (50 levels ÷ 12 levels per streak).
+
+`reward_streak_soft_cap` semantics are **not yet measured** — see
+`open-questions.md` §17. No break is visible in credits at the 120 cap, but only
+34 fights past it exist so far.
