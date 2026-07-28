@@ -24,6 +24,11 @@ Commands:
                            [--phase 'of Haste:4' ...] [--order] [--floor N]
                            (use instead of the flat ~5-point discount when a
                            craft verdict is close — see ihlib.simulate_contract)
+  calibration              score the prediction ledger: planner bias,
+                           interval coverage, verdict survival
+  assumptions              provenance register for every tunable constant
+                           (asserted/inherited = never tested; those are
+                           the ones that have been wrong every time)
   cadence                  measured seconds per fight from the death clock
                            (fixed ~4.87s tick; attack speed is NOT income)
 
@@ -33,6 +38,7 @@ Output is deliberately compact; prefer this over ad-hoc capture parsing.
 import argparse
 import statistics
 import sys
+import textwrap
 
 import ihlib
 
@@ -313,6 +319,18 @@ def cmd_potential(args):
             if steps:
                 print(f"            plan: {steps}")
             print(f"            proj: {ihlib.fmt_totals(plan['totals'])}")
+            # where the delta came from -- a scalar hides which weight carries
+            # it, which is how two Corruption artifacts topped this board
+            parts = ihlib.score_contributions(plan["totals"], eq_totals)
+            if parts:
+                print("            from: " + "  ".join(
+                    f"{label} {value:+.1f}" for value, label in parts[:8]))
+                bad, labels = ihlib.suspect_share(parts)
+                if labels and abs(bad) > 2:
+                    print(f"            !!    {abs(bad):.1f} of that is "
+                          f"{'/'.join(labels)} — Δ ex-suspect "
+                          f"{delta - bad:+.1f}. "
+                          + "; ".join(ihlib.SUSPECT_WEIGHTS[l] for l in labels))
             econ = []
             for label in sorted(set(plan["totals"]) | set(eq_totals)):
                 if ihlib.is_combat_stat(label):
@@ -665,6 +683,55 @@ def cmd_audit(args):
             flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
                                      f"{need} needed for pending installs"))
 
+    # Contracts expire on a daily UTC reset and unfinished progress is lost.
+    # They are also the only repeatable hackcoin source observed, and hackcoin
+    # gates every install. Added 28 Jul 2026 -- the sweep had no contract check
+    # at all, and an Extended Elimination sat at 658/1424 with 2.4h to run.
+    board = ihlib.contract_board(cap)
+    left = board["hours_left"]
+    active = board["active"]
+    if active and not active.get("completed"):
+        done, target = active.get("progress") or 0, active.get("target") or 0
+        rew = active.get("rewards") or {}
+        pay = (f"{rew.get('credits', 0):,.0f} cr + {rew.get('chips', 0):,} "
+               f"chips + {rew.get('hackcoin', 0)} hackcoin")
+        window = f"{left:.1f}h left on the board" if left is not None else \
+            "reset time unknown"
+        if target and done < target:
+            flags.append(("CONTRACT", f"{active.get('name')} at {done:,}/"
+                                      f"{target:,} ({done / target * 100:.0f}%) "
+                                      f"— {window}; unfinished progress is "
+                                      f"destroyed at reset. Pays {pay}"))
+    for c in board["unclaimed"]:
+        rew = c.get("rewards") or {}
+        flags.append(("CONTRACT", f"{c.get('name')} is COMPLETE and unclaimed "
+                                  f"— claim it: {rew.get('credits', 0):,.0f} cr "
+                                  f"+ {rew.get('chips', 0):,} chips + "
+                                  f"{rew.get('hackcoin', 0)} hackcoin"))
+    if board["clear_bonus"] and not board["clear_bonus_claimed"]:
+        flags.append(("CONTRACT", f"board-clear bonus of {board['clear_bonus']} "
+                                  f"unclaimed (only if every contract clears "
+                                  f"before reset)"))
+
+    # Install gates, priced against the hackcoin-backed budget rather than the
+    # credit balance alone (ihlib.HACKCOIN_CREDIT_RATE).
+    balance, hours, pending = ihlib.credit_runway(cap)
+    if hours > 0:
+        names = "; ".join(f"{n} ({c / 1e9:.1f}B cr + {hc} hc)"
+                          for n, c, hc in pending if c)
+        flags.append(("CREDITS", f"{balance / 1e9:.1f}B of credit-equivalent "
+                                 f"budget does not cover the remaining "
+                                 f"installs — {names}. At ~12M/hr fight income "
+                                 f"that is {hours:,.0f}h of banking"))
+    # The hackcoin half of an install dwarfs its credit half at the current
+    # exchange rate, so the gate to watch is hackcoin, not the credit balance.
+    free_hc = (cap["state"].get("currentPlayer") or {}).get("hackcoin") or 0
+    need_hc = sum(hc for _, _, hc in pending)
+    if need_hc and free_hc < need_hc:
+        flags.append(("RESERVE", f"{free_hc} hackcoin vs {need_hc} needed for "
+                                 f"the remaining installs — hackcoin is the "
+                                 f"binding currency, not credits"))
+
     # Death streaks are only comparable within one zone: a zone's level_offset
     # shifts enemy level at equal streak (mechanics.md 15), so a baseline that
     # spans a zone change is measuring the move, not the gear.
@@ -693,6 +760,99 @@ def cmd_audit(args):
     width = max(len(k) for k, _ in flags)
     for kind, message in flags:
         print(f"  [{kind:<{width}}] {message}")
+
+
+def cmd_calibration(args):
+    """Score the prediction ledger: is the planner biased, are its intervals honest?"""
+    if args.record:
+        row = ihlib.record_prediction(
+            item=args.record, slot=args.slot or "?", projected=args.projected,
+            realized=args.realized, p10=args.p10, p90=args.p90,
+            p_upgrade=args.p_upgrade, date=args.date, note=args.note or "")
+        print(f"recorded: {row}")
+        return
+    eras = ihlib.calibration()
+    if not eras:
+        sys.exit("no graded predictions in data/predictions.jsonl")
+    print("# realized-vs-projected, per planner era. Eras are NOT comparable:")
+    print("# removing the T3 cap and lowering COMPILE_FLOOR each moved "
+          "projections by more\n# than UPGRADE_BAND, so only the newest era "
+          "describes what the tool does today.\n")
+    for name, era in eras.items():
+        current = "  <-- current" if name == ihlib.CURRENT_MODEL else ""
+        print(f"== {name} (n={era['n']}){current}")
+        for item, proj, real, err in era["items"]:
+            print(f"     {item:<38} projected {proj:+6.1f}  realized "
+                  f"{real:+6.1f}  error {err:+6.1f}")
+        print(f"     bias {era['bias']:+.1f}   MAE {era['mae']:.1f}   "
+              f"over-realized {era['over']}/{era['n']}   "
+              f"verdict held {era['agree']}/{era['graded']}")
+        if era["with_interval"]:
+            print(f"     p10-p90 coverage {era['in_interval']}/"
+                  f"{era['with_interval']} (want ~80%)")
+        else:
+            print("     p10-p90 coverage: no distributions recorded — "
+                  "point estimates only")
+        print()
+    total = sum(e["n"] for e in eras.values())
+    over = sum(e["over"] for e in eras.values())
+    print(f"  {over}/{total} crafts realized ABOVE projection. The standing "
+          f"'~5-point contract-\n  conservatism discount' subtracts from "
+          f"projections — check the sign of the bias\n  in the current era "
+          f"before applying it. Record every approved craft with\n  "
+          f"`ih.py calibration --record` at contract time, then fill "
+          f"--realized after.")
+    if ihlib.CURRENT_MODEL not in eras:
+        print(f"\n  NOTE: zero graded crafts under the current planner "
+              f"({ihlib.CURRENT_MODEL}).\n  Every number above describes a "
+              f"model that no longer exists. Treat the next two\n  crafts as "
+              f"calibration runs and record their full distributions.")
+
+
+def cmd_assumptions(args):
+    """Provenance register for every tunable constant, most-suspect first.
+
+    Exists because every defect found in this workspace has been an inherited
+    number that looked reasonable in output: the T3 tier cap, the zone
+    transition cost, "attack speed -> fights per hour", Corrupt = 0.6,
+    "credits are unlimited", floor = 8. The standing lesson kept being written
+    as prose to remember. This runs instead.
+    """
+    cap, path = ihlib.load_capture(args.file)
+    print(f"# {path.name}")
+    print("# provenance register — 'asserted' and 'inherited' are guesses "
+          "nobody has tested.")
+    print("# Every defect found so far has been one of those. Most-suspect "
+          "first.\n")
+    rows = ihlib.assumptions()
+    if args.provenance:
+        rows = [r for r in rows if r[2] == args.provenance]
+    counts = {}
+    shown = None
+    for name, value, provenance, basis, validated, check in rows:
+        counts[provenance] = counts.get(provenance, 0) + 1
+        if provenance != shown:
+            shown = provenance
+            print(f"── {provenance.upper()} " + "─" * (54 - len(provenance)))
+        value = f"{value:g}" if isinstance(value, float) else str(value)
+        print(f"  {name:<30} {value:>12}   "
+              f"{'validated ' + validated if validated else 'NEVER VALIDATED'}")
+        if basis:
+            for line in textwrap.wrap(basis, 74):
+                print(f"      {line}")
+        if check:
+            try:
+                status, detail = check(cap)
+            except Exception as exc:                 # a broken check is a finding
+                status, detail = "ERROR", f"{type(exc).__name__}: {exc}"
+            print(f"      [{status}] {detail}")
+    print("\n  " + "  ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
+    untested = counts.get("asserted", 0) + counts.get("inherited", 0)
+    if untested:
+        print(f"  {untested} constant(s) have never been tested against game "
+              f"data. Before any\n  verdict rests on one, exercise it at both "
+              f"ends of its range — `ih.py contract\n  --floor` sweeps are "
+              f"cheap, and the archive usually holds natural variation.")
 
 
 def cmd_ab(args):
@@ -847,12 +1007,34 @@ def main():
                    metavar="'of Haste:4'",
                    help="affix:target_tier, repeatable, in execution order; "
                         "defaults to plan_craft's own plan")
-    p.add_argument("--floor", type=int, default=8)
+    p.add_argument("--floor", type=int, default=ihlib.COMPILE_FLOOR)
     p.add_argument("--trials", type=int, default=20000)
     p.add_argument("--order", action="store_true",
                    help="search every phase permutation")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_contract)
+
+    p = sub.add_parser("calibration",
+                       help="score the prediction ledger (bias, coverage)")
+    p.add_argument("--record", metavar="ITEM",
+                   help="append a prediction for ITEM")
+    p.add_argument("--slot")
+    p.add_argument("--projected", type=float)
+    p.add_argument("--realized", type=float)
+    p.add_argument("--p10", type=float)
+    p.add_argument("--p90", type=float)
+    p.add_argument("--p-upgrade", dest="p_upgrade", type=float)
+    p.add_argument("--date")
+    p.add_argument("--note")
+    p.set_defaults(fn=cmd_calibration)
+
+    p = sub.add_parser("assumptions",
+                       help="provenance register for tunable constants")
+    p.add_argument("--provenance", choices=("measured", "asserted",
+                                            "inherited", "supplied"),
+                   help="show only constants of one provenance")
+    p.add_argument("--file")
+    p.set_defaults(fn=cmd_assumptions)
 
     p = sub.add_parser("cadence", help="measured seconds per fight")
     p.set_defaults(fn=cmd_cadence)
@@ -861,7 +1043,7 @@ def main():
     p.add_argument("--slot")
     p.add_argument("--file")
     p.add_argument("--top", type=int, default=3)
-    p.add_argument("--floor", type=int, default=8)
+    p.add_argument("--floor", type=int, default=ihlib.COMPILE_FLOOR)
     p.add_argument("--cap", type=int, default=1,
                    help="deepest tier to plan to (default 1 = the game max; "
                         "pass 3 to reproduce pre-27-Jul-2026 projections)")

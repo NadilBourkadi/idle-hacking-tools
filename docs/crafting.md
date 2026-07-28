@@ -58,15 +58,27 @@ Compile bonus = 0.5% × remaining Stability
 - Compile multiplies non-signature affix values.
 - Every Stability-spending action therefore sacrifices **0.5 percentage points** of possible Compile.
 
-### Default budget rule
+### Default budget rule (rewritten 28 July 2026 — the old rule was costing ~11-13 score points per craft)
 
 For a serious main-set craft:
 
-- hard floor: **8 Stability** remaining → +4% Compile;
-- preferred finish: **8-12 Stability** → +4% to +6%;
-- only cross the floor when a clearly build-defining affix is one successful step away and the chance is at least 40%.
+- hard floor: **2 Stability** remaining (`ihlib.COMPILE_FLOOR`) → +1% Compile;
+- spend everything above the floor on tier depth;
+- the floor exists only to keep one Refactor/retry in hand (§10.1 phase 7), not because Compile is worth reserving for.
 
 Compile is always the final crafting action.
+
+**Why the floor moved 8 → 2.** Compile pays 0.5% per preserved point spread across *all* affixes; one deeper Version-Upgrade step multiplies *one* affix by 1.26-1.40×. Because affix value is concentrated in one or two lines, the tier step wins almost always. `simulate_contract` swept floors 0/2/4/6/8/10 over three live candidates on 28 July: **lower was better on mean, median, p10 and p90 in every case**, with the worst case flat.
+
+| candidate | floor 8 mean | floor 0 mean |
+|---|---|---|
+| Assault Kernel of Corruption | +14.9 | **+26.3** |
+| Titanic Firewall of Sandboxing | +15.5 | **+28.3** |
+| Untouchable Payload of Lightning | +11.0 | **+19.0** |
+
+Confirmed live the same evening. The Resilient Firewall of Perpetuity contract was written to floor 8 (projected mean +15.1, p90 +18.9); the player crossed the floor and ran to 1 Stability, reaching T1/T1/T3/T5 instead of the planned T3/T1/T6/T7, and the item realized **+44.6** — more than double the floor-8 p90. Compile's resource price also *falls* with a lower floor (this item's Compile cost 49,999 at 1 Stability vs 1,249,951 at 25).
+
+**Standing lesson.** `floor=8` was never measured — it was a plausible default written once and then inherited by `plan_craft`, `simulate_contract`, `ih.py potential` and every craft verdict for six days. It suppressed every ceiling by more than `UPGRADE_BAND` itself, which means candidates rejected as sidegrades before 28 July were re-ranked, not merely re-scored. Same failure shape as the T3 tier cap and the "attack speed → fights/hour" assertion: **a default nobody ever exercised at both ends of its range.**
 
 ## 4. Version Upgrade
 

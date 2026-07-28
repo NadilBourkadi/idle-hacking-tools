@@ -274,6 +274,31 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 UPGRADE_BAND = 5.0   # delta > +5 -> genuine upgrade candidate
 INFERIOR_BAND = -5.0  # delta < -5 -> inferior; between -> sidegrade
 
+# Stability held back for Compile. Was 8 ("+4% Compile") from 22 Jul 2026 to
+# 28 Jul 2026 -- a default nobody ever tested, and it was suppressing EVERY
+# craft verdict in this workspace by more than UPGRADE_BAND itself.
+#
+# Compile pays 0.5% per preserved point, spread across all affixes. One deeper
+# Version-Upgrade step multiplies ONE affix by 1.26-1.40x, and affix value is
+# concentrated in one or two lines -- so a tier step beats 0.5%-of-everything
+# almost always. `simulate_contract` swept floor 0/2/4/6/8/10 over three live
+# candidates on 28 Jul 2026 and lower was better on mean, median, p10 AND p90
+# in every case, with the worst case essentially flat:
+#
+#   Assault Kernel of Corruption    floor 8 mean +14.9  ->  floor 0 mean +26.3
+#   Titanic Firewall of Sandboxing  floor 8 mean +15.5  ->  floor 0 mean +28.3
+#   Untouchable Payload of Lightning floor 8 mean +11.0 ->  floor 0 mean +19.0
+#
+# Confirmed live the same evening: the Hearty Firewall contract was written to
+# floor 8 (projected mean +15.1, p90 +18.9), the player crossed the floor and
+# ran to 1 Stability, and the item realized **+44.6** -- above even the
+# floor-1 simulation's p90 (+40.3).
+#
+# Set to 2 rather than 0 to keep one Refactor/retry in hand (see crafting.md
+# 10.1 phase 7, which needs floor + 1); that option costs ~1-2 score points
+# against floor 0 and the simulator does not value it.
+COMPILE_FLOOR = 2
+
 # Adjacent-tier value ratio. NOT one constant: measured within-family across
 # every percentage affix in the 27 Jul 2026 capture, the step is region-
 # dependent, and the single 1.4 that stood here was fitted on shallow tiers
@@ -492,7 +517,7 @@ def augment_state(item):
     return True, "either"
 
 
-def plan_craft(item, ladders, floor=8, tier_cap=1, preserve=0.0,
+def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
                deep_step=TIER_STEP_DEEP, deep_step_low=TIER_STEP_DEEP_LOW):
     """Greedy expected-Stability Version-Upgrade plan + Compile projection.
 
@@ -733,7 +758,7 @@ def score_tiers(item, ladders, tiers, stability_left, deep_step=TIER_STEP_DEEP):
     return weighted_score(totals)
 
 
-def simulate_contract(item, ladders, phases, floor=8, preserve=0.0,
+def simulate_contract(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
                       trials=20000, seed=1, baseline=None):
     """Monte-Carlo a §10.1 craft contract. Returns the OUTCOME DISTRIBUTION.
 
@@ -1157,6 +1182,404 @@ def captured_ms(capture):
         stamp.replace("Z", "+00:00")).timestamp() * 1000
 
 
+def measured_credits_per_hour(max_gap_s=300):
+    """Credits/hr from the ledger's own fight rewards, or None.
+
+    Gap-aware, and it has to be: the ledger spans six days of wall clock but
+    only ~13 hours of play, so dividing total rewards by (last - first) reports
+    ~0.8M/hr against a true ~10M/hr. Same trap `fight_cadence` documents -- a
+    ledger timestamp range is not playing time. Elapsed accrues only across
+    consecutive fights less than `max_gap_s` apart (the stream polls every
+    150 s, so 300 s spans a normal poll without spanning a closed browser).
+    """
+    rows, seen = [], set()
+    for record in stream_records():
+        if record.get("kind") != "fight":
+            continue
+        key = tuple(record.get("key") or ())
+        if key in seen:
+            continue
+        seen.add(key)
+        ms = record.get("seen_ms")
+        if ms:
+            rows.append((ms, (record.get("fight") or {}).get("credits_gained") or 0))
+    rows.sort()
+    total, seconds, prev = 0.0, 0.0, None
+    for ms, credits in rows:
+        total += credits
+        if prev is not None and (ms - prev) / 1000 <= max_gap_s:
+            seconds += (ms - prev) / 1000
+        prev = ms
+    return (total / (seconds / 3600)) if seconds > 600 else None
+
+
+# ---- Assumption register --------------------------------------------------
+# Every defect in this workspace so far has been an INHERITED NUMBER: written
+# once, plausible in output forever after, and load-bearing for everything
+# downstream. The T3 tier cap, the zone transition cost, "attack speed -> fights
+# per hour", `Corrupt = 0.6`, "credits are unlimited" and `floor = 8` all failed
+# the same way, and the standing lesson kept being recorded as prose to remember
+# rather than as a check that runs. This is the check that runs.
+#
+# `provenance` is the only field that matters:
+#   measured  - fitted or tested against game data, with the test named
+#   asserted  - someone's reasonable guess; never tested
+#   inherited - asserted, and now depended on by code that predates any test
+#   supplied  - given by the player; true when stated, not a game constant
+#
+# A `check` runs live and reports drift. Constants with no possible check are
+# not thereby fine -- they are the ones to be most suspicious of.
+
+def _chk_stat_families(cap):
+    bad = validate_stat_totals(cap)
+    return ("OK", "reproduces every stat in statsBreakdown") if not bad else \
+        ("FAIL", f"{len(bad)} stat(s) mismatch: {[b[0] for b in bad]}")
+
+
+def _chk_tier_steps(cap):
+    shallow, deep = fit_tier_steps(cap, ladders=tier_ladders_archive())
+    drift = max(abs(shallow - TIER_STEP_SHALLOW), abs(deep - TIER_STEP_DEEP))
+    return (("OK" if drift < 0.02 else "DRIFT"),
+            f"archive refit {shallow:.3f}/{deep:.3f} vs constants "
+            f"{TIER_STEP_SHALLOW:.3f}/{TIER_STEP_DEEP:.3f}")
+
+
+def _chk_hardware_curve(cap):
+    hw = hardware_state(cap)
+    if not hw:
+        return ("SKIP", "no hardwareInfo in this capture")
+    _a, _p, spread = hardware_cost_curve(hw)
+    return (("OK" if spread < 1.05 else "DRIFT"),
+            f"single-family fit spread {spread:.3f} (want < 1.05); the whole-"
+            f"build total self-checked to +1.0% vs the game's reset refund")
+
+
+def _chk_cadence(cap):
+    rows = fight_cadence()
+    if not rows:
+        return ("SKIP", "no death records in the ledger")
+    values = sorted(s for _ms, s in rows)
+    mid = values[len(values) // 2]
+    return (("OK" if abs(mid - 4.872) < 0.15 else "DRIFT"),
+            f"n={len(values)} median {mid:.3f} s/fight vs recorded 4.872")
+
+
+def _chk_credits_hr(cap):
+    rate = measured_credits_per_hour()
+    if rate is None:
+        return ("SKIP", "no fight rewards in the ledger")
+    return (("OK" if abs(rate - CREDITS_PER_HOUR) / CREDITS_PER_HOUR < 0.35
+             else "DRIFT"),
+            f"ledger says {rate / 1e6:.1f}M/hr vs constant "
+            f"{CREDITS_PER_HOUR / 1e6:.0f}M/hr")
+
+
+def assumptions():
+    """[(name, value, provenance, basis, validated_on, check)] — the register.
+
+    Ordered most-suspect first: anything `inherited` or `asserted`, then
+    `supplied`, then `measured`.
+    """
+    w, f = CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT
+    rows = [
+        # --- planning weights: a bottleneck heuristic, not a game formula ---
+        ("CRAFT_WEIGHTS_PCT[Acc]", w["Acc"], "asserted",
+         "CHALLENGED and now actionable: cutting Accuracy 7,595 -> 7,265 "
+         "(-4.35%) produced NO hit-rate loss over 8,195 attacks at matched "
+         "streak band. Left unchanged only because driver-ab-2026-07-27 was "
+         "mid-flight; that A/B closed 28 Jul, so this weight is free to move "
+         "and is probably far too high", "27 Jul 2026 (falsified)", None),
+        ("CRAFT_WEIGHTS_PCT[AtkSpd]", w["AtkSpd"], "asserted",
+         "right number, wrong reason: buys NO extra fights/hour (cadence is a "
+         "fixed 4.872 s tick); pays -2% to -5% rounds per fight, i.e. it is a "
+         "mitigation stat", "27 Jul 2026 (rationale corrected)", None),
+        ("CRAFT_WEIGHTS_FLAT[Corrupt]", f["Corrupt"], "measured",
+         "~0.5% of output per point in the deep streak bands -- HALF its "
+         "stated rationale -- and NOT LINEAR. Fitted range is 12-25 points; "
+         "do not apply above ~25 (two candidates scored as upgrades purely on "
+         "extrapolation to 57.8)", "28 Jul 2026", None),
+        ("CRAFT_WEIGHTS_FLAT[Regen]", f["Regen"], "asserted",
+         "DIRECTION is measured -- regeneration moved the death ceiling twice "
+         "(+20.5 streaks on +35.3% realized prg; +7.0 on the Shell) -- but the "
+         "0.6 scalar has never been fitted, and 28 Jul showed it is NOT FLAT: "
+         "a +29.7% listed buy realized +0.4% / +4.7% / +11.5% of prg/round at "
+         "streak bands 60-85 / 86-105 / 106-130. Realization rises with "
+         "depletion (overheal capping, open-questions.md), so a flat weight "
+         "over-prices regen shallow and a second large buy will realize less "
+         "again", "direction only; magnitude falsified as flat 28 Jul", None),
+        ("CRAFT_WEIGHTS_PCT[Def]", w["Def"], "asserted",
+         "first isolated read 28 Jul: gross damage/round at streak 106-130 "
+         "went 349.0 -> 368.6 (+5.6%) against Defense -6.05%, i.e. roughly 1:1 "
+         "elasticity -- but n=35 fights, one window, and Evasion +4.4% pushed "
+         "the other way. Every earlier Defense change arrived bundled with "
+         "regen or barrier", "directional only, 28 Jul 2026", None),
+        ("CRAFT_WEIGHTS_PCT[Eva]", w["Eva"], "asserted",
+         "only ever moved bundled with Regen (Citadel Shell)", None, None),
+        ("CRAFT_WEIGHTS_PCT[AtkDmg]", w["AtkDmg"], "asserted", "", None, None),
+        ("CRAFT_WEIGHTS_PCT[CritCh]", w["CritCh"], "asserted", "", None, None),
+        ("CRAFT_WEIGHTS_PCT[MaxHP]", w["MaxHP"], "asserted",
+         "guardrail says Max HP is a buffer, not mitigation or recovery",
+         None, None),
+        ("CRAFT_WEIGHTS_PCT[CritDmg]", w["CritDmg"], "asserted", "", None, None),
+        ("CRAFT_WEIGHTS_FLAT[ArmorPen]", f["ArmorPen"], "inherited",
+         "never tested; the multiplicand was 0 until 28 Jul, so it has never "
+         "even been exercised", None, None),
+        ("CRAFT_WEIGHTS_FLAT[Thorns]", f["Thorns"], "inherited",
+         "never tested", None, None),
+        ("CRAFT_WEIGHTS_FLAT[Barrier]", f["Barrier"], "inherited",
+         "never tested; Barrier arrived bundled in the 27 Jul package",
+         None, None),
+        # --- verdict bands ---
+        ("UPGRADE_BAND", UPGRADE_BAND, "inherited",
+         "STALE: calibrated 22 Jul against the Vital Driver under the old "
+         "Compile floor of 8. Lowering the floor to 2 raised every projection "
+         "~11-13 points, so this threshold no longer means what it did. "
+         "Re-derive from crafts executed after 28 Jul", "22 Jul 2026", None),
+        ("INFERIOR_BAND", INFERIOR_BAND, "inherited",
+         "same calibration as UPGRADE_BAND, same staleness", "22 Jul 2026",
+         None),
+        # --- supplied ---
+        ("HACKCOIN_CREDIT_RATE", HACKCOIN_CREDIT_RATE, "supplied",
+         "player-supplied exchange rate, not derivable from any capture. An "
+         "exchange rate is NOT a game constant -- re-confirm before leaning "
+         "on it", "28 Jul 2026", None),
+        # --- measured, with live checks ---
+        ("COMPILE_FLOOR", COMPILE_FLOOR, "measured",
+         "swept 0/2/4/6/8/10 over three live candidates: lower better on "
+         "mean, median, p10 AND p90 in every case. 2 rather than 0 keeps one "
+         "Refactor in hand", "28 Jul 2026", None),
+        ("plan_craft tier_cap default", 1, "measured",
+         "was 3 and untested, which excluded the two best steps on the "
+         "ladder; gain per expected Stability point peaks at T3->T2",
+         "27 Jul 2026", None),
+        ("CREDITS_PER_HOUR", CREDITS_PER_HOUR, "measured",
+         "fight rewards only; homelab jobs outspend it ~10x, and contracts "
+         "add lumpy income on top. The live check pools the whole ledger and "
+         "so runs BEHIND the current rate (6.6M/hr on 23 Jul, 9.6M on 27 Jul, "
+         "13.1M on 28 Jul as the build deepened) -- do not 'correct' the "
+         "constant down to the pooled figure", "28 Jul 2026", _chk_credits_hr),
+        ("TIER_STEP_SHALLOW / _DEEP", f"{TIER_STEP_SHALLOW}/{TIER_STEP_DEEP}",
+         "measured", "fitted archive-wide and re-fitted on every run by "
+         "fit_tier_steps, so it cannot rot as the inventory turns over",
+         "27 Jul 2026", _chk_tier_steps),
+        ("DEEP_TIER", DEEP_TIER, "measured",
+         "the step is region-dependent; one constant 1.4 was fitted on "
+         "shallow tiers only and over-projected a T6->T1 chase by 1.9x",
+         "27 Jul 2026", None),
+        ("fight cadence 4.872 s", 4.872, "measured",
+         "from the game's own death clock, never the stream's poll interval",
+         "27 Jul 2026", _chk_cadence),
+        ("hardware cost curve", "A*L**p", "measured",
+         "fitted live off next_cost and self-validates against the game's own "
+         "reset refund", "27 Jul 2026", _chk_hardware_curve),
+        ("stat_total stat families", "SCALING/DIRECT/economy", "measured",
+         "self-validates against the game's reported totals for every stat",
+         "27 Jul 2026", _chk_stat_families),
+    ]
+    order = {"inherited": 0, "asserted": 1, "supplied": 2, "measured": 3}
+    return sorted(rows, key=lambda r: order.get(r[2], 9))
+
+
+# ---- Prediction ledger ----------------------------------------------------
+# The realized-vs-projected table lived in prose in crafting.md 13 for six
+# days, which meant nobody could score it. The "~5-point contract-conservatism
+# discount" and `UPGRADE_BAND` were both folklore derived by eyeballing it --
+# and the discount points the WRONG WAY for the current planner (six of nine
+# crafts over-realized). A model you cannot score is a model you cannot improve.
+#
+# `model` tags the planner era. Rows from different eras are NOT comparable:
+# removing the T3 cap (27 Jul) and lowering COMPILE_FLOOR 8 -> 2 (28 Jul) each
+# shifted projections by more than UPGRADE_BAND.
+PREDICTIONS_PATH = ROOT / "data" / "predictions.jsonl"
+CURRENT_MODEL = "uncapped+floor2+archive"
+
+
+def prediction_records(path=PREDICTIONS_PATH):
+    """[record] from the prediction ledger, oldest first."""
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            out.append(json.loads(line))
+    return out
+
+
+def record_prediction(item, slot, projected, realized=None, p10=None, p90=None,
+                      p_upgrade=None, date=None, model=CURRENT_MODEL, note="",
+                      path=PREDICTIONS_PATH):
+    """Append one prediction. Call at contract time, fill `realized` after."""
+    row = {"date": date, "item": item, "slot": slot, "projected": projected,
+           "p10": p10, "p90": p90, "p_upgrade": p_upgrade,
+           "realized": realized, "model": model, "note": note}
+    with path.open("a") as handle:
+        handle.write(json.dumps(row) + "\n")
+    return row
+
+
+def calibration(records=None):
+    """Per-model-era scoring of the prediction ledger.
+
+    Returns {model: {...}} with signed bias (realized - projected), MAE,
+    verdict agreement against UPGRADE_BAND, and interval coverage where a
+    distribution was recorded. Coverage is the number that matters once
+    `simulate_contract` is the standard instrument: an 80% p10-p90 interval
+    should contain the truth ~80% of the time, and if it does not, every
+    P(upgrade) the tool prints is miscalibrated by a knowable amount.
+    """
+    rows = [r for r in (records or prediction_records())
+            if r.get("realized") is not None and r.get("projected") is not None]
+    out = {}
+    for row in rows:
+        era = out.setdefault(row.get("model", "?"),
+                             {"n": 0, "errors": [], "agree": 0, "graded": 0,
+                              "in_interval": 0, "with_interval": 0,
+                              "items": []})
+        era["n"] += 1
+        error = row["realized"] - row["projected"]
+        era["errors"].append(error)
+        era["items"].append((row["item"], row["projected"], row["realized"],
+                             error))
+        # did the UPGRADE/not verdict survive realization?
+        era["graded"] += 1
+        if (row["projected"] > UPGRADE_BAND) == (row["realized"] > UPGRADE_BAND):
+            era["agree"] += 1
+        if row.get("p10") is not None and row.get("p90") is not None:
+            era["with_interval"] += 1
+            if row["p10"] <= row["realized"] <= row["p90"]:
+                era["in_interval"] += 1
+    for era in out.values():
+        errors = era["errors"]
+        era["bias"] = sum(errors) / len(errors)
+        era["mae"] = sum(abs(e) for e in errors) / len(errors)
+        era["over"] = sum(1 for e in errors if e > 0)
+    return out
+
+
+def score_contributions(projected, equipped_totals):
+    """[(value, label)] — which stat each point of a ceiling Δ came from.
+
+    A ceiling Δ is a scalar and a scalar hides which weight is carrying it. On
+    28 Jul 2026 the top two candidates on the board scored +22.1 and +16.2, and
+    a decomposition showed +23.1 and +17.6 of that was Corruption alone — a
+    weight fitted on one fight and extrapolated 2.3x past its observed range.
+    Both were sidegrades once that term was removed. Nothing in the output said
+    so, because the output was one number.
+
+    Read it against `ih.py assumptions`: a Δ carried by an `asserted` or
+    `inherited` weight is a hypothesis, not a verdict.
+    """
+    out = []
+    for label in set(projected) | set(equipped_totals):
+        p_pct, p_flat = projected.get(label, (0.0, 0.0))
+        c_pct, c_flat = equipped_totals.get(label, (0.0, 0.0))
+        value = ((p_pct - c_pct) * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
+                 + (p_flat - c_flat) * CRAFT_WEIGHTS_FLAT.get(label, 0.0))
+        if abs(value) > 0.05:
+            out.append((value, label))
+    return sorted(out, reverse=True)
+
+
+# Weights whose value is known to be unreliable, so a Δ leaning on one gets
+# called out at the point of use rather than in a doc nobody re-reads.
+SUSPECT_WEIGHTS = {
+    "Corrupt": "fitted on n=1 at 12 points; ~2x too generous and NON-LINEAR "
+               "— invalid above ~25 points",
+    "Acc": "measured saturated 27 Jul (-4.35% Acc, zero hit-rate loss)",
+}
+
+
+def suspect_share(contributions):
+    """(suspect_total, [labels]) for the part of a Δ resting on bad weights."""
+    rows = [(v, l) for v, l in contributions if l in SUSPECT_WEIGHTS]
+    return sum(v for v, _ in rows), [l for _, l in rows]
+
+
+def contract_board(capture):
+    """Daily contract board state: reset clock, live progress, unclaimed pay.
+
+    Added 28 Jul 2026 after the sweep missed it. The board resets at a fixed
+    UTC hour and **unfinished progress is destroyed** -- and contracts are the
+    game's only observed repeatable hackcoin source (1-5 hc each plus a
+    board-clear bonus), which is the scarcest currency in the model. Nothing
+    else in the capture surfaces that deadline.
+
+    Returns {reset_ms, hours_left, active, unclaimed, clear_bonus,
+    clear_bonus_claimed} where `active` is the in-progress contract (or None)
+    and `unclaimed` is [completed but not claimed].
+    """
+    board = ((capture["state"].get("currentPlayer") or {}).get("contracts")
+             or {})
+    rows = board.get("contracts") or []
+    reset_ms = board.get("next_reset_at_ms")
+    now = captured_ms(capture)
+    active_id = board.get("active_contract_id")
+    active = next((c for c in rows if c.get("id") == active_id), None)
+    return {
+        "reset_ms": reset_ms,
+        "hours_left": ((reset_ms - now) / 3.6e6
+                       if reset_ms and now else None),
+        "active": active,
+        "unclaimed": [c for c in rows
+                      if c.get("completed") and not c.get("claimed")],
+        "clear_bonus": board.get("clear_bonus_amount") or 0,
+        "clear_bonus_claimed": bool(board.get("clear_bonus_claimed")),
+    }
+
+
+# Credit income, measured from the stream ledger rather than assumed.
+CREDITS_PER_HOUR = 12e6
+
+# Hackcoin sells for credits, so the credit balance is NOT the credit budget.
+# Player-supplied rate, 28 Jul 2026. This single number reprices the whole
+# game: at 8.33B/hc the credit half of every install is rounding error next to
+# its hackcoin half (Hacking Simulator = 5B cr + 3 hc = 0.60 + 3.00 hc), so
+# credits should be spent freely and HACKCOIN is the only real currency.
+# Re-check it before leaning on it -- an exchange rate is not a game constant.
+HACKCOIN_CREDIT_RATE = 8_332_642_927
+
+
+def hackcoin_equivalent(cost, rate=HACKCOIN_CREDIT_RATE, resource_rate=2.0):
+    """Total price of a cost dict in hackcoin, the actually-scarce currency.
+
+    Gathering resources convert at ~`resource_rate` credits/unit on the
+    marketplace (CLAUDE.md), credits convert at `rate` credits per hackcoin.
+    """
+    cost = cost or {}
+    credits = (cost.get("credits") or 0) + resource_rate * sum(
+        cost.get(r) or 0 for r in GATHER_RESOURCES)
+    return credits / rate + (cost.get("hackcoin") or 0)
+
+
+def credit_runway(capture, per_hour=CREDITS_PER_HOUR,
+                  rate=HACKCOIN_CREDIT_RATE):
+    """(balance, hours_of_income_to_afford, [(name, credits, hackcoin)]).
+
+    Lists homelab installs not yet affordable, with how long fight income alone
+    would take to cover the credit shortfall. `balance` counts hackcoin at
+    `rate`, because the player sells it: a 5.7B credit balance next to 28
+    hackcoin is really a ~239B budget, and treating it as 5.7B produced exactly
+    one wrong recommendation (deferring the Hacking Simulator, 28 Jul 2026).
+    Pass rate=None to score the raw credit balance instead.
+    """
+    player = capture["state"].get("currentPlayer") or {}
+    balance = player.get("credits") or 0
+    if rate:
+        balance += (player.get("hackcoin") or 0) * rate
+    homelab, definitions, _ = homelab_state(capture)
+    installed = (homelab or {}).get("installed") or {}
+    pending = []
+    for d in definitions.get("installs") or []:
+        if installed.get(d.get("type")):
+            continue
+        cost = d.get("cost") or {}
+        pending.append((d.get("name"), cost.get("credits") or 0,
+                        cost.get("hackcoin") or 0))
+    short = sum(c for _, c, _ in pending) - balance
+    return balance, (short / per_hour if short > 0 else 0.0), pending
+
+
 def capture_stream_drift(capture, tolerance=0.01, min_abs=1):
     """(lag_seconds, [(field, capture_value, stream_value)]) vs the ledger.
 
@@ -1516,9 +1939,54 @@ DRIVER_AB_2026_07_27 = {
                  "throughput was bought to close",
 }
 
+DRIVER_AB_2026_07_27["concluded"] = (
+    "KEEP, 28 Jul 2026. 13/24 deaths, mean 120.2 vs baseline 113.8 (+6.4), "
+    "Welch t~3.8 against a keep threshold of 111.8. Stopped at 13 of a "
+    "pre-registered 24 because the Firewall craft made every further death "
+    "uninterpretable as a Driver test -- reason recorded before the craft, not "
+    "after. The rounds/fight clause would have FAILED (40.0 vs 40.5 at 86-105; "
+    "50.4 vs 49.6 at 106-130, i.e. up); per the standing resolution logged 27 "
+    "Jul the primary outcome governs and that clause is a mis-declared "
+    "diagnostic. Hit rate 80.8% vs 80.2% -- the -4.35% Accuracy cut cost "
+    "nothing, consistent with saturation.")
+
+FIREWALL_AB_2026_07_28 = {
+    "name": "firewall-ab-2026-07-28",
+    "item": "Resilient Firewall of Perpetuity",
+    "slot": "Firewall",
+    "equip_ms": 1785276480000,          # 2026-07-28T22:08:00Z
+    "boundary_fight_id": None,
+    # Aegisbound-Driver era only (that A/B closed KEEP), Corporate Network,
+    # streak >= 50. n=16, mean 119.8, sd 4.3 -> n=16 resolves +3 at 80% power.
+    "baseline_deaths": [110, 116, 116, 117, 119, 119, 119, 119, 119, 119, 120,
+                        122, 123, 124, 126, 129],
+    # The Firewall moves Accuracy by +0.30%, so hit rate is a CONTAMINATION
+    # check here, not a treatment metric -- unlike the Driver test.
+    "baseline_hits": (35163, 8238),     # 81.02% over 821 detailed fights
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785189000000,   # Driver equip -- same-loadout era
+    # The window measures a BUNDLE by explicit policy, not by oversight:
+    # ECC Memory L100->L110 and Encryption Module L100->L110 (133.4K chips)
+    # landed ~20 min after the equip, plus 2 player levels and Mechanical
+    # Keyboard L10. End state vs pre-craft: Regen +34.1%, Def -3.4%.
+    "segment_ms": 1785277800000,        # ~22:30Z, the hardware purchase
+    # Gates on the OUTCOME and on contamination only. Realized prg/round and
+    # net drain are recorded as DIAGNOSTICS and are explicitly NOT gates --
+    # that is the mis-specification driver-ab-2026-07-27 made.
+    "keep_rule": "KEEP if mean death streak >= 117.8 (baseline 119.8 - 2); "
+                 "REVERT if mean <= 114.8. Contamination checks only: hit rate "
+                 "must stay near 81.0% (this craft moves Accuracy +0.30%, so a "
+                 "material move means something else changed), the window must "
+                 "not span a zone change, and deaths starting above 70% HP "
+                 "must not rise above the baseline 2/16 (13%) -- Defense fell "
+                 "6.05% on equip before hardware restored part of it, and "
+                 "burst is the exposed flank. Realized prg/round and net drain "
+                 "per round are DIAGNOSTICS, not gates.",
+}
+
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = DRIVER_AB_2026_07_27
+ACTIVE_EXPERIMENT = FIREWALL_AB_2026_07_28
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -1656,7 +2124,14 @@ def experiment_status(experiment=None):
         log = state.get("combatLog") or []
         ids = [f.get("id") for f in log if f.get("id") is not None]
         capture_pre = captured_ms is not None and captured_ms < exp["equip_ms"]
-        same_session_as_equip = bool(ids) and max(ids) > exp["boundary_fight_id"]
+        # `boundary_fight_id` splits the one capture that STRADDLES the equip:
+        # fight ids are per-session, so within that session the id orders
+        # fights either side of it. Optional -- when the equip was not caught
+        # mid-session there is nothing to straddle, and capture time alone
+        # segments correctly.
+        boundary = exp.get("boundary_fight_id")
+        same_session_as_equip = (boundary is not None and bool(ids)
+                                 and max(ids) > boundary)
         for f in log:
             fid = f.get("id")
             if fid is None:
@@ -1664,9 +2139,9 @@ def experiment_status(experiment=None):
             if capture_pre:
                 post = False
             elif same_session_as_equip:
-                post = fid > exp["boundary_fight_id"]
+                post = fid > boundary
             else:
-                post = True  # session restarted after equip
+                post = True  # session restarted after equip, or no boundary set
             _absorb_fight(fights, f, post, captured_ms)
     post_deaths = sorted(
         (e for ms, e in deaths.items() if ms >= exp["equip_ms"]),

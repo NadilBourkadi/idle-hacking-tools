@@ -292,3 +292,31 @@ Cutting Accuracy 7,595 → 7,265 (**−4.35%**) with the Driver equip produced *
 - Why it matters: `CRAFT_WEIGHTS_PCT` prices Accuracy at **1.0**, joint-highest with Defense and Evasion, and `current-state.md` still lists hit reliability as bottleneck #2. If accuracy is saturated in the 7.2–7.6K region against Corporate Network evasion, both are wrong and the Daemon verdict (+8.9, part of whose case is Acc +3.2%) is overstated.
 - Constraint this puts on the unknown hit-chance formula (§7/§8): it is **flat in accuracy** across 7.2–7.6K at these enemy evasion levels — consistent with a ratio-based curve deep in diminishing returns, not a linear or additive one.
 - Cheapest resolution: the **Software Profiler** (homelab 10) runs 100 sims against a chosen enemy level, which isolates hit rate from streak composition entirely.
+
+
+## Does realized regeneration scale with how depleted you are? (opened 28 July 2026)
+
+The Resilient Firewall raised **listed** Regeneration +29.7% (388.5 → 504.0, later 520.8 with ECC L100→L110). Realized `prg`/round, matched on streak band over 323 detailed post-equip fights:
+
+| band | pre | post | realized gain |
+|---|---:|---:|---:|
+| 60–85 | 220.3 | 221.1 | **+0.4%** |
+| 86–105 | 264.9 | 277.3 | +4.7% |
+| 106–130 | 306.8 | 342.2 | **+11.5%** |
+
+Realization **rises monotonically with streak depth**, and this *understates* it — the ECC buy landed inside the window and added listed regen on top, so the true denominator is larger than +29.7%. Ratio at depth ≈ 0.39 against listed; ≈ 0 shallow. Every previous regen buy realized 0.57–0.91 (hardware +13.6% realized on +14.9% listed; Router +19.1% on +33.5%).
+
+- **Working model: overheal capping.** `data-dictionary.md` already suspects `prg` is under-reported at full HP. Shallow in a streak the player sits near full HP and surplus regeneration is discarded; deep, HP is depleted and it lands. The monotone band pattern is what that model predicts.
+- **Why it matters:** `CRAFT_WEIGHTS_FLAT["Regen"] = 0.6` prices regeneration **flat**. If this holds, regen's value is concentrated at depth — which is where runs end, so the direction is favourable — but the *average* realization on a large buy is far below 1, and a second large regen buy on top of this one will realize less again. This is the first evidence of diminishing returns on the build's confirmed win condition, and it is the reason the standing chip advice caps ECC rather than pouring the whole budget in.
+- **Confounds:** one window, ~23 minutes, bundled with ECC +10, Encryption +10, two player levels and Mechanical Keyboard L10.
+- **Cheapest resolution:** segment realized `prg`/round by *starting-HP fraction* rather than by streak band — the ledger already has `starting_hp`/`max_hp` per fight, so this is an analysis, not a measurement. If the relationship is with depletion rather than streak, that separates the two directly. Do this before any further regen purchase.
+
+## How much damage does Defense actually stop? (opened 28 July 2026)
+
+`CRAFT_WEIGHTS_PCT["Def"] = 1.0` — joint-highest weight in the table — and Defense has **never been isolated**: every prior change arrived bundled with regeneration or barrier moving the same way. The Firewall equip gives the first usable read, because it cut Defense while raising regeneration, and `damage_taken` is **gross** intake (verified, `data-dictionary.md`) which regeneration does not touch.
+
+Gross damage/round at streak 106–130: **349.0 → 368.6 (+5.6%)** against Defense −6.05% at equip. Roughly 1:1 elasticity.
+
+- Status: **directional, single window, n=35 fights at depth.** Evasion also rose +4.4%, which pushes gross intake the other way, so Defense's own elasticity is probably slightly worse than 5.6/6.05.
+- Why it matters: this is the only number bearing on a weight that decides Firewall/Kernel/Router verdicts. It is registered as `asserted` in `ih.py assumptions` for exactly this reason.
+- Cheapest resolution: the **Software Profiler** (homelab 10) — fixed enemy, fixed level, vary Defense only.

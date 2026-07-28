@@ -1,21 +1,36 @@
-# Candidate and Craft Status — 27 July 2026
+# Candidate and Craft Status — 28 July 2026
 
-> Rewritten from scratch. The 23 July version described an inventory that no longer exists: 43 of 52 items were decompiled on 27 July after an explicit audit, leaving 12. Every hold, safe-decompile list and ceiling verdict in the previous version is void.
+> **Every ceiling number below the main-set table is stale and has been left in place only as history.** Two things invalidated them on 28 July: `COMPILE_FLOOR` moved 8 → 2 (every projection rises ~11–13 points, which is more than `UPGRADE_BAND` itself, so past *rankings* changed, not just scores), and the inventory went 9 → 45 items on a large drop. **Regenerate with `python3 scripts/ih.py potential` — do not read a number off this page.**
+>
+> Read `ih.py potential`'s new `from:` decomposition line, not just the score: two of the three top-ranked candidates on 28 July were artifacts of a Corruption weight fitted on n=1 and extrapolated 2.3× past its observed range, and an Accuracy weight measured as saturated.
 
 ## Main set (all eight slots)
 
 | Slot | Item | Origin |
 |---|---|---|
 | Payload | Bastioned Payload of Perfect Strike | crafted 23 Jul, A/B KEEP |
-| Firewall | Brutal Firewall of Perpetuity | original baseline — **the weakest slot**, ilvl 314 |
+| Firewall | **Resilient Firewall of Perpetuity** | crafted 28 Jul (**+44.6**, best on record), A/B `firewall-ab-2026-07-28` open at 3/24 |
 | Analyzer | Targeted Analyzer of Light Speed | crafted 27 Jul (+24.9), A/B KEEP |
 | Shell | Citadel Shell of the Phoenix | crafted 23 Jul (+22.6), A/B KEEP |
-| Driver | **Aegisbound Driver of Cataclysm** | crafted 27 Jul (**+16.7**, realized above projection), A/B `driver-ab-2026-07-27` open |
-| Router | Titanic Router of the Undying | crafted 27 Jul (**+38.7**, best on record), A/B KEEP |
+| Driver | Aegisbound Driver of Cataclysm | crafted 27 Jul (**+16.7**), A/B **closed KEEP** 28 Jul (+6.4 death streaks) |
+| Router | Titanic Router of the Undying | crafted 27 Jul (**+38.7**), A/B KEEP |
 | Daemon | Targeted Daemon of the Storm | crafted 22 Jul, A/B KEEP |
 | Kernel | Hearty Kernel of Decay | original baseline |
 
-Six of eight are now contract crafts. The two remaining baselines (Firewall, Kernel) are exactly where the remaining upgrades sit — and both are held on sustain guardrails.
+**Seven of eight are now contract crafts.** The Kernel (ilvl 626) is the last original baseline and the last structural gap.
+
+## Next craft — two contenders, deliberately held
+
+Scores below are post-`COMPILE_FLOOR`-fix and "adjusted" strips the Corruption and Accuracy weights that `ih.py assumptions` flags as unreliable:
+
+| candidate | raw Δ | adjusted Δ | case |
+|---|---:|---:|---|
+| Untouchable Payload of Lightning | +18.7 | **+19.9** | *gains* when adjusted — its −10.5 Accuracy penalty is fake. AtkSpd +19.0, AtkDmg +7.8. The output answer |
+| Assault Kernel of Corruption | +26.0 | +7.6 | Def +9.1 with **no sustain cost** — the only candidate that spends nothing. The mitigation answer |
+
+Rejected on the sustain guardrail regardless of score: **Targeted Router of Immortality** (+14.1, but Regen −20.9% at loadout) and **Deadeye Kernel of Containment** (Regen −14.7%).
+
+**Held on purpose.** The Firewall's +34% regen may have moved the bottleneck from attrition to closing tank matchups, which changes *which* of the two is correct — the one case where sequencing is justified. Read `firewall-ab-2026-07-28` first.
 
 ## Inventory — all 9 items, ranked by ceiling delta vs equipped
 
