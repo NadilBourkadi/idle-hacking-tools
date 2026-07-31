@@ -872,8 +872,17 @@ def cmd_audit(args):
         for c in sorted(pending, key=lambda c: -_hc_per_hour(c, rate)):
             rew = (c.get("rewards") or {}).get("hackcoin") or 0
             per = _hc_per_hour(c, rate)
-            eff = (f"{per:.2f} hc/combat-h" if per
-                   else "rate unmeasured (non-combat)")
+            if per:
+                eff = f"{per:.2f} hc/combat-h"
+            elif c.get("type") == "harvest" and rew:
+                left_n = max((c.get("target") or 0) - (c.get("progress") or 0),
+                             0)
+                gather_h = left_n / ihlib.HARVEST_PER_GATHER_HOUR
+                eff = (f"~{rew / gather_h:.2f} hc/gather-h over ~{gather_h:.1f}h "
+                       f"of ACTIVE gathering (rate is a lower bound; passive "
+                       f"accrual ~0)")
+            else:
+                eff = "rate unmeasured (non-combat)"
             flags.append(("CONTRACT", f"    {c.get('name')} — "
                                       f"{c.get('target'):,} {c.get('type')}, "
                                       f"pays {rew} hc  [{eff}]"))

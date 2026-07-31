@@ -433,7 +433,7 @@ additive pool** (open-questions §13 resolved). Four families:
 | **Scaling** | max_hp, defense, accuracy, evasion, **attack_damage**, **post_combat_heal** | `(base + level + equipment_flat) × (1 + equipment_pct + hardware + homelab)` |
 | **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + equipment_pct + hardware + homelab` (no scaling term) |
 | **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `equipment_flat × (1 + equipment_pct + hardware + homelab)` |
-| **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache)` |
+| **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache) × (1 + homelab_mult)` — the `homelab_mult` term appeared 31 Jul 2026 when Container Runtime L1 ("×1.01, multiplicative" per its own description) first populated it; confirmed formula-level, all four gathering stats reproduce to <1e-9 with it and sit +0.52% off without it |
 
 **Family membership is not guessable from the stat name.** `attack_damage` was
 absent from all three families until 27 July 2026, so `ihlib.stat_total`

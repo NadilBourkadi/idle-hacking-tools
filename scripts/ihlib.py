@@ -1634,9 +1634,10 @@ def assumptions():
          "the stat 0.648% -- more than Def or Eva get from the same affix. "
          "FIRST LIVE BOUND 31 Jul (firewall-ab-2026-07-31, pre-registered as "
          "a MaxHP test): trading max_hp -7.8% for Def +11.4% / Regen +8% "
-         "RAISED the death mean +12.6 (15/24 deaths at write time, KEEP "
-         "arithmetically locked) -- in a mitigation-compensated trade the "
-         "0.5 weight did not under-price Max HP. A bound, not a fit",
+         "RAISED the death mean +12.5, and the A/B closed KEEP at n=34 "
+         "(167.6 vs 155.1) -- in a mitigation-compensated trade the 0.5 "
+         "weight did not under-price Max HP. A bound, not a fit; the "
+         "shell-ab-2026-07-31 window probes the REVERSE sign (+7% max_hp)",
          None, None),
         ("CRAFT_WEIGHTS_PCT[CritDmg]", w["CritDmg"], "measured",
          "RE-FIT 0.35 -> 0.22, 29 Jul 2026. Crit multiplier measured at 1.883 "
@@ -1715,6 +1716,14 @@ def assumptions():
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",
          "27 Jul 2026", None),
+        ("HARVEST_PER_GATHER_HOUR", HARVEST_PER_GATHER_HOUR, "measured",
+         "LOWER BOUND, 31 Jul 2026: an Extended Harvest (1,331 actions, 4 hc "
+         "claimed) cleared inside a 4.37h capture window -> >=305/h if "
+         "gathering ran continuously, higher if not. Passive accrual is "
+         "~zero (the follow-up Extended sat at 3/1,374 through hours of "
+         "idle combat), so harvest contracts pay per GATHER-hour only. "
+         "Tighten by noting gathering start/stop times around any harvest "
+         "contract", "31 Jul 2026", None),
         ("CONTRACT_DROP_PER_WIN", CONTRACT_DROP_PER_WIN, "measured",
          "0.0534 -> 0.296, 31 Jul 2026, and the old value had NO register row "
          "(introduced 29 Jul in violation of the same-change rule). The 29 "
@@ -1941,6 +1950,15 @@ def contract_board(capture):
 # vary with the thing it supposedly measures.
 CONTRACT_DROP_PER_WIN = 0.296
 
+# Harvest-contract actions per hour of ACTIVE gathering -- a LOWER BOUND,
+# measured 31 Jul 2026: an Extended Harvest (1,331 actions) cleared and was
+# claimed (+4 hc) inside the 15:30 -> 19:52 capture window, so the rate is at
+# least 1,331/4.37h ~= 305/h if gathering ran the whole window, higher if it
+# ran less. Passive accrual is ~ZERO: the next Extended sat at 3/1,374 while
+# combat idled for hours -- harvest contracts pay only while the player is
+# actively gathering, so quote hc per GATHER-hour, never per combat-hour.
+HARVEST_PER_GATHER_HOUR = 305
+
 # Credit income, measured from the stream ledger rather than assumed.
 CREDITS_PER_HOUR = 12e6
 
@@ -2042,6 +2060,7 @@ DIRECT_STATS = {"attack_speed", "crit_chance", "crit_damage"}
 ECONOMY_KEY = "equipment"
 # Multiplicative, NOT additive, on top of the economy additive bracket:
 #   total = (base + additive components) * (1 + participation) * (1 + cache)
+#          * (1 + homelab_mult)
 # Confirmed formula-level 27 Jul 2026 against the game's own totals on the
 # 21:07 capture -- all five economy stats reproduce to <1e-9 with this and to
 # -11% .. -23% without it. Identifiable because the capture carries both a
@@ -2050,7 +2069,14 @@ ECONOMY_KEY = "equipment"
 # every additive reading of either term fails both. Regime: only these two
 # values have been observed -- if a capture ever shows a different
 # participation_bonus or firewall_cache, `validate_stat_totals` re-checks it.
-ECONOMY_MULT_KEYS = ("participation_bonus", "firewall_cache")
+# `homelab_mult` added 31 Jul 2026 when Container Runtime L1 ("x1.01,
+# multiplicative" per its own description) populated the field for the first
+# time: audit's MODEL check flagged all four gathering stats at +0.52%, and
+# (base + homelab + equipment) * 1.01 reproduces every one to <1e-9 (cycles
+# 2.0648121516 * 1.01 = 2.0854602731 exact; credits, with homelab_mult=0,
+# unchanged). The multiplier takes the WHOLE bracket including base -- same
+# footing as participation/cache, matching the in-game description.
+ECONOMY_MULT_KEYS = ("participation_bonus", "firewall_cache", "homelab_mult")
 # everything else in stats_breakdown is gear-flat (regeneration, corruption,
 # thorns, damage_barrier, armor_penetration) -> pool multiplies equipment_flat.
 
@@ -2520,11 +2546,68 @@ FIREWALL_AB_2026_07_31 = {
                  "(1)-(3) all landing is evidence Max HP is worth far more "
                  "than 0.5 and the weight must be re-fit before the next "
                  "sustain trade.",
+    "concluded": "2026-07-31 KEEP — mean 167.6 over 34 deaths (pre-declared "
+                 "n=24 passed at first-24 mean 168.1) vs gate 153.0, +12.5 "
+                 "over the 155.1 baseline. Contamination clean: no zone "
+                 "change, cadence held. All four pre-registered predictions "
+                 "landed: per-round gross -10/-11% at the deep bands (Def "
+                 "law predicted -9% direct-channel; bundled with the 107K-"
+                 "chip package); deep-band hit +0.7pp exactly as the hit law "
+                 "predicted; realized regen/round +7.7% (244.2 -> 263.0, "
+                 "top of the +2-6% band); and the -7.8% MaxHP side never "
+                 "bit — the first live MaxHP-weight test resolves as 'not "
+                 "grossly under-priced in a mitigation-compensated trade'. "
+                 "Anomaly logged, not predicted: shallow-band gross fell "
+                 "24-47%, far beyond the Def law — stack-exposure-vs-fight-"
+                 "length hypothesis in open-questions.md. Revert path "
+                 "Resilient Firewall of Perpetuity RELEASED.",
+}
+
+SHELL_AB_2026_07_31 = {
+    "name": "shell-ab-2026-07-31",
+    "item": "Shielded Shell of Segmentation",
+    "slot": "Shell",
+    # Declared BEFORE the craft ran — the crafted item will carry different
+    # suffix names (rename-on-promotion); match the Shell slot's stat-change
+    # markers in the stream (Barrier +~650-730 gear-flat appearing on the
+    # Shell slot, Eva -17pp affix) and update `item` to the final name at
+    # grading. equip_ms is provisional.
+    "equip_ms": 1785529800000,          # 2026-07-31T20:30:00Z, provisional
+    "boundary_fight_id": None,
+    # Baseline = the full firewall-ab-2026-07-31 post window (closed KEEP),
+    # mean 167.6, n=34, Corporate Network.
+    "baseline_deaths": [175, 166, 162, 158, 168, 181, 173, 172, 165, 160,
+                        166, 163, 162, 174, 170, 154, 171, 171, 166, 170,
+                        172, 177, 166, 172, 172, 158, 166, 155, 162, 173,
+                        167, 180, 163, 170],
+    "baseline_hits": (176636, 52676),   # 77.0% pm-flag basis, post-Firewall
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785500100000,  # Firewall equip -- same-loadout era
+    # DECLARED BUNDLE by policy: the 110.7K-chip equal-marginal spend (ECC
+    # L121->134 carrying most of it) lands inside this window.
+    "segment_ms": None,
+    "keep_rule": "KEEP if mean death streak >= 165.6 (baseline 167.6 - 2); "
+                 "REVERT if mean <= 162.6. Contamination checks only: no "
+                 "zone change in the window, and fight cadence must stay "
+                 "~4.872 s. PRE-REGISTERED treatment predictions "
+                 "(diagnostics, not gates, written before the CRAFT ran, "
+                 "from the deepened contract's projection): (1) Barrier law "
+                 "-- gear Barrier rises by the crafted affix (~650-730 at "
+                 "Segmentation T1) and per-fight pool drawdown rises by "
+                 "exactly 1.00x that amount; (2) Thorns law -- `ptd` per "
+                 "enemy landed hit rises ~0.97x the crafted Thorns affix "
+                 "(~+39 at of Reprisal T3); (3) Eva stat falls ~7.4% (affix "
+                 "20.0 -> ~3.0pp) predicting enemy hit rate on us UP "
+                 "+2.5-3pp -- the priced cost of the trade; (4) MaxHP rises "
+                 "~+7% stat: the REVERSE MaxHP probe. The firewall window "
+                 "cut max_hp 7.8% and depth rose; if depth rises here too, "
+                 "both signs moved with the mitigation-weighted totals and "
+                 "the 0.5 weight is bracketed from both directions.",
 }
 
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = FIREWALL_AB_2026_07_31
+ACTIVE_EXPERIMENT = SHELL_AB_2026_07_31
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -3166,7 +3249,10 @@ def experiment_status(experiment=None):
     of the visible screen).
     """
     exp = experiment or ACTIVE_EXPERIMENT
-    if exp is None:
+    # A concluded experiment left as ACTIVE_EXPERIMENT must read as "no active
+    # experiment" -- but only on the implicit path: passing one explicitly is
+    # the documented retrospective-analysis route and must keep working.
+    if exp is None or (experiment is None and exp.get("concluded")):
         return None
     deaths = {}       # ended_at_ms -> entry
     fights = {}       # content key -> compact record (+ post flag)

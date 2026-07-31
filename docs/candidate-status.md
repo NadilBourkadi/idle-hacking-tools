@@ -9,7 +9,8 @@
 | Slot | Item | Origin |
 |---|---|---|
 | Payload | **Vital Payload of Extinction** | crafted 30 Jul (realized **+64.7**, scale-corrected grade), A/B **closed KEEP 31 Jul** (+14.8 streaks, bundle) — revert path Bastioned Payload of Perfect Strike **released** |
-| Firewall | **Predatory Firewall of Immortality** — *crafted 31 Jul, realized +36.8, NOT YET EQUIPPED — equip it* | first in-interval craft (p10 +17.4 ≤ +36.8 ≤ p90 +50.9); replaces Resilient Firewall of Perpetuity (28 Jul, +44.6), which becomes the **locked revert path for `firewall-ab-2026-07-31`** |
+| Firewall | **Predatory Firewall of Immortality** | crafted 31 Jul (realized +36.8, first in-interval craft), **A/B closed KEEP 31 Jul evening** (167.6 over 34 deaths, +12.5) — revert path Resilient Firewall of Perpetuity **released** |
+| Shell *(pending)* | **Shielded Shell of Segmentation** — *craft approved 31 Jul evening, §10.1 contract in decision-log* | deepened contract mean +35.5 / p10 +24.8; replaces Citadel Shell of the Phoenix, which becomes the **locked revert path for `shell-ab-2026-07-31`** on equip. The Corrupt monsters (Analyzer +69.9, Kernel +63.0) are **held for the CI/CD Pipeline** (homelab 12) — their Δs rest on Corruption ~2× past the verified stat ~72 |
 | Analyzer | Targeted Analyzer of Light Speed | crafted 27 Jul (+24.9), A/B KEEP |
 | Shell | Citadel Shell of the Phoenix | crafted 23 Jul (+22.6), A/B KEEP |
 | Driver | Aegisbound Driver of Cataclysm | crafted 27 Jul (**+16.7**), A/B **closed KEEP** 28 Jul (+6.4 death streaks) |
