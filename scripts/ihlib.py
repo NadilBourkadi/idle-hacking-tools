@@ -1351,6 +1351,23 @@ STREAM_LIVE_FIELDS = ("chips", "hackcoin", "credits", "hack_level",
 STREAM_EXACT_FIELDS = {"hack_level", "current_zone"}
 
 
+def latest_stream_ms():
+    """Newest seen_ms across ALL ledger record kinds, or None.
+
+    Exists because `stats` records append only when combat stats CHANGE: a
+    player who idles streams fights/deaths for an hour without a single new
+    stats record, and any staleness measure keyed to stats alone goes silent
+    exactly then (31 Jul 2026: a capture 25+ min behind a flowing stream drew
+    no OUTDATED flag because the newest stats record predated the capture).
+    """
+    best = None
+    for record in stream_records():
+        ms = record.get("seen_ms")
+        if ms is not None and (best is None or ms > best):
+            best = ms
+    return best
+
+
 def latest_stream_player(before_ms=None):
     """(seen_ms, player) of the newest ledger `stats` record, or (None, None)."""
     best_ms, best = None, None
@@ -2025,9 +2042,17 @@ def capture_stream_drift(capture, tolerance=0.01, min_abs=1):
     streamed, so they can only be assumed stale.
     """
     cap_ms = captured_ms(capture)
-    stream_ms, player = latest_stream_player()
-    if cap_ms is None or stream_ms is None or stream_ms <= cap_ms:
+    newest_ms = latest_stream_ms()
+    if cap_ms is None or newest_ms is None or newest_ms <= cap_ms:
         return None, []
+    # Lag is measured against the newest record of ANY kind -- stats records
+    # only append when combat stats change, so keying the lag to them went
+    # silent during pure idling (31 Jul 2026). The field diff below still
+    # needs a stats record newer than the capture; without one the lag stands
+    # alone with an empty change list.
+    stream_ms, player = latest_stream_player()
+    if stream_ms is None or stream_ms <= cap_ms:
+        player = {}
     live = capture["state"].get("currentPlayer") or {}
     changed = []
     for field in STREAM_LIVE_FIELDS:
@@ -2043,7 +2068,7 @@ def capture_stream_drift(capture, tolerance=0.01, min_abs=1):
             continue
         if field in STREAM_EXACT_FIELDS or gap > tolerance * max(abs(was), 1):
             changed.append((field, was, now))
-    return (stream_ms - cap_ms) / 1000, changed
+    return (newest_ms - cap_ms) / 1000, changed
 
 
 # ---- Stat composition (mechanics.md §13, formula-level) --------------------
