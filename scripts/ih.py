@@ -36,9 +36,13 @@ Output is deliberately compact; prefer this over ad-hoc capture parsing.
 """
 
 import argparse
+import contextlib
+import io
+import re
 import statistics
 import sys
 import textwrap
+import time
 from datetime import datetime
 
 import ihlib
@@ -1117,7 +1121,228 @@ def cmd_ab(args):
                   + "  |  ".join(prg_parts))
 
 
-def main():
+def _section_output(argv):
+    """Run one subcommand in-process and return its stdout."""
+    args = build_parser().parse_args(argv)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            args.fn(args)
+    except SystemExit as e:          # a missing panel must not kill the digest
+        buf.write(f"  [unavailable: {e}]\n")
+    return buf.getvalue()
+
+
+def _brief_potential(text):
+    """Best band-clearing candidate per slot, verdict-bearing lines only.
+
+    Candidates print best-first, so the digest keeps the first UPGRADE block
+    per slot (its ceiling / from: / !! / low: lines — the parts a verdict
+    reads) and counts everything else, saying how many of the suppressed also
+    clear the band. Unrecognized top-level lines are KEPT — a printer format
+    change degrades to verbosity, never to silent loss.
+    """
+    out, slot, keep, kept_one = [], None, True, False
+    below = {}
+    more_up = {}
+
+    def note():
+        if not slot:
+            return
+        parts = []
+        if more_up.get(slot):
+            parts.append(f"{more_up[slot]} further band-clearing")
+        if below.get(slot):
+            parts.append(f"{below[slot]} below-band")
+        if parts:
+            out.append(f"  ({' + '.join(parts)} candidate(s) suppressed — "
+                       f"ih.py potential --slot {slot.lower()})")
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if line.startswith("== "):
+            note()
+            slot, keep, kept_one = line.strip("= ").strip(), True, False
+            out.append(line)
+        elif line.startswith("# "):
+            if "idle-hacking" in line:   # capture name; drop static boilerplate
+                out.append(line)
+        elif stripped.startswith(("ceiling", "~ceiling")):
+            if "UPGRADE" in line and not kept_one:
+                keep, kept_one = True, True
+                out.append(line)
+            else:
+                key = more_up if "UPGRADE" in line else below
+                key[slot] = key.get(slot, 0) + 1
+                keep = False
+        elif stripped.startswith("equipped"):
+            keep = True
+            out.append(line)
+        elif keep and stripped.startswith(("plan:", "proj:", "econ")):
+            continue                     # contract-time detail, not triage
+        elif keep:
+            out.append(line)
+    note()
+    return "\n".join(out)
+
+
+def _brief_assumptions(text):
+    """Keep asserted/supplied rows and DRIFTing measured rows; count the rest."""
+    out, block, in_measured, ok_rows = [], [], False, 0
+
+    def flush():
+        nonlocal ok_rows
+        if not block:
+            return
+        if not in_measured or "[DRIFT" in "\n".join(block):
+            out.extend(block)
+        else:
+            ok_rows += 1
+        block.clear()
+
+    for line in text.splitlines():
+        if line.startswith("── "):
+            flush()
+            in_measured = "MEASURED" in line
+            out.append(line)
+        elif not line.strip():
+            flush()
+            out.append(line)
+        elif (line.startswith("  ") and len(line) > 2 and line[2] != " "
+              and "VALIDATED" in line.upper()):
+            flush()
+            block.append(line)
+        elif block:
+            block.append(line)
+        else:
+            out.append(line)
+    flush()
+    if ok_rows:
+        out.append(f"  ({ok_rows} measured row(s) with no drift suppressed "
+                   f"— ih.py assumptions for the full register)")
+    return "\n".join(out)
+
+
+def _brief_calibration(text):
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if "<-- current" in line:
+            return "\n".join(
+                ["  (earlier planner eras suppressed — ih.py calibration)"]
+                + lines[i:])
+    return text
+
+
+def _brief_homelab(text):
+    out, dropping = [], False
+    for line in text.splitlines():
+        head = line.lstrip()
+        if head.startswith("purchasable now"):
+            dropping = True
+            out.append("  (purchasable list suppressed — ih.py homelab)")
+            continue
+        if head.startswith("unlocks at level"):
+            dropping = False
+        if not dropping:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _brief_hardware(text):
+    out, in_tracks, kept, dropped = [], False, 0, 0
+    for line in text.splitlines():
+        if "combat tracks by value" in line:
+            in_tracks = True
+            out.append(line)
+        elif in_tracks and line.startswith("  economy/farming"):
+            out.append(f"  ({dropped} lower-value combat track(s) and the "
+                       f"economy tracks suppressed — ih.py hardware)")
+            break
+        elif in_tracks and line.startswith("    ") and line.strip():
+            if kept < 3:
+                out.append(line)
+                kept += 1
+            else:
+                dropped += 1
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _brief_ab(text):
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("keep rule:"):
+            head = line.split("Contamination")[0].rstrip()
+            out.append(head + " (full rule + pre-registered predictions: "
+                              "ih.py ab)")
+        elif "deaths" in line and "[" in line and "pre-equip" in line:
+            out.append(re.sub(r"\[.*?\]", "[…]", line))
+        elif line.lstrip().startswith("attrition onset"):
+            out.append(re.sub(r"\[.*?\]", "[…]", line, count=1))
+        elif line.lstrip().startswith("(wider context"):
+            continue
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _brief_diff(text):
+    lines = text.splitlines()
+    if len(lines) > 21:
+        lines = lines[:21] + [f"  (+{len(lines) - 21} more changes "
+                              f"— ih.py diff)"]
+    return "\n".join(lines)
+
+
+def cmd_brief(args):
+    """One-process advisory digest: the whole gather, compressed for triage.
+
+    Motivated 31 Jul 2026: the mandated advisory gather was ~10 separate
+    commands emitting ~72KB, of which the verdict-bearing content was a
+    fraction. This digest suppresses only what it can COUNT (and says so
+    inline), keeps every audit flag verbatim, and defaults to keeping lines
+    its filters do not recognize. It is a triage layer: anything flagged,
+    close, or surprising gets the full command — never conclude from a
+    thing's absence in this output.
+    """
+    latest = ihlib.capture_paths()[-1] if ihlib.capture_paths() else None
+    print("# ih.py brief — triage digest. Full commands remain canonical; "
+          "drill into anything flagged or close.")
+    if latest:
+        m = re.search(r"(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})",
+                      latest.name)
+        if m:
+            ts = datetime.fromisoformat(
+                f"{m.group(1)}T{m.group(2)}:{m.group(3)}:{m.group(4)}+00:00")
+            age_h = (time.time() - ts.timestamp()) / 3600
+            stale = "  ** capture is stale — ask for a fresh one **" \
+                if age_h > 12 else ""
+            print(f"# latest capture is {age_h:.1f}h old{stale}")
+    sections = [
+        ("audit — outranks everything below", ["audit"], None),
+        ("freshness", ["captures"],
+         lambda t: "\n".join(t.splitlines()[-1:])),
+        ("stats", ["stats"], None),
+        ("assumptions (asserted/supplied/drifting only)", ["assumptions"],
+         _brief_assumptions),
+        ("calibration (current era)", ["calibration"], _brief_calibration),
+        ("potential (band-clearing candidates only)", ["potential"],
+         _brief_potential),
+        ("homelab", ["homelab"], _brief_homelab),
+        ("hardware (top tracks)", ["hardware"], _brief_hardware),
+        ("ab", ["ab"], _brief_ab),
+        ("diff vs previous capture", ["diff"], _brief_diff),
+    ]
+    for title, argv, filt in sections:
+        text = _section_output(argv)
+        if filt:
+            text = filt(text)
+        print(f"\n───── {title} " + "─" * max(1, 60 - len(title)))
+        print(text.rstrip("\n"))
+
+
+def build_parser():
     parser = argparse.ArgumentParser(prog="ih.py")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -1227,7 +1452,16 @@ def main():
                         "pass 3 to reproduce pre-27-Jul-2026 projections)")
     p.set_defaults(fn=cmd_potential)
 
-    args = parser.parse_args()
+    p = sub.add_parser("brief",
+                       help="one-process advisory digest — triage only; the "
+                            "full commands remain canonical for drill-down")
+    p.set_defaults(fn=cmd_brief)
+
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
     args.fn(args)
 
 

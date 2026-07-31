@@ -2573,13 +2573,29 @@ def _absorb_fight(fights, f, post, ms=None):
     fights[key] = _fight_record(f, post, ms)
 
 
+_STREAM_CACHE = {"key": None, "rows": None}
+
+
 def stream_records():
-    """Yield deduped ledger records from data/combat-stream/*.jsonl."""
-    for path in sorted(STREAM_DIR.glob("*.jsonl")):
-        for line in path.read_text().splitlines():
-            line = line.strip()
-            if line:
-                yield json.loads(line)
+    """Yield deduped ledger records from data/combat-stream/*.jsonl.
+
+    Parsed once per process per ledger state (keyed on every file's mtime and
+    size), because `ab`, `audit`, the register's live checks and `brief` all
+    consume the same multi-MB ledger. Records are SHARED between consumers --
+    treat them as read-only.
+    """
+    paths = sorted(STREAM_DIR.glob("*.jsonl"))
+    key = tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size)
+                for p in paths)
+    if _STREAM_CACHE["key"] != key:
+        rows = []
+        for path in paths:
+            for line in path.read_text().splitlines():
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        _STREAM_CACHE["key"], _STREAM_CACHE["rows"] = key, rows
+    yield from _STREAM_CACHE["rows"]
 
 
 # ---- Hacking Simulator ------------------------------------------------------
