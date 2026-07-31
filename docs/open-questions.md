@@ -127,14 +127,13 @@ Need a durable table of:
 
 The in-game Help Affixes table is authoritative but was not present in static export data. A passive structured capture of that visible table would make future Augment advice exact rather than based on observed names.
 
-### 7. Exact hit-chance formula
+### 7. Exact hit-chance formula — **RESOLVED 29 July 2026** (`mechanics.md` §18)
 
-Known: Accuracy and Evasion determine hit reliability.
-Unknown: formula, caps/floors and modifier interactions.
+**`logit(hit) = 0.532 + 1.208 × ln(Accuracy / Evasion)`**, fitted on 2,953 attacks over enemy evasion 3,002–7,699 from a Software Profiler sweep. The ratio-power form `acc^k/(acc^k+eva^k)` is rejected. **Accuracy is not saturated** at this build's level (76–79% hit at the evasion the deep bands face), which retires the 27 July reading; `CRAFT_WEIGHTS_PCT["Acc"]` moved 0.14 → 0.19. Residual unknowns: caps/floors outside the fitted ratio range 1.20–3.07, and whether the constants depend on player level.
 
-### 8. Defense and Armor Penetration formula
+### 8. Defense and Armor Penetration formula — **RESOLVED 29 July 2026** (`mechanics.md` §18)
 
-Unknown: mitigation curve, penetration treatment and breakpoints.
+**`damage = AttackDamage × K / (K + Defense − ArmorPen)`, K ≈ 205** — fitted independently on both directions (K = 190.2 outgoing, 219.3 incoming). ArmorPen subtracts directly from Defense, so the curve is convex and ArmorPen's value per point *rises* as it approaches the target's Defense. Defense elasticity is −0.88 at our 1,487. ArmorPen's inherited weight of 0.05 is **validated** (measured 0.044–0.051). Residual unknowns: whether K is a constant or scales with level, and behaviour when ArmorPen exceeds Defense.
 
 ### 9. Streak recovery model — RESOLVED 22 July 2026 (formula), residual unknowns
 
@@ -274,10 +273,10 @@ Immediate probe: `of Execution` T6→T5 on the Aegisbound Driver (`suffix_critda
 
 The 22 July law says it does not, and `current-state.md` treats output/tempo as "the deliberate cost". Session 8 measured fight cadence as a **fixed 4.872 s tick** (`mechanics.md` §14), which means attack speed cannot buy income — but the same measurement found rounds/fight down **−8.3%** at streak 106–130 and **−4.2%** at 86–105 after a +9.9% attack-speed equip. Fewer rounds at fixed wall clock = fewer enemy attacks per fight = less damage taken. That makes attack speed an **attrition** stat, which the 22 July law denies.
 
-- Status: **unresolved, and it matters.** `CRAFT_WEIGHTS_PCT` prices AtkSpd at 0.9 (second-highest); if the law is right the weight is too high, if this reading is right the weight is justified and several past verdicts under-valued tempo.
-- Confounds: n is 14–20 fights at the deep bands, and the ECC Memory L93→L99 regen buy (+2.05%) landed inside the same window.
-- Test in flight: `driver-ab-2026-07-27`, whose amended keep rule scores rounds/fight at streak ≥ 86 directly.
-- Resolves cleanly once the **Hacking Simulator** lands (homelab 10) — a gear-customised full-streak sim isolates attack speed from regeneration.
+- Status: **the strict law is dead; the quantitative question is open.** Two closed windows now show ceiling moves with output/tempo in the bundle: `payload-ab-2026-07-30` (+14.8 streaks on an AtkDmg/Corrupt craft, closed KEEP 31 Jul) and `firewall-ab-2026-07-31` (+12.6 at 15/24, mitigation-led but with rounds/fight down 6–11%). Both bundle same-hour hardware packages, so the *size* of the pure tempo term is still unmeasured. `CRAFT_WEIGHTS_PCT[AtkSpd]` is 0.56 (mitigation-stat rationale, validated 27 Jul); the open question is whether that under- or over-prices the rounds-exposure channel.
+- **New sub-question (31 Jul):** in the Firewall window, damage taken per round fell far more at shallow bands (−24% at 60–85, −44% at 24–42) than the −9% the Defense law predicts, while deep bands matched prediction (−10/−11%). Hypothesis: corruption-stack exposure scales superlinearly with fight length, so shorter fights cut incoming DoT disproportionately where fights are already short. Testable with paired Software Profiler arms at matched enemy levels (stack counts are in the round detail).
+- Confounds: every live window bundles hardware; the profiler isolates single-fight mechanics but not streak depth.
+- **CORRECTED 29 Jul 2026:** the gear-customised *full-streak* sim is the **CI/CD Pipeline**, which is a separate homelab upgrade gated at **homelab 12** (not 10) and still at level 0. The Hacking Simulator install (homelab 10, now owned) ships the **Software Profiler**, which simulates fights at a chosen enemy level — it can measure rounds/fight and damage taken per fight against a fixed enemy, which is the mitigation half of this question, but it cannot see streak depth. See `docs/simulator-protocol.md`.
 
 ## Unexplained 2.7% fight-cadence step (opened 27 July 2026)
 
@@ -291,7 +290,7 @@ Cutting Accuracy 7,595 → 7,265 (**−4.35%**) with the Driver equip produced *
 - Status: **the loss is falsified; the rise is unexplained.** Each band is only z ≈ +1.2 to +1.9, but all three move the same way.
 - Why it matters: `CRAFT_WEIGHTS_PCT` prices Accuracy at **1.0**, joint-highest with Defense and Evasion, and `current-state.md` still lists hit reliability as bottleneck #2. If accuracy is saturated in the 7.2–7.6K region against Corporate Network evasion, both are wrong and the Daemon verdict (+8.9, part of whose case is Acc +3.2%) is overstated.
 - Constraint this puts on the unknown hit-chance formula (§7/§8): it is **flat in accuracy** across 7.2–7.6K at these enemy evasion levels — consistent with a ratio-based curve deep in diminishing returns, not a linear or additive one.
-- Cheapest resolution: the **Software Profiler** (homelab 10) runs 100 sims against a chosen enemy level, which isolates hit rate from streak composition entirely.
+- Cheapest resolution: the **Software Profiler** (homelab 10) runs 100 sims against a chosen enemy level, which isolates hit rate from streak composition entirely. **Owned since 29 Jul 2026** and it returns the enemy's `effective_evasion` with every logged fight, so the hit-rate-vs-evasion curve is directly traceable — `docs/simulator-protocol.md` §5.
 
 
 ## Does realized regeneration scale with how depleted you are? (opened 28 July 2026)
@@ -306,7 +305,9 @@ The Resilient Firewall raised **listed** Regeneration +29.7% (388.5 → 504.0, l
 
 Realization **rises monotonically with streak depth**, and this *understates* it — the ECC buy landed inside the window and added listed regen on top, so the true denominator is larger than +29.7%. Ratio at depth ≈ 0.39 against listed; ≈ 0 shallow. Every previous regen buy realized 0.57–0.91 (hardware +13.6% realized on +14.9% listed; Router +19.1% on +33.5%).
 
-- **Working model: overheal capping.** `data-dictionary.md` already suspects `prg` is under-reported at full HP. Shallow in a streak the player sits near full HP and surplus regeneration is discarded; deep, HP is depleted and it lands. The monotone band pattern is what that model predicts.
+- **CONFIRMED FORMULA-LEVEL 29 July 2026 (evening) — overheal capping is exact:** `prg` is truncated to `max_hp − php` (288/288 profiler rounds, `mechanics.md` §17). A listed-Regeneration buy therefore realizes **nothing** near full HP and **1:1** once depleted, which is the whole band pattern below with no extra mechanism needed. The corruption suppression term (−1.5 × `ecd`) accounts for the rest. Original working model:
+
+**Working model: overheal capping.** `data-dictionary.md` already suspects `prg` is under-reported at full HP. Shallow in a streak the player sits near full HP and surplus regeneration is discarded; deep, HP is depleted and it lands. The monotone band pattern is what that model predicts.
 - **Why it matters:** `CRAFT_WEIGHTS_FLAT["Regen"] = 0.6` prices regeneration **flat**. If this holds, regen's value is concentrated at depth — which is where runs end, so the direction is favourable — but the *average* realization on a large buy is far below 1, and a second large regen buy on top of this one will realize less again. This is the first evidence of diminishing returns on the build's confirmed win condition, and it is the reason the standing chip advice caps ECC rather than pouring the whole budget in.
 - **Confounds:** one window, ~23 minutes, bundled with ECC +10, Encryption +10, two player levels and Mechanical Keyboard L10.
 - **Cheapest resolution:** segment realized `prg`/round by *starting-HP fraction* rather than by streak band — the ledger already has `starting_hp`/`max_hp` per fight, so this is an analysis, not a measurement. If the relationship is with depletion rather than streak, that separates the two directly. Do this before any further regen purchase.
@@ -319,4 +320,32 @@ Gross damage/round at streak 106–130: **349.0 → 368.6 (+5.6%)** against Defe
 
 - Status: **directional, single window, n=35 fights at depth.** Evasion also rose +4.4%, which pushes gross intake the other way, so Defense's own elasticity is probably slightly worse than 5.6/6.05.
 - Why it matters: this is the only number bearing on a weight that decides Firewall/Kernel/Router verdicts. It is registered as `asserted` in `ih.py assumptions` for exactly this reason.
-- Cheapest resolution: the **Software Profiler** (homelab 10) — fixed enemy, fixed level, vary Defense only.
+- Cheapest resolution: the **Software Profiler** (homelab 10) — fixed enemy, fixed level, vary Defense only. **Owned since 29 Jul 2026**; `gear_set_capacity` is 2, so a Defense-only gear set can be A/B'd against the live loadout without equipping either — `docs/simulator-protocol.md` §6.
+
+## Why does realized regeneration under-perform against exactly three enemy classes? — **RESOLVED 29 July 2026 (evening)**
+
+**Answer: it does not. `prg` is a NET figure and corruption is subtracted from it at exactly 1.5:1.**
+`prg = clamp(Regeneration − 1.5 × ecd, 0, max_hp − php)`, verified 288/288 rounds on the first two Software Profiler runs (`mechanics.md` §17). Of the three hypotheses below, **(1) healing-reduction was right** — and it is exact, not approximate. (2) is wrong, (3) is wrong in sign as suspected. Incoming corruption costs **2.5× face value** (1.0 direct + 1.5 regen destroyed). The counter is **Isolated Sandbox** [Virtualization Cluster], homelab 11.
+
+<details><summary>original question, kept for the method note</summary>
+
+
+At streak 106–145 post-Kernel-craft, realized `prg` per round as a share of gross damage per round splits cleanly in two:
+
+- **Trojan Wall 83%, Rootkit 85%, Stealth Worm 88%** — net drain positive, and these three caused **11 of 11** deaths in the window.
+- Spike Router, Logic Bomb, Zero-Day, Glitch Phantom, Siege Daemon, Brute Force — **98–104%**, all net-negative.
+
+n = 32–50 victorious fights per class, matched on streak band. Barrier absorption is flat across all nine classes (26–36/round), so this is specific to regeneration.
+
+**It is not simply "they hit harder."** Spike Router has the *highest* gross damage per round (407) and realizes 99%; Trojan Wall hits for 380 and realizes 83%. Nor is it fight length (50–58 rounds across all classes) or outgoing damage (486–557).
+
+Candidate explanations, none tested:
+1. A **healing-reduction / regen-suppression** effect carried by those classes (or by a shared modifier — note "Mirrored" and "Silent" prefixes recur among the killers).
+2. `prg` is **capped per round** by something correlated with their attack pattern — e.g. the cap binds when a single hit exceeds a threshold, or when HP is above some fraction.
+3. An **overheal-capping artifact**: if `prg` is truncated at missing HP, classes that keep the player nearer full would report *lower* `prg` — but that predicts the opposite sign of what is observed, since the dangerous classes are the ones draining HP.
+
+**Why it matters:** this single ratio decides the death ceiling. Closing the Trojan Wall gap needs ~+59 listed Regen (+11%) — out of reach by gear (every regen anchor is crafted) or hardware (~35 ECC levels, ~280K chips). If instead it is a *suppression* effect, the counter may be a different stat entirely and much cheaper.
+
+**How to test:** the enemy record in each fight carries `enemy_stats`. Compare the stat vectors of the three lethal classes against the six safe ones and look for a field that separates them cleanly; then check whether it correlates with the `prg`-to-gross ratio fight by fight. Both are already in the ledger — this needs no new data collection.
+
+</details>

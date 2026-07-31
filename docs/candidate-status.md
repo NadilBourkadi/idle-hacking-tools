@@ -1,4 +1,4 @@
-# Candidate and Craft Status — 28 July 2026
+# Candidate and Craft Status — 31 July 2026
 
 > **Every ceiling number below the main-set table is stale and has been left in place only as history.** Two things invalidated them on 28 July: `COMPILE_FLOOR` moved 8 → 2 (every projection rises ~11–13 points, which is more than `UPGRADE_BAND` itself, so past *rankings* changed, not just scores), and the inventory went 9 → 45 items on a large drop. **Regenerate with `python3 scripts/ih.py potential` — do not read a number off this page.**
 >
@@ -8,18 +8,20 @@
 
 | Slot | Item | Origin |
 |---|---|---|
-| Payload | Bastioned Payload of Perfect Strike | crafted 23 Jul, A/B KEEP |
-| Firewall | **Resilient Firewall of Perpetuity** | crafted 28 Jul (**+44.6**, best on record), A/B `firewall-ab-2026-07-28` open at 3/24 |
+| Payload | **Vital Payload of Extinction** | crafted 30 Jul (realized **+64.7**, scale-corrected grade), A/B **closed KEEP 31 Jul** (+14.8 streaks, bundle) — revert path Bastioned Payload of Perfect Strike **released** |
+| Firewall | **Predatory Firewall of Immortality** — *crafted 31 Jul, realized +36.8, NOT YET EQUIPPED — equip it* | first in-interval craft (p10 +17.4 ≤ +36.8 ≤ p90 +50.9); replaces Resilient Firewall of Perpetuity (28 Jul, +44.6), which becomes the **locked revert path for `firewall-ab-2026-07-31`** |
 | Analyzer | Targeted Analyzer of Light Speed | crafted 27 Jul (+24.9), A/B KEEP |
 | Shell | Citadel Shell of the Phoenix | crafted 23 Jul (+22.6), A/B KEEP |
 | Driver | Aegisbound Driver of Cataclysm | crafted 27 Jul (**+16.7**), A/B **closed KEEP** 28 Jul (+6.4 death streaks) |
 | Router | Titanic Router of the Undying | crafted 27 Jul (**+38.7**), A/B KEEP |
-| Daemon | Targeted Daemon of the Storm | crafted 22 Jul, A/B KEEP |
-| Kernel | Hearty Kernel of Decay | original baseline |
+| Daemon | Shielded Daemon of Bastion | crafted 29 Jul (realized **+131.5**, best on record) |
+| Kernel | Assault Kernel of Blight | crafted 29 Jul (realized +37.4) |
 
-**Seven of eight are now contract crafts.** The Kernel (ilvl 626) is the last original baseline and the last structural gap.
+**All eight slots are now contract crafts** (Kernel and Daemon fell 29 Jul).
 
-## Next craft — two contenders, deliberately held
+## Next craft — RESOLVED (both former contenders crafted 29 Jul; Vital Payload of Striking approved 30 Jul — see decision-log)
+
+### (historical) Next craft — two contenders, deliberately held
 
 Scores below are post-`COMPILE_FLOOR`-fix and "adjusted" strips the Corruption and Accuracy weights that `ih.py assumptions` flags as unreliable:
 
@@ -72,7 +74,7 @@ Note the line is at a **99% roll** (0.1667 of 0.1231–0.1670), so the step is w
 - **Bastioned Firewall of Infection (+9.8)** is the highest ceiling owned and, on archive-wide ladders, the best-evidenced — `suffix_adaptive_shell` is observed at T1/T2/T3/T6/T7/T8/T9, so `of Recovery` T8→T1 plans almost entirely inside measured data. **Still held, on the sustain-anchor guardrail** — and now quantified rather than asserted. At loadout level the swap buys **Def +7.1% and Eva +4.3%** with **MaxHP −7.9% (14,956 → 13,778) and Regen −5.4% (379.4 → 358.9)**. Regeneration is this build's measured win condition: −5.4% of realized regen is ≈ **−12.5 `prg`/round against a measured net drain of −2.8/round**, so the craft flips net drain positive and hands back the +20.5 death streaks the 27 July package bought. ECC Memory L93→L99 covers only about a third of that loss (+2.05%). Directional on the regen → realized-`prg` proportionality, but the sign is not in doubt. Revisit when a Firewall base appears that does not spend Regen and MaxHP, or once the Hacking Simulator can measure it instead of arguing it.
 - **Elusive Kernel of Spikes (+6.7)** projects MaxHP +38.47% but strips the Kernel's Defense and buys only +7 net Regen. At loadout level: **MaxHP +22.5% (14,956 → 18,325), Def −4.5% (1,090.7 → 1,041.5), Regen +2.8%, Acc −0.7%, AtkSpd −1.2%, Thorns 6 → 17.** This is close to the exact trade the 21 July Kernel A/B ran and **rejected** — the Defense loss is slightly *worse* (−4.5% vs −3.65% realized) and the Regen gain slightly *smaller* (+2.8% vs +4.2%); only the Max HP side is bigger, and Max HP is a buffer, not mitigation or recovery. **Craft the Firewall before any Kernel** — it puts Defense back first.
 - **Sighted Daemon of the Storm (+8.9, low +8.4)** has no sustain cost and is the best-supported *direction* on the board: at loadout level **Eva +8.9% and Acc +3.2%** (bottleneck #2) for AtkSpd −8.7%, which the 22 July law says should not move the death ceiling. Held only because the ceiling discounts to ~+3.9 under a §10.1 contract. **Strongest candidate if one craft has to run before the Hacking Simulator lands** — but note the cost is worse than it first looked. −8.7% attack speed is **not** an income cost (fight cadence is a fixed 4.872 s/fight, invariant — see `mechanics.md` §14): it is a **depth** cost, because attack speed pays in rounds per fight and fewer rounds means fewer enemy attacks per fight. Giving up 8.7% AtkSpd buys evasion by spending attrition resistance, which is the opposite of what this build needs.
-- Revert paths: keep **Aligned Analyzer of Light Speed** and **Aligned Router of the Undying** locked until both 27 July A/Bs are formally closed against the new Corporate Network baseline. The Payload and Shell revert paths are releasable whenever inventory pressure appears (currently 9/102 slots — no pressure).
+- Revert paths: keep **Aligned Analyzer of Light Speed** and **Aligned Router of the Undying** locked until both 27 July A/Bs are formally closed against the new Corporate Network baseline, and **Resilient Firewall of Perpetuity** locked until `firewall-ab-2026-07-31` closes. **Bastioned Payload of Perfect Strike released 31 Jul** (`payload-ab-2026-07-30` closed KEEP); it and the Shell revert path are releasable whenever inventory pressure appears — no pressure now.
 
 ## Safe to decompile now
 

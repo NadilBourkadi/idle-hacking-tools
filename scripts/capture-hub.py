@@ -151,6 +151,79 @@ def absorb_stream(payload):
             f"+{deaths} deaths banked")
 
 
+# ---- Hacking Simulator ledger ----------------------------------------------
+# Simulator payloads are appended to a daily JSONL ledger, deduped by a hash
+# of the result body: the userscript re-sends the same live binding until the
+# player runs again, and the IndexedDB backfill overlaps what live polling
+# already banked. Hashing the result makes both harmless.
+
+SIM_SCHEMA = "idle-hacking-sim-runs-v1"
+_sim_lock = threading.Lock()
+_seen_sims = set()
+_seen_sims_day = None
+
+
+def _sim_ledger_path(now):
+    return ihlib.SIM_DIR / f"{now:%Y-%m-%d}.jsonl"
+
+
+def _load_seen_sims(now):
+    global _seen_sims_day
+    day = f"{now:%Y-%m-%d}"
+    if _seen_sims_day == day:
+        return
+    _seen_sims.clear()
+    path = _sim_ledger_path(now)
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if line.strip():
+                _seen_sims.add(json.loads(line).get("key"))
+    _seen_sims_day = day
+
+
+def absorb_sims(payload):
+    """Append new simulator runs; return summary text."""
+    state = payload.get("state") or {}
+    now = datetime.now(timezone.utc)
+    seen_ms = int(now.timestamp() * 1000)
+    with _sim_lock:
+        _load_seen_sims(now)
+        new_records = []
+        for run in state.get("runs") or []:
+            if not isinstance(run, dict) or not isinstance(run.get("result"), dict):
+                continue
+            key = ihlib.sim_key(run)
+            if key in _seen_sims:
+                continue
+            _seen_sims.add(key)
+            new_records.append({
+                "kind": "sim",
+                "seen_ms": seen_ms,
+                "key": key,
+                "mode": run.get("mode"),
+                "source": run.get("source"),
+                "recorded_at_ms": run.get("recorded_at_ms"),
+                "form": state.get("form"),
+                "context": state.get("context"),
+                "result": run["result"],
+            })
+        if new_records:
+            ihlib.SIM_DIR.mkdir(parents=True, exist_ok=True)
+            with _sim_ledger_path(now).open("a") as ledger:
+                for record in new_records:
+                    ledger.write(json.dumps(record) + "\n")
+    if not new_records:
+        return "sim: no new runs"
+    parts = []
+    for record in new_records:
+        result = record["result"]
+        level = result.get("requested_enemy_level") or "?"
+        rate = result.get("win_rate")
+        rate_text = f"{rate * 100:.0f}%" if isinstance(rate, (int, float)) else "?"
+        parts.append(f"lvl {level} {rate_text}")
+    return f"sim: +{len(new_records)} run(s) banked ({', '.join(parts[:4])})"
+
+
 def sanitise_name(raw):
     name = re.sub(r"[^A-Za-z0-9._-]", "-", Path(raw or "").name).lstrip(".")[:120]
     if not name.endswith(".json"):
@@ -219,6 +292,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, absorb_stream(payload) + "\n")
             except Exception as error:
                 self._send(500, f"stream absorb failed: {error}\n")
+            return
+        if schema == SIM_SCHEMA:
+            try:
+                self._send(200, absorb_sims(payload) + "\n")
+            except Exception as error:
+                self._send(500, f"sim absorb failed: {error}\n")
             return
         directory = SCHEMA_ROUTES.get(schema, INCOMING)
         directory.mkdir(parents=True, exist_ok=True)

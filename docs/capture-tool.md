@@ -1,6 +1,6 @@
 # Idle Hacking Capture Tool — Technical Reference
 
-**Current source:** `tools/item-loadout-capture.user.js` (v1.5.0)
+**Current source:** `tools/item-loadout-capture.user.js` (v1.6.0)
 **Export schema:** `idle-hacking-state-capture-v1`
 
 Version history is tracked by git. Bump `@version` in the script header on **every** change — Tampermonkey refuses to update to a same-version script.
@@ -29,6 +29,7 @@ Allowed:
 - reading game state bindings from page scope (values only, never calling game functions);
 - copy/download of captures;
 - POSTing captures to the user's own localhost capture hub (user-click-initiated);
+- the opt-in **sim capture** (since v1.6.0): a 2 s poll of the two page-scope Hacking Simulator result bindings (`homelabSoftwareProfilerResult`, `homelabPipelineSimulationResult`), pushing each NEW result once to the hub, plus a manual button that also reads the game's own IndexedDB history store (`idlehack.hacking-simulator-history`, last 10 per mode). The player presses RUN in the game's panel; the script only observes the result. It never sends `RUN_HACKING_SOFTWARE_PROFILER` or any other message — the no-game-interaction boundary is unchanged. See `docs/simulator-protocol.md`.
 - the opt-in **auto-stream** (since v1.5.0, boundary amended 23 Jul 2026 at the player's request): a timer POSTing a lightweight combat-only payload (`combatLog`, `recentLossStreaks`, `hackingState`, plus a small `playerLite` scalar slice) to the localhost hub every 150 s while the panel toggle is ON. Still zero game interaction; localhost only.
 
 Forbidden:
@@ -69,6 +70,7 @@ Unit file: `scripts/idle-hacking-capture-hub.service` (installed copy in `~/.con
 - v1.4.0 — feedback-loop release: readiness shows `rounds N/M` (fights with round detail — detail only records while the combat-log modal is open) with an explicit ⚠ hint when zero, and `losses N (Xm ago)` freshness; the hub now runs `ih.py ab --brief` on every state capture and returns the A/B verdict in the POST response, which the panel displays. Capture cadence guidance: once per climb banks the death tail; deaths persist ~10 entries (~80–100 min), fights only ~50 (<1 climb).
 - v1.4.1 — round-detail readiness distinguishes LIVE (newest fight has detail) from STALE (detail exists but recording stopped), with an explicit warning; the green state requires LIVE. Total count alone could show comfortable numbers hours after recording stopped.
 - v1.4.2 — round-detail guidance corrected: the real switch is the **"Detailed Logs" checkbox in the Hacking panel** (records regardless of visible screen), not the combat-log modal; warnings now say so. Companion fix in `ihlib.experiment_status`: fight ids are per-session (counter resets on reload), so cross-capture aggregation dedupes by content key and classifies pre/post per capture instead of by global id.
+- v1.6.0 — Hacking Simulator capture (panel toggle + one-shot history button): profiler/pipeline results → hub dedupes into the `data/sim-runs/` ledger. Payload carries the run result, the simulator form state (which zone/level/gear was requested) and a context slice (`combat_stats`, `gear_sets`, `gear_set_items`) so each run is self-describing.
 - v1.5.0 — opt-in auto-stream (panel toggle, persisted): combat-only payload every 150 s → hub dedupes into the `data/combat-stream/` ledger. Includes `playerLite` (combat stats + currency scalars) so the hub logs stat-change segmentation records. Full state deliberately NOT streamed: it is lossless in any single click-capture and ~1 MB/push (~500 MB/day) of near-duplicates.
 
 ## Leftovers from the legacy tool

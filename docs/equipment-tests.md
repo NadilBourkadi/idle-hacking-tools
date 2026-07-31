@@ -177,3 +177,71 @@ Cost **−17.9 streaks against a predicted −4** — see `mechanics.md` §15 fo
 **New standing baseline: 113.1 mean death streak, Corporate Network** (n=16, 17:10–19:30Z). Nothing here compares to a Small Business figure; `ih.py audit` flags any death window spanning a zone change.
 
 **New failure mode logged:** 3 of 16 Corporate deaths start above 60% HP (89%, 100%, 79%), all against 19–23K HP Trojan Wall / Rootkit tanks whose attack damage is *lower* than the attrition-death enemies. Not burst — the build cannot close those HP pools before in-fight regen decays. This is the day's crit sacrifice (51% → 31.5%) appearing as a damage floor, and it is why the next craft target moved from the Firewall to the Aegisbound Driver (CritDmg +81.21%).
+
+## A/B — Resilient Firewall of Perpetuity, `firewall-ab-2026-07-28` (closed 30 July 2026: KEEP)
+
+Pre-declared keep rule: KEEP if mean death streak ≥ 117.8 (baseline 119.8 − 2, n=16 same-loadout deaths); REVERT ≤ 114.8.
+
+| | pre-equip (n=16) | post-equip (n=89) |
+|---|---|---|
+| Mean death streak | 119.8 | **140.2 (+20.4)** |
+| Hit rate | 81.0% (deep-streak baseline) | 79.7% |
+| Realized regen/round, streak ≥60 | 260.5 | 284.6 |
+
+**KEEP, decisively — the mean cleared the gate by +22.4 and every one of the last 40 deaths individually exceeds the old baseline mean.** The readout is a **bundle**, stated per the standing rule rather than corrected for: 87 of 89 deaths fall after the VLAN Rules +1% Def homelab segment boundary, and the window contains the 29 Jul Kernel (Assault Kernel of Blight, +37.4) and Daemon (Shielded Daemon of Bastion, +131.5) crafts. Attribution among the four is not possible from this window and does not matter for the decision — no component has a plausible negative sign. The 1.3pp hit-rate drift is consistent with the Kernel/Daemon equips moving Accuracy composition, not with the Firewall's +0.30% Acc.
+
+Consequences: **Brutal Firewall of Perpetuity (ilvl 314) released for decompile** (last pre-craft Firewall, no sole ladder anchors — `of Perpetuity` T1 and `of Immortality` T2 are both archive-covered). **New standing baseline: mean death streak 140.2, Corporate Network** — `ih.py ab` output, 30 Jul capture.
+
+## A/B — Vital Payload of Extinction, `payload-ab-2026-07-30` (open)
+
+Declared 30 July ~21:00Z, before any post-equip data existed. Baseline: the full post-Firewall window (mean **140.2**, n=89, Corporate Network). **KEEP if post mean ≥ 138.2; REVERT if ≤ 135.2** (n=24 deaths). The window is a **declared bundle** with the same-hour 287K-chip hardware package (Packet Shield 14→88, ECC 110→119).
+
+The equip trades Acc −26.4pp affix and CritCh −10.1pp for AtkDmg +34.6pp, CritDmg +17.4pp and Corrupt 16→66 gear-flat — roughly +10–15% net output for worse hit reliability. It is the strongest test yet of the 22 Jul "output does not move the death ceiling" law.
+
+Pre-registered treatment predictions (diagnostics, not gates):
+
+1. **Hit law out-of-sample:** Accuracy stat 10,350 → ~9,186 (−11.2%) predicts per-attack hit rate at the streak-120–159 faces down ~3.8pp (65–68% → 62–64%); pm-flag pooled rate ~79.7% → ~76%.
+2. **Corruption law extension:** corruption stat 17.4 → ~71.6 predicts max outgoing corruption ≈ 6 × stat ≈ **430/round** at full stack (was ~104). Confirming extends the verified linear range 50 → ~72; a miss flags non-linearity above 50.
+3. **Rounds/fight** at matched streak band down ~10–13%.
+
+Requires **Detailed Logs enabled** in the Hacking panel for round-level data. Revert path: Bastioned Payload of Perfect Strike, decompile-locked until close.
+
+**Profiler pairing (added on the player's point that the Hacking Simulator can A/B directly):** the three mechanism predictions do not need to wait for 24 live deaths. Paired Software Profiler runs — same enemy levels, both Payloads — read them in minutes, and because both arms run under the *post-chip-spend* hardware, the pair **isolates the craft from the hardware bundle**, which the live window cannot. Recipe: **pre-arm with the Bastioned still equipped, 5 runs each at enemy level 1800 / 2100 / 2500, Corporate Network; equip Vital Payload of Extinction; post-arm, same 5×3 runs** (~30 runs, ~3 min against the 5 s cooldown; the userscript banks them automatically, read with `ih.py sims`). The profiler remains blind to attrition (full-HP single fights), so the **death-streak keep rule still gates on the live ledger** — the profiler pair settles the *laws*, the streaks settle the *depth*.
+
+### `payload-ab-2026-07-30` — profiler readout, 30 July ~21:44Z (post-arm only)
+
+10 runs banked (5 × enemy 2100, 5 × 2500; the pre-arm was skipped — the equip happened first, so single-fight deltas vs the 29 Jul runs include the same-day hardware package). Against the pre-registered predictions:
+
+1. **Hit law: HOLDS out-of-sample.** At Accuracy 9,198 (−11.2%), pooled per-attack hit rate (2-attack estimator, n=195) = **63.6% vs ~64% predicted**, and per-face observed rates track the per-face predictions computed from each logged enemy's `effective_evasion` (52–70% range).
+2. **Corruption law: LINEAR, range extended 50 → 72 — but my 430/round max was wrong in size.** Avg `pcd`/round per stat point: 5.19× at stat 17.36 vs 4.95× at 71.61 (within 5% — linear). Max tick 611 = 8.5× stat, not the predicted 6×: the full-stack multiple is **side-dependent** (stacks sustained ∝ attacks landing/round; enemy side ~6×, ours 8.5–9×). Per-stack tick ≈ 0.95× stat. Provenance note updated in `ihlib`.
+3. **Rounds/fight: −39 to −41%** at matched levels (2100: 56 → 32.8; 2500: 76 → 46.4) — far beyond the predicted −10–13%, because corruption at stat 71.6 is ~46% of total output. Consistent with the Corrupt weight (+50 score ≈ +51% output; observed ≈ +60%): the weight is right-to-slightly-conservative at this stat level.
+
+**Win rate: 1,000/1,000 — zero losses**, including 5×100 at enemy 2500 where the 29 Jul arm won 70–81%. The tank damage-floor failure mode (Trojan Wall / Rootkit / Siege Daemon closing) is gone at these levels in single fights. Regime caveat: all full-HP single fights — **attrition and the death ceiling remain unread; the live-streak keep rule (≥138.2 over 24 deaths) still governs KEEP/REVERT.**
+
+### `payload-ab-2026-07-30` — clean paired profiler readout, 30 July ~21:54Z (pre-arm re-run at matched hardware)
+
+The player re-equipped the Bastioned and re-ran the pre-arm (5×2100 + 5×2500), so both arms now share the post-chip-spend hardware and the pair isolates the Payload swap. This **corrects the attribution in the previous entry**, which compared against the 29 Jul pre-hardware arm:
+
+| level | metric | pre (Bastioned) | post (Vital) | craft-only Δ |
+|---|---|---|---|---|
+| 2100 | win rate | 500/500 | 500/500 | — |
+| 2500 | win rate | **485/500 (97.0%)** | **500/500** | +3.0pp, losses (Trojan Wall ×2, Stealth Worm ×3 logged) → zero |
+| 2100 | rounds/victory | 56.8 | 32.8 | **−42%** |
+| 2500 | rounds/victory | 70.4 | 46.4 | **−34%** |
+| both | avg `pcd`/round per stat pt | 5.06–5.41× (stat 17.4) | 4.57–5.48× (stat 71.6) | linear — re-confirmed within the matched pair |
+
+**Hit law: holds on both arms.** Attack-weighted per-face predictions vs pooled observed: pre **66.2% pred / 66.4% obs** (n=500), post **63.9% pred / 63.6% obs** (n=195). Pooled per-level cells look inverted (post 70.3% at 2100) — that is enemy-class composition, not a law violation; per-face is the honest read.
+
+**Win-rate decomposition at 2500** (correcting the earlier "looks mostly craft" lean): 29 Jul pre-hardware ~76% → **97% from the hardware package alone** (Packet Shield barrier + ECC regen) → **100% with the craft**. The hardware did most of the single-fight survival lift; the craft eliminated the remainder by closing fights ~35–40% faster.
+
+**Ledger note:** the pre-arm re-run put the Bastioned back on inside the live post window (~20:45Z onward; still equipped at the 20:53:50Z capture). The segment is marked in the experiment for exclusion at grading — boundary markers are the Corruption 71.61↔17.36 stat-change records in the stream.
+
+---
+
+### `payload-ab-2026-07-30` — CLOSED: KEEP, 31 July (mean 155.0 over 29 deaths vs gate ≥138.2)
+
+Pre-declared n=24 reached (first-24 mean 154.6); all 29 pre-Firewall-equip deaths counted: mean **155.0, +14.8 streaks over the 140.2 baseline**. Contamination clean: no zone change, cadence held ~4.872 s. Treatment predictions: hit law **held** (pooled 77.5% vs ~76 predicted), corruption law **held** out-of-sample (linearity extended to ~72, 30 Jul profiler), rounds/fight −39–41% at matched levels (profiler; bundles the same-hour hardware package). The 22 Jul "output does not move the death ceiling" law survives only as "this **bundle** moved it" — attribution between craft and hardware not attempted by policy. **New standing death-streak baseline: mean 155.0, Corporate Network — retire 140.2.** Revert path **Bastioned Payload of Perfect Strike released**.
+
+### `firewall-ab-2026-07-31` — DECLARED, equip pending (Predatory Firewall of Immortality)
+
+Crafted 31 Jul, realized **+36.8** vs projected +39.1 — error −2.3, smallest on record, **first craft ever to land inside p10–p90** (era coverage 1/4), on the first projection recorded after the deepen-scale bug fix. Replaces Resilient Firewall of Perpetuity, now **decompile-locked as the revert path**. Baseline = the 29-death post-Payload window (mean 155.0, n=29). **KEEP ≥ 153.0 / REVERT ≤ 150.0 over 24 deaths**; contamination checks: no zone change, cadence ~4.872 s. Pre-registered treatment predictions (full text in `ihlib.FIREWALL_AB_2026_07_31`): incoming direct per landed hit −~9% (Def stat +11.4%), enemy hit rate on us +1.3–1.8pp (Eva stat −4.4%), our per-attack hit +~0.7pp (Acc +3.75pp affix), realized prg/round +2–6% at streak ≥60. The −7.8% MaxHP side makes this window the **first live test of the unmeasured MaxHP weight (0.5)**: KEEP is evidence the weight is not grossly under-priced; REVERT with the mitigation predictions landing means Max HP is worth far more than 0.5. Declared bundle: the pending 112.8K-chip equal-marginal spend lands inside the window.

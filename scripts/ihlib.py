@@ -5,9 +5,12 @@ docs/static-analysis-2026-07-22.md so analyses never re-derive them.
 Used by ih.py; import directly for bespoke analysis.
 """
 
+import hashlib
 import itertools
 import json
+import math
 import random
+import statistics
 from datetime import datetime
 from pathlib import Path
 
@@ -242,37 +245,155 @@ def item_header(item, slot=None, where=None):
 # the current bottleneck model (late-streak attrition: sustain + tempo, see
 # docs/current-state.md), NOT a game formula. Retune when the bottleneck
 # changes. Keys are display labels (STAT_LABELS values).
-# Two of these are under active challenge as of 27 Jul 2026 -- values left
-# UNCHANGED on purpose, because driver-ab-2026-07-27 is mid-flight and moving
-# weights would break comparability with its own baseline:
+# NO WEIGHT MAY SIT IN A KNOWN-WRONG STATE. If a measurement shows a weight is
+# wrong, re-fit it in the SAME session -- see PENDING_REFITS below and the
+# "never defer a known defect" rule in CLAUDE.md. Leaving a measured-wrong
+# weight in place because "it deserves its own change" silently corrupts every
+# ranking computed until someone remembers; that happened with Barrier (0.02
+# vs a measured 0.10, wrong for a week) and Acc (asserted 1.0 vs a measured
+# 0.14, wrong for two days after it was first challenged).
+#   Acc 0.14 -- MEASURED 29 Jul 2026, was 1.0. Within a fixed-Accuracy era
+#     (n=2,674 fights, 174K attempts), hit rate against enemy effective_evasion
+#     has slope 7.44pp per 1.0 of acc/eva ratio; at the working ratio ~2.1 a
+#     +10% Accuracy buy is +1.56pp hit rate = ~+2.0% output = 0.197% per pp,
+#     i.e. 0.7 x 0.197 = 0.14 on the AtkDmg scale. Accuracy is NOT saturated:
+#     the 27 Jul "no hit-rate loss" test predicted -0.68pp against a +-0.9pp
+#     95% CI on 8,195 attempts -- it was UNDERPOWERED, not null.
 #   AtkSpd 0.9 -- the reason was wrong, the number may be right. Attack speed
 #     buys NO extra fights per hour (cadence is a fixed 4.872 s tick,
 #     mechanics.md §14); it pays by shortening fights in ROUNDS (-2% to -5%
-#     measured), which cuts enemy attacks per fight. It is a mitigation stat,
-#     not an economy one, and the 22 Jul "tempo does not move the death
-#     ceiling" law is in question (open-questions.md).
-#   Acc 1.0 -- probably TOO HIGH. Cutting Accuracy 7,595 -> 7,265 (-4.35%)
-#     produced no hit-rate loss at matched streak band (+0.9 to +1.7pp across
-#     three bands, 8,195 attacks) against a linear prediction of -1.7pp.
-#     Accuracy looks saturated in this region. Resolve with the Software
-#     Profiler before re-weighting; see open-questions.md.
+#     measured), which cuts enemy attacks per fight -- and rounds now matter
+#     directly, because corruption is charged per round (mechanics.md §16).
 CRAFT_WEIGHTS_PCT = {   # value per +1 percentage point
-    "Def": 1.0, "Eva": 1.0, "Acc": 1.0, "AtkSpd": 0.9,
-    "AtkDmg": 0.7, "CritCh": 0.7, "MaxHP": 0.5, "CritDmg": 0.35,
+    # RE-FITTED 29 Jul 2026 from Software Profiler sweeps (mechanics.md §19).
+    # Scale anchor: AtkDmg. A "+1%" AFFIX adds 1 point to that stat's shared
+    # additive pool, so the STAT moves by 1/pool -- 0.686% for AtkDmg, whose
+    # applied 0.7 therefore means "weight ~= % output-equivalent per +1% affix".
+    # EVERY earlier weight was set without that conversion, which is why the
+    # pool-heavy stats (Def pool 2.30, Eva pool 2.10) were the most inflated.
+    "Def": 0.45, "Eva": 0.22, "Acc": 0.21, "AtkSpd": 0.56,
+    "AtkDmg": 0.7, "CritCh": 0.7, "MaxHP": 0.5, "CritDmg": 0.22,
 }
 CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
-    # Corrupt recalibrated 22 Jul: outgoing DoT ~15.6% of total output from 12
-    # points in the streak-96 death fight (sum(ecd) 990 vs direct 5368) — ~1%
-    # of output per point in long fights; 0.6 is deliberately conservative.
-    "Regen": 0.6, "Corrupt": 0.6, "ArmorPen": 0.05,
-    "Thorns": 0.05, "Barrier": 0.02,
+    # Corrupt MEASURED 29 Jul 2026 (was 0.6, "deliberately conservative", and
+    # separately mis-flagged as "~2x too generous" -- both wrong). `pcd` is the
+    # PLAYER's corruption output (data-dictionary.md): across four eras with the
+    # stat at 16.2-22.9 it is a stable 4.88-5.82 damage/round per point, i.e.
+    # ~1.04% of the ~530/round output per point -> 0.7 x 1.04 = 0.7. Linear in
+    # the FITTED RANGE 16-23 only; above ~25 remains extrapolation.
+    "Regen": 0.6, "Corrupt": 1.0, "ArmorPen": 0.068,
+    "Thorns": 0.13, "Barrier": 0.043,
 }
+
+# ---------------------------------------------------------------------------
+# PENDING REFITS -- the anti-deferral register.
+#
+# A constant belongs here the MOMENT evidence shows the applied value is wrong
+# and it has not yet been corrected. It exists because the failure mode it
+# guards against is invisible from the output: `potential` and `contract` keep
+# printing clean-looking numbers computed from a value already known to be
+# false, and nothing in the workflow ever surfaces it again.
+#
+# DO NOT ADD A ROW HERE TO AVOID FIXING SOMETHING. Fixing is the default and is
+# nearly always cheap. A row is legitimate ONLY when the fix is genuinely
+# blocked on data that does not exist yet, and it MUST carry an `unblock`
+# naming the specific observation that resolves it. Anything else -- "deserves
+# its own change", "would move live verdicts", "do it next session" -- is
+# exactly the reasoning that left the Barrier weight at one fifth of its
+# measured value for a week while every ranking in the workspace was wrong.
+#
+# Consumers (audit / potential / contract) print a banner while this register
+# is non-empty. That is deliberate and should be annoying.
+# Emptied 30 Jul 2026: the UPGRADE_BAND / INFERIOR_BAND row (opened 28 Jul)
+# hit its unblock condition -- a third craft graded under uncapped+floor2+
+# archive whose projection described the executed plan (Vital Payload of
+# Striking, realized +64.7 vs projected +80.6) -- and both bands were
+# re-derived to +/-16 the same session. See the bands' own provenance rows.
+PENDING_REFITS = []
+
+
+def cohort_summary(rows, label="cohort", ms_key="seen_ms", item=None):
+    """Print a cohort's OWN boundaries before any statistic is computed from it.
+
+    Mandatory before segmenting the ledger -- see the "declare the cohort"
+    rule in CLAUDE.md. On 29 Jul 2026 a post-craft cohort was selected by
+    `17000 < max_hp < 18000` with no date bound; the 28 Jul loadout sat at
+    max_hp 17,345-17,374, so a whole day of pre-craft fights was pooled into
+    it. Two constants were "refined" from the result, published, and withdrawn.
+    Printing min/max of the discriminating field plus the date range would have
+    caught it in one line.
+
+    `rows` are dicts carrying `ms_key` and optionally the fight/death payload
+    under `item` (a key name) or at top level.
+    """
+    import datetime as _dt
+    if not rows:
+        print(f"  [{label}] EMPTY COHORT"); return {}
+    def _get(r, k):
+        src = (r.get(item) or {}) if item else r
+        return src.get(k, r.get(k))
+    ms = [r.get(ms_key) for r in rows if r.get(ms_key)]
+    hp = [v for v in (_get(r, "max_hp") for r in rows) if v]
+    span = ""
+    if ms:
+        f = lambda x: _dt.datetime.fromtimestamp(x / 1000, _dt.UTC).strftime(
+            "%m-%d %H:%M")
+        span = f"{f(min(ms))} .. {f(max(ms))}"
+    out = {"n": len(rows), "span": span,
+           "max_hp": (min(hp), max(hp)) if hp else None}
+    print(f"  [{label}] n={len(rows)}  {span}"
+          + (f"  max_hp {min(hp)}-{max(hp)}" if hp else ""))
+    if hp and max(hp) - min(hp) > 0.05 * max(hp):
+        print(f"  [{label}] WARNING: max_hp spans {100*(max(hp)-min(hp))/max(hp):.1f}%"
+              f" — this cohort probably straddles a gear change")
+    return out
+
+
+def pending_refits():
+    """Constants known to be wrong and not yet corrected. Should be empty."""
+    return list(PENDING_REFITS)
+
+
+def pending_refit_banner():
+    """Warning lines for any command that consumes the planning weights."""
+    if not PENDING_REFITS:
+        return []
+    out = ["!! %d CONSTANT(S) KNOWN-WRONG AND UNCORRECTED -- numbers below are "
+           "computed from them:" % len(PENDING_REFITS)]
+    for r in PENDING_REFITS:
+        out.append("   %s  (applied %s, open since %s)"
+                   % (r["name"], r["applied"], r["opened"]))
+        out.append("      blocked on: %s" % r["blocked_on"])
+        out.append("      unblock by: %s" % r["unblock"])
+    return out
+
 
 # Verdict bands for ceiling-vs-equipped score deltas, calibrated against the
 # realized Vital Driver craft (projected +3.9, realized -2): treat small
 # positive deltas as noise/contract-shortfall, not upgrades.
+# Re-derived 30 Jul 2026 from the three crafts graded under
+# uncapped+floor2+archive (errors vs projection: +21.3, +56.8, +14.7).
+# REVERTED 16 -> 5 on 31 Jul 2026: the -15.9 Payload error that set the band
+# to 16 was a SCALE BUG, not a shortfall. The 30 Jul contract was recorded at
+# the --deepen block's numbers, and that block called simulate_contract
+# without `baseline` -- it printed ABSOLUTE post-craft scores as if they were
+# deltas (proven 31 Jul: a deepen variant with the contract's own phases
+# printed +128.1 against the contract's +38.4, difference exactly the equipped
+# baseline 89.9). Corrected, the Payload projected +50.0/p10 +42.5/p90 +56.9
+# and realized +64.7 -- error +14.7, ABOVE projection and above p90 like the
+# other two grades. No negative in-era error exists, so the worst-shortfall
+# method yields no band at all; ±5 (the pre-bug value, from the 22 Jul Vital
+# Driver) is restored as a switching-cost indifference band pending the first
+# genuine negative grade. Interval coverage 0/3, ALL misses above p90:
+# simulate_contract underestimates -- its p10 has never been breached.
 UPGRADE_BAND = 5.0   # delta > +5 -> genuine upgrade candidate
 INFERIOR_BAND = -5.0  # delta < -5 -> inferior; between -> sidegrade
+
+# Fixed fight tick, from the game's own death clock (27 Jul 2026) -- NOT from
+# the stream's poll interval, which measures the poller. Attack speed does not
+# move it: a +9.9% AtkSpd equip changed it 0%. Was a magic number repeated in
+# four places until 29 Jul 2026; `_chk_cadence` re-validates it every run.
+FIGHT_CADENCE_S = 4.872
 
 # Stability held back for Compile. Was 8 ("+4% Compile") from 22 Jul 2026 to
 # 28 Jul 2026 -- a default nobody ever tested, and it was suppressing EVERY
@@ -377,7 +498,10 @@ def vu_expected_stability(tier, preserve=0.0):
     """Expected Stability spent promoting Tn -> T(n-1).
 
     The success always costs 1; each failure costs 1 only when Snapshot
-    Backups does not trigger. Homelab `tier_promotion_stability_preserve` is
+    Backups does not trigger. **The "success costs 1" half was CONFIRMED by the
+    player 29 Jul 2026** after being registered as a blocker -- it had been an
+    untested assumption carrying the whole Stability budget. Model A stands;
+    the failure-only alternative is rejected. Homelab `tier_promotion_stability_preserve` is
     5%/level, so at L2 (10%) a deep chase is ~6% cheaper than the attempt
     count implies, and the saving grows with depth (3% at T7->T6, 8% at
     T2->T1) because deeper steps fail more often.
@@ -834,6 +958,43 @@ def simulate_contract(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
     }
 
 
+def deepen_search(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
+                  trials=4000, max_deepen=3, **kw):
+    """Test plans DEEPER than plan_craft's, which stops at the expected budget.
+
+    plan_craft breaks when the next step's expected Stability exceeds what is
+    left (`cost > budget - spend`), so it plans to roughly exhaust the budget
+    in expectation. That is the wrong objective. Tier value compounds while
+    attempt cost only grows linearly, and an over-committed plan that runs out
+    of Stability simply stops -- leaving a shallower craft that is still an
+    upgrade, and which you are free not to equip. So the downside of aiming too
+    deep is bounded and the upside is not.
+
+    Measured on the 29 Jul Daemon, same base, 20k trials each: the contracted
+    plan (Quarantine T2) scored mean +15.6 / p10 +7.8; deepening the single
+    highest-value affix to T1 scored mean +21.3 / p10 +7.1 -- **+37% expected
+    value for 0.7 of p10 and an identical worst case**. The player had already
+    beaten the contract this way twice before it was modelled.
+
+    Returns [(phases, sim)] ranked by mean, best first.
+    """
+    base = [(name, tier) for name, tier in phases]
+    seen, out = set(), []
+    for i in range(len(base)):
+        for deeper in range(0, max_deepen + 1):
+            cand = list(base)
+            cand[i] = (base[i][0], max(1, base[i][1] - deeper))
+            key = tuple(cand)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((cand, simulate_contract(item, ladders, cand, floor=floor,
+                                                preserve=preserve, trials=trials,
+                                                **kw)))
+    out.sort(key=lambda r: -r[1]["mean"])
+    return out
+
+
 def best_contract_order(item, ladders, phases, **kw):
     """[(order, sim)] over every phase permutation, best P(upgrade) first.
 
@@ -867,15 +1028,43 @@ def homelab_state(capture):
     return info.get("homelab"), info.get("definitions"), info
 
 
+def homelab_build_speed(info):
+    """Homelab build-speed multiplier `o` -- the WHOLE tick pool, not per slot.
+
+    Mirrors the client's `homelabBuildSpeedBreakdown`:
+        o = (1 + upgradeEffects + global_build_speed_bonus) * global_multiplier
+    clamped to [1, 20]. Total progress is `o / tick_seconds` ticks per second
+    SPLIT evenly across active jobs, so this is the only lever on the rate --
+    slot count is not one. Verified against the capture 29 Jul 2026: n=2 jobs
+    each advanced 0.1580 ticks/s, total 0.3161 == 1.58/5. See mechanics.md §15.
+    """
+    bonus = float(info.get("global_build_speed_bonus") or 0)
+    mult = float(info.get("global_build_speed_multiplier") or 1)
+    upgrades = float(info.get("build_speed_upgrade_bonus") or 0)
+    return max(1.0, min(20.0, (1.0 + upgrades + bonus) * mult))
+
+
 def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     """Concrete jobs to put in free build slots / queue places, best first.
 
-    Ranked by **total progress points**, not points per slot-hour. For a slot
-    that will run unattended the idle time after a short job costs more than
-    its better nominal rate: a 1.0h/95pt job beats a 0.5h/110pt-per-hour job
-    outright if nobody is there to refill at the 30-minute mark. Excludes jobs
-    already active or queued, gated jobs, and (by default) anything costing
-    hackcoin, which is reserved for install gates.
+    Ranked by **points per tick** -- i.e. points per slot-hour. CORRECTED
+    29 Jul 2026, having been backwards since it was written.
+
+    The old ranking was by total points, justified by "an idle slot costs more
+    than a better hourly rate". That rested on slots adding throughput. They do
+    not. The Build Scheduler upgrade says so in its own description ("splits
+    progress, doesn't speed up building"), the client divides by the active-job
+    count (`homelabJobEstimates`: `remaining -= l*o*t/n`), and the capture
+    confirms it exactly: with n=2 active jobs each advanced 0.1580 ticks/s and
+    the total was 0.3161 ticks/s == `build_speed_multiplier / tick_seconds`
+    == 1.58/5. See `mechanics.md` §15.
+
+    So **tick throughput is a fixed pool** and the only question is which jobs
+    to spend it on -- which makes points-per-tick the whole ranking. Slot count
+    changes nothing about the rate; it only buffers work so throughput never
+    falls to zero while nobody is refilling. Excludes jobs already active or
+    queued, gated jobs, and (by default) anything costing hackcoin, which is
+    reserved for install gates.
     """
     homelab, definitions, info = homelab_state(capture)
     if not homelab:
@@ -908,7 +1097,11 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             "hours": (nxt.get("duration_ticks") or 0) * tick_s / 3600,
             "cost": cost, "description": d.get("description") or "",
         })
-    out.sort(key=lambda r: (-r["points"], -r["hours"]))
+    for r in out:
+        r["pts_per_hour"] = r["points"] / r["hours"] if r["hours"] else 0.0
+    # points per tick is the scarce-resource ranking; total points only breaks
+    # ties, since a longer job buffers more unattended work at the same rate.
+    out.sort(key=lambda r: (-r["pts_per_hour"], -r["hours"]))
     return out[:limit]
 
 
@@ -1260,8 +1453,8 @@ def _chk_cadence(cap):
         return ("SKIP", "no death records in the ledger")
     values = sorted(s for _ms, s in rows)
     mid = values[len(values) // 2]
-    return (("OK" if abs(mid - 4.872) < 0.15 else "DRIFT"),
-            f"n={len(values)} median {mid:.3f} s/fight vs recorded 4.872")
+    return (("OK" if abs(mid - FIGHT_CADENCE_S) < 0.15 else "DRIFT"),
+            f"n={len(values)} median {mid:.3f} s/fight vs recorded {FIGHT_CADENCE_S}")
 
 
 def _chk_credits_hr(cap):
@@ -1274,6 +1467,42 @@ def _chk_credits_hr(cap):
             f"{CREDITS_PER_HOUR / 1e6:.0f}M/hr")
 
 
+def _chk_contract_drop(cap):
+    """Re-measure drops/win from the board's own accrual across captures."""
+    paths = capture_paths()
+    cur = contract_board(cap).get("active")
+    if not cur or cur.get("type") != "drops":
+        return ("SKIP", "no drops contract active in the latest capture")
+
+    def ts(p):
+        m = __import__("re").search(
+            r"(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})", p.name)
+        return (datetime.fromisoformat(
+            f"{m.group(1)}T{m.group(2)}:{m.group(3)}:{m.group(4)}")
+            if m else None)
+
+    t_now = ts(paths[-1])
+    for p in reversed(paths[-7:-1]):
+        old = contract_board(load_capture(p)[0]).get("active")
+        if not old or old.get("name") != cur.get("name"):
+            continue
+        gained = (cur.get("progress") or 0) - (old.get("progress") or 0)
+        t_old = ts(p)
+        if not t_old or not t_now or gained <= 20:
+            continue
+        hours = (t_now - t_old).total_seconds() / 3600
+        if hours < 0.5:
+            continue
+        # wins approximated from the fixed cadence; deaths/offline gaps are
+        # inside the 40% tolerance
+        rate = gained / (hours * 3600 / FIGHT_CADENCE_S)
+        ok = abs(rate - CONTRACT_DROP_PER_WIN) / CONTRACT_DROP_PER_WIN < 0.4
+        return ("OK" if ok else "DRIFT",
+                f"board accrual {gained} drops / {hours:.1f}h -> "
+                f"{rate:.3f}/win vs constant {CONTRACT_DROP_PER_WIN}")
+    return ("SKIP", "no earlier capture shares the active drops contract")
+
+
 def assumptions():
     """[(name, value, provenance, basis, validated_on, check)] — the register.
 
@@ -1283,21 +1512,62 @@ def assumptions():
     w, f = CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT
     rows = [
         # --- planning weights: a bottleneck heuristic, not a game formula ---
-        ("CRAFT_WEIGHTS_PCT[Acc]", w["Acc"], "asserted",
-         "CHALLENGED and now actionable: cutting Accuracy 7,595 -> 7,265 "
-         "(-4.35%) produced NO hit-rate loss over 8,195 attacks at matched "
-         "streak band. Left unchanged only because driver-ab-2026-07-27 was "
-         "mid-flight; that A/B closed 28 Jul, so this weight is free to move "
-         "and is probably far too high", "27 Jul 2026 (falsified)", None),
+        ("CRAFT_WEIGHTS_PCT[Acc]", w["Acc"], "measured",
+         "SETTLED at 0.21 after TWO corrections in one session -- the value "
+         "moved 0.14 -> 0.19 -> 0.115 -> 0.21 and only the last is sound. "
+         "Error 1: multiplied a per-STAT elasticity onto the weight scale, "
+         "forgetting that a +1% AFFIX moves the accuracy stat only 0.4283% "
+         "(pool 2.3347). Error 2: the elasticity itself came from a BIASED "
+         "denominator -- `pm` flags only that the FIRST attack of the round "
+         "missed, so hits/(hits+missflags) read 0.757 where the true "
+         "per-attack rate is 0.638. Refitting on 2-attack rounds only "
+         "(n(2,0) vs n(1,1), 1,004 rounds) gives "
+         "logit(hit) = -0.164 + 1.420*ln(Acc/Eva) -- a STEEPER curve, so "
+         "Accuracy is worth ~2x the biased fit: +0.45-0.50% output per 1% of "
+         "the stat at the evasion streak 120-159 faces, i.e. 0.198-0.218. "
+         "True hit rate there is 65-68%, nowhere near saturated. Covers the "
+         "OUTPUT channel only, so still a floor. Out-of-sample holds: "
+         "profiler 30 Jul (63.6% obs vs ~64% pred at Acc -11.2%), and live "
+         "31 Jul firewall window (+0.7pp predicted at the deep bands, +0.7pp "
+         "observed at both 86-105 and 106-130)",
+         "29 Jul 2026 (fitted)", None),
+        ("CORRUPT_REGEN_SUPPRESSION", CORRUPT_REGEN_SUPPRESSION, "measured",
+         "prg = clamp(Regeneration - 1.5*ecd, 0, max_hp - php), verified "
+         "288/288 Software Profiler rounds (residual exactly 0.0 on the 190 "
+         "non-capped ones) across 4 enemy classes and 2 enemy levels. Incoming "
+         "corruption costs ~2.5x face value: 1.0 direct + 1.5 regeneration "
+         "destroyed. Fitted at Regeneration=537.85 and ecd 0-236/round; the "
+         "1.5 has NOT been shown to be independent of the player's own stats "
+         "-- re-check it after any large Regeneration change, and after any "
+         "Isolated Sandbox level (mechanics.md §17)", "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_PCT[AtkSpd]", w["AtkSpd"], "asserted",
          "right number, wrong reason: buys NO extra fights/hour (cadence is a "
          "fixed 4.872 s tick); pays -2% to -5% rounds per fight, i.e. it is a "
          "mitigation stat", "27 Jul 2026 (rationale corrected)", None),
         ("CRAFT_WEIGHTS_FLAT[Corrupt]", f["Corrupt"], "measured",
-         "~0.5% of output per point in the deep streak bands -- HALF its "
-         "stated rationale -- and NOT LINEAR. Fitted range is 12-25 points; "
-         "do not apply above ~25 (two candidates scored as upgrades purely on "
-         "extrapolation to 57.8)", "28 Jul 2026", None),
+         "RE-FIT 0.7 -> 1.0, 29 Jul 2026 (late), and BOTH earlier problems "
+         "were artefacts. (a) The 'NON-LINEAR, invalid above ~25 points' flag "
+         "is WRONG: enemy corruption spans 3.94-50.47 across the profiler "
+         "sample and max ecd/round tracks it at a constant ~6x (mean ratio "
+         "5.84 for stat<10 vs 6.45 for stat>30, z~1.5 -- indistinguishable). "
+         "Corruption damage is LINEAR in the stat; the apparent non-linearity "
+         "was stack accumulation varying with FIGHT LENGTH. (b) The 0.7 was "
+         "computed as 1.04% output x 0.7, repeating the anchor error that also "
+         "hit Acc -- the scale is ~1.02 per 1% output, not 0.7. Measured from "
+         "the sims: our Corruption 17.3 deals 0.90% of total output per point "
+         "at enemy level 1800 and 1.18% at 2100-2537, i.e. weight 0.92-1.20. "
+         "Mechanism REFINED 30 Jul from the paired profiler arms (17.36 vs "
+         "71.61): per-STACK tick = ~0.95 x stat (135/270/341/412/547/611 at "
+         "2/4/5/6/8/9 stacks, i.e. ~68.3 per stack at stat 71.61 -- the same "
+         "~2-5% shortfall thorns shows), stacks build one per landing hit "
+         "over a rolling window (Resident Shader adds +1 round/level). The "
+         "'~6x at full stack' multiple is therefore SIDE-DEPENDENT, not a "
+         "constant: it is stacks-sustained, set by attacks landing per round. "
+         "Enemy side ~6x; OUR side reaches 8.5-9x (1.8 attacks/round x ~64% "
+         "hit). LINEARITY EXTENDED 50 -> 72: avg pcd/round per stat point is "
+         "5.19x at stat 17.36 vs 4.95x at 71.61 (within 5%). Output-only "
+         "basis: the 1.5x regen rider is real but enemy regen is already "
+         "floored at 0 in 95%+ of rounds, so there is no further gain", "30 Jul 2026 (mechanism refined)", None),
         ("CRAFT_WEIGHTS_FLAT[Regen]", f["Regen"], "asserted",
          "DIRECTION is measured -- regeneration moved the death ceiling twice "
          "(+20.5 streaks on +35.3% realized prg; +7.0 on the Shell) -- but the "
@@ -1306,37 +1576,130 @@ def assumptions():
          "streak bands 60-85 / 86-105 / 106-130. Realization rises with "
          "depletion (overheal capping, open-questions.md), so a flat weight "
          "over-prices regen shallow and a second large buy will realize less "
-         "again", "direction only; magnitude falsified as flat 28 Jul", None),
-        ("CRAFT_WEIGHTS_PCT[Def]", w["Def"], "asserted",
-         "first isolated read 28 Jul: gross damage/round at streak 106-130 "
-         "went 349.0 -> 368.6 (+5.6%) against Defense -6.05%, i.e. roughly 1:1 "
-         "elasticity -- but n=35 fights, one window, and Evasion +4.4% pushed "
-         "the other way. Every earlier Defense change arrived bundled with "
-         "regen or barrier", "directional only, 28 Jul 2026", None),
-        ("CRAFT_WEIGHTS_PCT[Eva]", w["Eva"], "asserted",
-         "only ever moved bundled with Regen (Citadel Shell)", None, None),
-        ("CRAFT_WEIGHTS_PCT[AtkDmg]", w["AtkDmg"], "asserted", "", None, None),
-        ("CRAFT_WEIGHTS_PCT[CritCh]", w["CritCh"], "asserted", "", None, None),
+         "again. COUNTERPOINT 31 Jul: the Firewall's +8.0% listed buy "
+         "realized +8.1% of prg/round at streak >= 60 (244.2 -> 263.9) -- at "
+         "streaks 150-180 realization is ~100% of listed, so the 'realize "
+         "less again' prediction did NOT bite at this depth. The scalar "
+         "itself remains unfitted; needs CI/CD Pipeline",
+         "direction only; magnitude falsified as flat 28 Jul", None),
+        ("CRAFT_WEIGHTS_PCT[Def]", w["Def"], "measured",
+         "RE-FIT 1.0 -> 0.45, 29 Jul 2026, and the old 1.0 was inflated by "
+         "THREE compounding errors. (1) The mitigation law is "
+         "dmg = Atk*K/(K+Def-ArmorPen) with K~205 -- fitted independently on "
+         "both directions, 190.2 outgoing / 219.3 incoming -- so Defense's own "
+         "elasticity is -0.88, not -1.0. (2) A +1% AFFIX moves the Defense "
+         "STAT only 0.435%, because its additive pool is 2.2983 (the earlier "
+         "live elasticities of -0.93 to -0.96 were per-STAT and were read as "
+         "if per-affix). (3) Defense touches ONLY the direct channel: against "
+         "Trojan Wall, `ea` is 352.8 of an effective 859.7 gross once "
+         "corruption counts at its measured 2.5x, i.e. 41%. Net of all three, "
+         "and multiplied by the measured leverage gross/net = 2.5-3.1x against "
+         "the three classes that cause ~72% of deaths, Defense is worth "
+         "0.40-0.50 output-equivalents per +1% affix. LEVERAGE IS THE WEAK "
+         "TERM: it rests on 54-309 rounds per class from 3-6 fights, sampled "
+         "at enemy levels 2100-2537 while deaths happen at ~1800, where "
+         "leverage is HIGHER -- so 0.45 is if anything conservative. Re-measure "
+         "with a class-controlled sweep at level 1800. Live corroboration 31 "
+         "Jul: Def stat +11.4% predicted -9% incoming direct per hit; "
+         "per-round gross fell 10-11% at the deep streak bands (bundled with "
+         "a 107K-chip package, so directional)", "29 Jul 2026 (fitted)", None),
+        ("CRAFT_WEIGHTS_PCT[Eva]", w["Eva"], "measured",
+         "RE-FIT 1.0 -> 0.22, 29 Jul 2026. Enemy hit rate on us fits the SAME "
+         "law with the SAME slope as our outgoing fit -- logit = 0.200 + 1.208 "
+         "* ln(enemyAcc/ourEva) over 2,310 enemy attacks -- giving -0.40% "
+         "enemy hit rate per +1% of the Evasion STAT. Eva/Def = 0.497 is "
+         "leverage-free and sample-free (both act on the direct channel only), "
+         "so that RATIO is the solid part; the absolute value inherits the same "
+         "leverage caveat as Def. Evasion does NOT dodge corruption -- ticks "
+         "land on missed rounds (mechanics.md §16) -- which is most of why it "
+         "is worth half of Defense", "29 Jul 2026 (fitted)", None),
+        ("CRAFT_WEIGHTS_PCT[AtkDmg]", w["AtkDmg"], "measured",
+         "ANCHOR of the whole scale, and it self-validates: a +1% AtkDmg AFFIX "
+         "adds 1 point to a shared additive pool of 1.458, so the stat moves "
+         "0.686% -- against an applied 0.7. The weight scale therefore means "
+         "'% output-equivalent per +1% affix'. Every other weight is now "
+         "expressed on that basis (mechanics.md §19)", "29 Jul 2026", None),
+        ("CRAFT_WEIGHTS_PCT[CritCh]", w["CritCh"], "measured",
+         "VALIDATED at 0.7, 29 Jul 2026. Crit rate measured on 954 single-hit "
+         "rounds (the only unconfounded denominator -- `pc` is capped at 1 per "
+         "round, so multi-hit rounds undercount) is 0.2631 against a "
+         "statsBreakdown crit_chance of 0.2558. A +1pp affix is ADDITIVE (no "
+         "pool division) and moves output +0.699%, i.e. weight 0.713",
+         "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_PCT[MaxHP]", w["MaxHP"], "asserted",
-         "guardrail says Max HP is a buffer, not mitigation or recovery",
+         "STILL UNMEASURED and the largest unpriced term. Max HP is pure "
+         "attrition buffer, and the Software Profiler runs full-HP SINGLE "
+         "fights, so it cannot see the quantity. Needs the CI/CD Pipeline "
+         "(homelab 12). Note its pool is small (1.5435), so a +1% affix moves "
+         "the stat 0.648% -- more than Def or Eva get from the same affix. "
+         "FIRST LIVE BOUND 31 Jul (firewall-ab-2026-07-31, pre-registered as "
+         "a MaxHP test): trading max_hp -7.8% for Def +11.4% / Regen +8% "
+         "RAISED the death mean +12.6 (15/24 deaths at write time, KEEP "
+         "arithmetically locked) -- in a mitigation-compensated trade the "
+         "0.5 weight did not under-price Max HP. A bound, not a fit",
          None, None),
-        ("CRAFT_WEIGHTS_PCT[CritDmg]", w["CritDmg"], "asserted", "", None, None),
-        ("CRAFT_WEIGHTS_FLAT[ArmorPen]", f["ArmorPen"], "inherited",
-         "never tested; the multiplicand was 0 until 28 Jul, so it has never "
-         "even been exercised", None, None),
-        ("CRAFT_WEIGHTS_FLAT[Thorns]", f["Thorns"], "inherited",
-         "never tested", None, None),
-        ("CRAFT_WEIGHTS_FLAT[Barrier]", f["Barrier"], "inherited",
-         "never tested; Barrier arrived bundled in the 27 Jul package",
-         None, None),
+        ("CRAFT_WEIGHTS_PCT[CritDmg]", w["CritDmg"], "measured",
+         "RE-FIT 0.35 -> 0.22, 29 Jul 2026. Crit multiplier measured at 1.883 "
+         "on 251 crit vs 703 non-crit single-hit rounds, against a "
+         "statsBreakdown crit_damage of 1.846 -- confirmed as a multiplier on "
+         "hit damage. A +1pp affix is additive on that multiplier and, at a "
+         "crit rate of 0.256, moves output only +0.214%", "29 Jul 2026", None),
+        ("CRAFT_WEIGHTS_FLAT[ArmorPen]", f["ArmorPen"], "measured",
+         "VALIDATED 29 Jul 2026 -- the inherited guess was right. The damage "
+         "law dmg = Atk*K/(K+Def-AP) with K~205 (fitted independently on both "
+         "directions, K=190.2 outgoing / 219.3 incoming) prices +97 ArmorPen "
+         "(10 -> 107) at +6.1% output vs enemy Defense 1,500 and +7.0% vs "
+         "1,300, i.e. 0.044-0.051 per point on the AtkDmg=0.7 scale against an "
+         "applied 0.05. Fitted range: enemy Defense 743-1,990, our ArmorPen 10. "
+         "Extrapolating to very high ArmorPen is NOT covered -- the law is "
+         "convex, so value per point RISES as ArmorPen approaches enemy "
+         "Defense", None, None),
+        ("CRAFT_WEIGHTS_FLAT[Thorns]", f["Thorns"], "measured",
+         "RE-FIT 0.05 -> 0.13, 29 Jul 2026 -- the inherited guess was ~2.5x "
+         "TOO LOW. Thorns is exact: `ptd` = 72.08 per enemy hit that lands, "
+         "against a stat of 73.4 (112,951 reflected damage over 1,567 enemy "
+         "hits, per-fight ratio 72.03-72.54 -- extremely tight). Value scales "
+         "with fight LENGTH because it is charged per enemy hit: 0.120 at "
+         "enemy level 1800, 0.157 at 2100, 0.141 at 2500. 0.13 is the value "
+         "at the levels where runs actually end", None, None),
+        ("CRAFT_WEIGHTS_FLAT[Barrier]", f["Barrier"], "measured",
+         "0.02 -> 0.10 -> 0.043 in one day; the 0.10 is WITHDRAWN and was my "
+         "error. Barrier absorbs ALL incoming channels (8,473 depletion rounds "
+         "match ea+ecd+etd at 100%; 2,657 rounds where the enemy MISSED still "
+         "absorbed the corruption tick), so it remains the only counter to "
+         "corruption -- that part stands. But the SIZE was measured by summing "
+         "`pbs` across rounds, and `pbs` is the pool REMAINING, a stock. "
+         "Summing a stock over time is meaningless and over-counts more when "
+         "the pool is larger (more rounds before it empties), which manufactured "
+         "a fake super-linearity: apparent 1.68x -> 2.34x -> 5.26x as Barrier "
+         "grew. Measured as actual pool DRAWDOWN, absorption is exactly 1.00x "
+         "the stat per fight in BOTH cohorts (787.5 -> 787 absorbed; 2,529.5 -> "
+         "2,529). Barrier is a once-per-fight shield equal to its value. So +1 "
+         "Barrier = +1.0 HP/fight against Regen's ~13.8 marginal -> 0.6/13.8 = "
+         "0.043, and the ORIGINAL 0.02 was nearer the truth than my correction. "
+         "Confirmed live: +1,742 Barrier gave +29/round absorbed over ~60-round "
+         "fights, exactly as 1.00x predicts",
+         "29 Jul 2026", None),
+
         # --- verdict bands ---
-        ("UPGRADE_BAND", UPGRADE_BAND, "inherited",
-         "STALE: calibrated 22 Jul against the Vital Driver under the old "
-         "Compile floor of 8. Lowering the floor to 2 raised every projection "
-         "~11-13 points, so this threshold no longer means what it did. "
-         "Re-derive from crafts executed after 28 Jul", "22 Jul 2026", None),
-        ("INFERIOR_BAND", INFERIOR_BAND, "inherited",
-         "same calibration as UPGRADE_BAND, same staleness", "22 Jul 2026",
+        ("UPGRADE_BAND", UPGRADE_BAND, "measured",
+         "path 5 -> 16 -> 5. The 30 Jul move to 16 rested on a -15.9 Payload "
+         "error that was a SCALE BUG: the contract was recorded at the "
+         "--deepen block's numbers, and deepen_search was called without "
+         "`baseline`, so it printed ABSOLUTE post-craft scores as deltas. "
+         "Corrected (subtract the equipped Bastioned's 30.6): projected "
+         "+50.0 / p10 +42.5 / p90 +56.9, realized +64.7, error +14.7. "
+         "In-era errors are now +21.3 / +56.8 / +14.7 -- ALL positive, all "
+         "above p90, so the worst-shortfall method yields no band; ±5 (the "
+         "pre-bug 22 Jul value) is restored as a switching-cost indifference "
+         "band pending the first genuine negative grade. simulate_contract's "
+         "p10 has never been breached -- its intervals underestimate, they do "
+         "not overpromise. First IN-interval grade same day: the Firewall "
+         "realized +36.8 in [+17.4, +50.9] (error -2.3, coverage 1/4) on the "
+         "first projection recorded after the deepen-scale fix",
+         "31 Jul 2026", None),
+        ("INFERIOR_BAND", INFERIOR_BAND, "measured",
+         "symmetric with UPGRADE_BAND, same 31 Jul reversion", "31 Jul 2026",
          None),
         # --- supplied ---
         ("HACKCOIN_CREDIT_RATE", HACKCOIN_CREDIT_RATE, "supplied",
@@ -1352,6 +1715,18 @@ def assumptions():
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",
          "27 Jul 2026", None),
+        ("CONTRACT_DROP_PER_WIN", CONTRACT_DROP_PER_WIN, "measured",
+         "0.0534 -> 0.296, 31 Jul 2026, and the old value had NO register row "
+         "(introduced 29 Jul in violation of the same-change rule). The 29 "
+         "Jul fit pooled 9,395 ledger wins recorded mostly with NO collection "
+         "contract active, so it measured a different quantity 5.5x low -- it "
+         "advised abandoning Marathon Collection on 31 Jul while the board's "
+         "own accrual (1 -> 466 in 2.32h, contract active throughout) showed "
+         "0.296/win and the contract finishing with hours to spare. Whether "
+         "the rate moves with Drop Rate Amplifier, zone or streak is "
+         "untested; the live check re-measures it whenever two captures "
+         "share the same active drops contract", "31 Jul 2026",
+         _chk_contract_drop),
         ("CREDITS_PER_HOUR", CREDITS_PER_HOUR, "measured",
          "fight rewards only; homelab jobs outspend it ~10x, and contracts "
          "add lumpy income on top. The live check pools the whole ledger and "
@@ -1366,7 +1741,7 @@ def assumptions():
          "the step is region-dependent; one constant 1.4 was fitted on "
          "shallow tiers only and over-projected a T6->T1 chase by 1.9x",
          "27 Jul 2026", None),
-        ("fight cadence 4.872 s", 4.872, "measured",
+        ("fight cadence 4.872 s", FIGHT_CADENCE_S, "measured",
          "from the game's own death clock, never the stream's poll interval",
          "27 Jul 2026", _chk_cadence),
         ("hardware cost curve", "A*L**p", "measured",
@@ -1484,9 +1859,17 @@ def score_contributions(projected, equipped_totals):
 # Weights whose value is known to be unreliable, so a Δ leaning on one gets
 # called out at the point of use rather than in a doc nobody re-reads.
 SUSPECT_WEIGHTS = {
-    "Corrupt": "fitted on n=1 at 12 points; ~2x too generous and NON-LINEAR "
-               "— invalid above ~25 points",
-    "Acc": "measured saturated 27 Jul (-4.35% Acc, zero hit-rate loss)",
+    "Corrupt": "LINEAR to ~72 (verified 30 Jul, paired profiler arms); "
+               "above that stat level is extrapolation",
+    # Acc REMOVED 29 Jul 2026: it was flagged "measured saturated 27 Jul",
+    # which §18 falsified. Hit rate at the evasion streak 120-159 actually
+    # faces is 76-79%, nowhere near a cap, and the weight is now fitted from
+    # logit(hit) = 0.532 + 1.208*ln(Acc/Eva). A stale suspect flag is as
+    # misleading as a stale weight -- it discounts a Δ that is now sound.
+    "MaxHP": "still UNMEASURED — pure attrition buffer, and the profiler's "
+             "full-HP single fights cannot see it (needs CI/CD Pipeline)",
+    "Regen": "magnitude still UNMEASURED for the same reason; direction is "
+             "solid and realization is depletion-dependent (mechanics.md §17)",
 }
 
 
@@ -1505,9 +1888,18 @@ def contract_board(capture):
     board-clear bonus), which is the scarcest currency in the model. Nothing
     else in the capture surfaces that deadline.
 
-    Returns {reset_ms, hours_left, active, unclaimed, clear_bonus,
-    clear_bonus_claimed} where `active` is the in-progress contract (or None)
-    and `unclaimed` is [completed but not claimed].
+    Returns {reset_ms, hours_left, all, active, pending, unclaimed,
+    clear_bonus, clear_bonus_claimed, board_hackcoin, queue_capacity}.
+
+    `all` is EVERY contract on the board. Corrected 29 Jul 2026: this used to
+    return only `active` + `unclaimed`, which silently dropped the five to six
+    contracts sitting incomplete at 0 progress -- so an advisory priced the
+    board at 11 hackcoin when it held 25, and misread "one contract has barely
+    moved" as evidence about offline accrual when the real cause was that the
+    other six had never been made active. **Only the ACTIVE contract accrues
+    progress** (`contract_queue_capacity` is 0: no queue, one at a time), so
+    clearing the board is a sequence of manual switches, and that -- not wall
+    clock -- is what makes the clear bonus hard.
     """
     board = ((capture["state"].get("currentPlayer") or {}).get("contracts")
              or {})
@@ -1516,17 +1908,38 @@ def contract_board(capture):
     now = captured_ms(capture)
     active_id = board.get("active_contract_id")
     active = next((c for c in rows if c.get("id") == active_id), None)
+    unclaimed = [c for c in rows
+                 if c.get("completed") and not c.get("claimed")]
     return {
         "reset_ms": reset_ms,
         "hours_left": ((reset_ms - now) / 3.6e6
                        if reset_ms and now else None),
+        "all": rows,
         "active": active,
-        "unclaimed": [c for c in rows
-                      if c.get("completed") and not c.get("claimed")],
+        # incomplete and NOT the active one: these earn nothing until selected
+        "pending": [c for c in rows
+                    if not c.get("completed") and c.get("id") != active_id],
+        "unclaimed": unclaimed,
         "clear_bonus": board.get("clear_bonus_amount") or 0,
         "clear_bonus_claimed": bool(board.get("clear_bonus_claimed")),
+        "board_hackcoin": sum((c.get("rewards") or {}).get("hackcoin") or 0
+                              for c in rows if not c.get("claimed")),
+        "queue_capacity": board.get("contract_queue_capacity") or 0,
     }
 
+
+# Contract-item drop rate per won fight WHILE a drops contract is active --
+# the only regime where the number is ever used. RE-MEASURED 31 Jul 2026 from
+# the board's own accrual: Marathon Collection 1 -> 466 across the 09:40 ->
+# 11:59 captures (2.32h, ~1,569 stream wins) = 0.296/win. The 29 Jul fit
+# (0.0534 = 502 ledger drops / 9,395 wins) pooled the WHOLE ledger, mostly
+# hours with no collection contract active, so it measured a different
+# quantity and came out 5.5x low -- it priced Standard Collection at ~4.8
+# combat-hours (real: ~0.9) and got Marathon Collection advised as
+# unfinishable on 31 Jul while it was cruising to completion. Same failure
+# family as pcd/ecd: a field's meaning is a hypothesis until it is shown to
+# vary with the thing it supposedly measures.
+CONTRACT_DROP_PER_WIN = 0.296
 
 # Credit income, measured from the stream ledger rather than assumed.
 CREDITS_PER_HOUR = 12e6
@@ -1982,11 +2395,136 @@ FIREWALL_AB_2026_07_28 = {
                  "6.05% on equip before hardware restored part of it, and "
                  "burst is the exposed flank. Realized prg/round and net drain "
                  "per round are DIAGNOSTICS, not gates.",
+    "concluded": "2026-07-30 KEEP — mean 140.2 over 89 deaths vs gate 117.8 "
+                 "(+20.4 streaks). Bundle window by policy: 87/89 deaths after "
+                 "the VLAN +1% Def segment, plus the 29 Jul Kernel and Daemon "
+                 "crafts. Hit rate 79.7% vs 81.0% baseline attributed to the "
+                 "bundle, not the Firewall's +0.30% Acc. Revert path Brutal "
+                 "Firewall of Perpetuity released.",
+}
+
+PAYLOAD_AB_2026_07_30 = {
+    "name": "payload-ab-2026-07-30",
+    "item": "Vital Payload of Extinction",
+    "slot": "Payload",
+    # PROVISIONAL equip time (advisory told the player to equip on reading it,
+    # ~21:00Z 30 Jul). Refine from the stream ledger's stat-change record when
+    # grading -- a late equip misclassifies pre fights as post and only
+    # dilutes, but the boundary should still be corrected.
+    # BOUNDARY CONFIRMED from the stream's Corruption 17.4<->71.6 stat-change
+    # markers: Vital first on ~20:43:06Z, Bastioned back 20:53:06Z-21:00:36Z
+    # (profiler pre-arm re-run), Vital re-equipped by 21:00:36Z. The 21:00:00Z
+    # value below sits inside the final swap's poll-uncertainty window
+    # [20:58:06, 21:00:36] -- keep it. GRADING NOTE: streak runs SPAN swaps
+    # (~13 min at these depths), so the first post death (streak 154, run
+    # began ~20:55:46Z) is a mixed-gear run, as are the 153/162 deaths near
+    # the boundary; the clean post cohort is deaths whose run STARTED after
+    # 21:00:36Z (run_start ~= ended_at_ms - streak*4872).
+    "equip_ms": 1785445200000,          # 2026-07-30T21:00:00Z, confirmed
+    "boundary_fight_id": None,
+    # Baseline = the full post-Firewall window (firewall-ab-2026-07-28 close),
+    # mean 140.2, n=89, Corporate Network.
+    "baseline_deaths": [115, 132, 133, 147, 128, 133, 125, 131, 134, 134, 138,
+                        137, 134, 131, 123, 136, 138, 134, 133, 148, 139, 134,
+                        129, 141, 134, 136, 137, 141, 139, 133, 146, 141, 140,
+                        143, 137, 145, 142, 144, 137, 139, 150, 146, 152, 148,
+                        146, 154, 144, 127, 144, 137, 156, 157, 137, 148, 138,
+                        146, 140, 143, 142, 144, 140, 132, 140, 146, 135, 144,
+                        145, 146, 136, 134, 142, 152, 139, 137, 152, 147, 145,
+                        140, 129, 147, 142, 159, 150, 142, 156, 128, 138, 148,
+                        145],
+    "baseline_hits": (456707, 115974),  # 79.7% pm-flag basis, post-Firewall
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785276480000,   # Firewall equip -- same-loadout era
+    # The window measures a DECLARED BUNDLE: the 287K-chip hardware package
+    # (Packet Shield 14->88 on ~2,364 gear-flat Barrier, ECC 110->119, minor
+    # tracks) landed minutes before the equip, inside this window and after
+    # the whole baseline. Attribution between craft and hardware is not
+    # recoverable from this window and is not attempted.
+    "segment_ms": None,
+    # Unlike the Firewall test, hit rate here is a TREATMENT metric with a
+    # pre-registered size (below), NOT a contamination check. This equip is
+    # also the strongest test yet of the 22 Jul "output does not move the
+    # death ceiling" law: it buys ~+10-15% net output (AtkDmg +34.6pp affix,
+    # Corrupt 16->66 gear-flat) with Acc -26.4pp / CritCh -10.1pp.
+    "keep_rule": "KEEP if mean death streak >= 138.2 (baseline 140.2 - 2); "
+                 "REVERT if mean <= 135.2. Contamination checks only: no zone "
+                 "change in the window, and fight cadence must stay ~4.872 s. "
+                 "PRE-REGISTERED treatment predictions (diagnostics, not "
+                 "gates, written before any post data existed): (1) hit law "
+                 "-- Accuracy stat 10,350 -> ~9,186 (-11.2%) predicts "
+                 "per-attack hit rate at the streak-120-159 faces down ~3.8pp "
+                 "(65-68% -> ~62-64%; pm-flag pooled rate ~79.7% -> ~76%); "
+                 "(2) corruption law -- stat 17.4 -> ~71.6 predicts max "
+                 "outgoing corruption/round at full stack ~6x stat = ~430 "
+                 "(was ~104), and this EXTENDS the linear-to-~50 verified "
+                 "range to ~72; (3) rounds/fight at matched streak band down "
+                 "~10-13%. A large miss on (1) or (2) is a defect report "
+                 "against the fitted law, whatever the depth outcome.",
+    "concluded": "2026-07-31 KEEP — mean 155.0 over 29 deaths (pre-declared "
+                 "n=24 reached; first-24 mean 154.6) vs gate 138.2, +14.8 "
+                 "over the 140.2 baseline. Contamination clean: no zone "
+                 "change, cadence held. Treatment predictions: (1) hit law "
+                 "HELD (pooled 77.5% vs ~76 predicted); (2) corruption law "
+                 "HELD out-of-sample, linearity extended to ~72 (30 Jul "
+                 "profiler); (3) rounds/fight -39-41% at matched levels "
+                 "(profiler; bundles the same-hour hardware package). The 22 "
+                 "Jul 'output does not move the death ceiling' law survives "
+                 "in strict form only as 'this BUNDLE moved it' -- "
+                 "attribution between craft and hardware not attempted by "
+                 "policy. Revert path Bastioned Payload of Perfect Strike "
+                 "RELEASED.",
+}
+
+FIREWALL_AB_2026_07_31 = {
+    "name": "firewall-ab-2026-07-31",
+    "item": "Predatory Firewall of Immortality",
+    "slot": "Firewall",
+    # PROVISIONAL equip time -- craft finished ~11:59Z 31 Jul, advisory told
+    # the player to equip on reading it. Refine from the stream's stat-change
+    # markers when grading (Def +26.33pp / Regen +43 / MaxHP -11.98pp on swap
+    # are unmistakable); runs SPAN swaps at these depths (~13 min), so the
+    # clean post cohort is deaths whose run STARTED after the confirmed
+    # boundary (run_start ~= ended_at_ms - streak*4872).
+    "equip_ms": 1785500100000,          # 2026-07-31T12:15:00Z, provisional
+    "boundary_fight_id": None,
+    # Baseline = the full payload-ab-2026-07-30 post window (closed KEEP),
+    # mean 155.0, n=29, Corporate Network.
+    "baseline_deaths": [154, 155, 148, 155, 160, 147, 157, 155, 160, 170,
+                        161, 148, 162, 155, 159, 158, 154, 158, 162, 147,
+                        153, 148, 150, 134, 163, 154, 155, 155, 157],
+    "baseline_hits": (99213, 28779),    # 77.5% pm-flag basis, post-Payload
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785445200000,   # Payload equip -- same-loadout era
+    # DECLARED BUNDLE by policy: the window will also contain the pending
+    # equal-marginal chip spend cut from the fresh 11:59Z hardware panel and
+    # any contract-board rewards. Attribution is not attempted.
+    "segment_ms": None,
+    "keep_rule": "KEEP if mean death streak >= 153.0 (baseline 155.0 - 2); "
+                 "REVERT if mean <= 150.0. Contamination checks only: no "
+                 "zone change in the window, and fight cadence must stay "
+                 "~4.872 s. PRE-REGISTERED treatment predictions "
+                 "(diagnostics, not gates, written before any post data "
+                 "existed): (1) mitigation law -- Def stat +~11.4% (affix "
+                 "+26.33pp x 0.435 pool factor) predicts incoming direct per "
+                 "landed hit down ~9% (elasticity -0.88, K~219); (2) hit "
+                 "laws -- Eva stat -~4.4% predicts enemy hit rate on us up "
+                 "+1.3-1.8pp (enemy-side slope 1.184); our Acc +3.75pp affix "
+                 "predicts our per-attack hit up ~+0.7pp; (3) realized "
+                 "prg/round at streak >= 60 up +2-6% (listed Regen +43 flat "
+                 "= +8%, realization depletion-dependent, mechanics.md §17). "
+                 "(4) MaxHP stat falls ~7.8% -- this equip doubles as the "
+                 "first live test of the UNMEASURED MaxHP weight (0.5): the "
+                 "outcome gate holding at KEEP is evidence the weight is not "
+                 "grossly under-priced; a REVERT with mitigation predictions "
+                 "(1)-(3) all landing is evidence Max HP is worth far more "
+                 "than 0.5 and the weight must be re-fit before the next "
+                 "sustain trade.",
 }
 
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = FIREWALL_AB_2026_07_28
+ACTIVE_EXPERIMENT = FIREWALL_AB_2026_07_31
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -2042,6 +2580,522 @@ def stream_records():
             line = line.strip()
             if line:
                 yield json.loads(line)
+
+
+# ---- Hacking Simulator ------------------------------------------------------
+# The Software Profiler (homelab 10) runs 100 fights against a CHOSEN enemy
+# level in a chosen zone, with either the equipped loadout or a saved gear set,
+# and returns wins/losses plus one fully-logged victory and one fully-logged
+# loss. That is a controlled dose-response instrument: the live ledger can only
+# observe the enemy levels the streak happens to visit, with gear changing
+# underneath it.
+#
+# REGIME WARNING, and it decides what the profiler may be used for: each sim
+# fight is an INDEPENDENT fight, not a continuing streak. `sim_regime_check`
+# tests whether fights start at full HP; until that returns "full-hp", nothing
+# here may be used to weight attrition stats (Regen, Barrier, Max HP), because
+# a full-HP-start sample cannot see attrition at all. Mitigation and hit
+# reliability are measurable either way.
+
+SIM_DIR = ROOT / "data" / "sim-runs"
+
+# Columnar compact combat log, ported from the client's
+# inflateCombatLogCompact (vendor/game-js/hacking.js). `bm` is a per-round
+# bitmask: bit 0 = player barrier fields present, bit 1 = enemy barrier.
+COMPACT_SCALARS = ("pa", "ph", "pc", "ea", "eh", "ec", "php", "ehp", "pls",
+                   "prg", "erg", "ptd", "pcd", "etd", "ecd", "srh", "ecs",
+                   "ecx")
+COMPACT_FLAGS = ("pm", "em", "el", "sr")
+
+
+def inflate_compact(compact):
+    """Expand a `combat_log_compact` block into the per-round dicts the rest
+    of the toolkit (and data-dictionary.md) already speak."""
+    if not compact or not isinstance(compact, dict):
+        return []
+    n = int(compact.get("n") or 0)
+    if n <= 0:
+        return []
+
+    def col(name):
+        value = compact.get(name)
+        return value if isinstance(value, list) else []
+
+    rounds = []
+    for i in range(n):
+        row = {"r": i + 1}
+        for name in COMPACT_SCALARS:
+            values = col(name)
+            row[name] = values[i] if i < len(values) else 0
+        for name in COMPACT_FLAGS:
+            values = col(name)
+            row[name] = bool(values[i]) if i < len(values) else False
+        mask = 0
+        bm = col("bm")
+        if i < len(bm):
+            mask = int(bm[i] or 0)
+        if mask & 1:
+            for name in ("pbs", "pbf"):
+                values = col(name)
+                row[name] = values[i] if i < len(values) else 0
+        if mask & 2:
+            for name in ("ebs", "ebf"):
+                values = col(name)
+                row[name] = values[i] if i < len(values) else 0
+        rounds.append(row)
+    return rounds
+
+
+# ---------------------------------------------------------------------------
+# COMBAT LAWS -- measured 29 Jul 2026 from Software Profiler sweeps.
+# These are mechanisms, not weights: they take the enemy's own stat line
+# (which every profiler fight carries) and return the game's behaviour.
+
+# Hit chance. Fitted on the UNBIASED 2-attack-round sample (1,004 rounds, 32
+# fights, enemy evasion 3,002-7,699, player Accuracy 9,226.9). The ratio-power
+# form p = acc^k/(acc^k+eva^k) is REJECTED.
+#
+# THE DENOMINATOR MATTERS AND IT BIT ONCE. `pm` is a per-round flag meaning
+# "the FIRST attack missed" (client: "First hit misses, but N hits land"), not
+# a miss count -- so hits/(hits+missflags) SILENTLY OVERSTATES hit rate,
+# because a round whose first attack hits and second misses is indistinguish-
+# able from a 1-attack round. That estimator gave 0.757 where the truth is
+# 0.638, and a first fit of 0.532 + 1.208*ln(Acc/Eva) was shipped from it.
+# The clean sample is 2-attack rounds only, identified WITHOUT knowing the
+# attack count: ph=2,pm=0 (both hit) vs ph=1,pm=1 (first missed, second hit),
+# so p = n(2,0)/(n(2,0)+n(1,1)). The model self-validates three ways --
+# predicted n(0,1) 335 vs 354 observed, total rounds 1,930 vs 1,949, and
+# implied attacks/round 1.815 vs the AttackSpeed stat of 1.8458.
+HIT_LOGIT_A = -0.164
+HIT_LOGIT_B = 1.420
+
+
+def hit_chance(accuracy, evasion):
+    """logit(p) = 0.532 + 1.208 * ln(Accuracy / Evasion).
+
+    Resolves open question §7. Fitted range: Acc/Eva ratio 1.20-3.07. At the
+    ratios this build actually fights at (streak 120-159 faces evasion
+    4,857-5,386) true per-attack hit rate is 65-68% -- nowhere near saturated,
+    which retires the 'Accuracy is saturated' reading of 27 Jul and makes
+    Accuracy worth roughly DOUBLE what the biased fit implied."""
+    import math as _m
+    z = HIT_LOGIT_A + HIT_LOGIT_B * _m.log(accuracy / evasion)
+    return 1.0 / (1.0 + _m.exp(-z))
+
+
+# Damage mitigation. Same functional form fits BOTH directions independently:
+# outgoing K = 190.2 (32 fights vs enemy Defense 743-1,990), incoming
+# K = 219.3 (28 fights, our Defense 1,487, enemy ArmorPen 26-406).
+DAMAGE_K = 205.0
+
+
+def damage_multiplier(defense, armor_pen=0.0, k=DAMAGE_K):
+    """dmg_dealt = AttackDamage * K / (K + Defense - ArmorPen).
+
+    Resolves open question §8. Consequences: Defense elasticity is
+    -Defense/(K+Defense) = -0.88 at our 1,487, and ArmorPen is worth far more
+    than its face value looks -- +97 points (10 -> 107) is +6.1% output
+    against enemy Defense 1,500, which validates the inherited weight of 0.05
+    at 0.044-0.051 in the operating range."""
+    return k / (k + max(defense - armor_pen, 0.0))
+
+
+# Corruption's healing-reduction rider. MEASURED 29 Jul 2026 on 288/288
+# Software Profiler rounds (residual exactly 0.0 over the 190 non-capped ones),
+# across 4 enemy classes and 2 enemy levels. See mechanics.md §17.
+CORRUPT_REGEN_SUPPRESSION = 1.5
+
+
+def realized_regen(regeneration, ecd, missing_hp):
+    """The game's own `prg`, from first principles.
+
+    prg = clamp(Regeneration - 1.5*ecd, 0, max_hp - php)
+
+    Incoming corruption destroys 1.5 HP/round of regeneration per point ON TOP
+    of the damage it deals, so incoming corruption costs ~2.5x face value; and
+    regeneration is truncated to missing HP, so a listed-regen buy realizes
+    NOTHING near full HP and 1:1 once depleted."""
+    return max(0.0, min(regeneration - CORRUPT_REGEN_SUPPRESSION * ecd,
+                        missing_hp))
+
+
+def gross_regen(prg, ecd):
+    """Undo the corruption suppression to recover gross regeneration.
+
+    `prg` is NET. Any cross-cohort comparison of realized regeneration must
+    either use this or segment by enemy corruption -- comparing raw Sum(prg)
+    between a high-corruption and a low-corruption cohort measures the
+    opponents, not the build (data-dictionary.md)."""
+    return prg + CORRUPT_REGEN_SUPPRESSION * ecd
+
+
+def sim_key(run):
+    """Content identity for a simulator run. Results carry no server id, and
+    the userscript re-sends the same live binding until the player runs
+    again, so dedupe hashes the whole result body."""
+    body = json.dumps(run.get("result"), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(body.encode()).hexdigest()[:16]
+
+
+def sim_records(path=None):
+    """Yield deduped simulator records from data/sim-runs/*.jsonl."""
+    paths = [path] if path else sorted(SIM_DIR.glob("*.jsonl"))
+    for p in paths:
+        if not Path(p).exists():
+            continue
+        for line in Path(p).read_text().splitlines():
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def unbiased_hit_rate(rounds, hit_key="ph", miss_key="pm"):
+    """True per-attack hit rate from a round log.
+
+    `pm`/`em` flag only that the FIRST attack of the round missed, so the
+    obvious hits/(hits+missflags) overstates accuracy. Restrict to rounds that
+    are provably 2-attack -- (2 hits, no flag) or (1 hit, flag) -- where the
+    flag alone decides the first attack's outcome. Returns (hits, trials)."""
+    both = sum(1 for x in rounds
+               if (x.get(hit_key) or 0) == 2 and not x.get(miss_key))
+    split = sum(1 for x in rounds
+                if (x.get(hit_key) or 0) == 1 and x.get(miss_key))
+    return both, both + split
+
+
+def _sim_fight_row(fight):
+    """Per-fight measurements from a profiler's logged victory/loss."""
+    if not isinstance(fight, dict):
+        return None
+    rounds = inflate_compact(fight.get("combat_log_compact")) or \
+        fight.get("combat_log") or []
+    hits = sum(r.get("ph") or 0 for r in rounds)
+    misses = sum(1 for r in rounds if r.get("pm"))
+    enemy = fight.get("enemy_stats") or {}
+    shp, mhp = fight.get("starting_hp"), fight.get("max_hp")
+    return {
+        "victory": bool(fight.get("victory")),
+        "enemy_class": fight.get("enemy_class"),
+        "enemy_level": fight.get("enemy_level"),
+        "rounds": len(rounds),
+        "hits": hits,
+        "misses": misses,
+        "attacks": hits + misses,
+        # NOTE: naive_hit_rate is BIASED HIGH (see unbiased_hit_rate). Kept
+        # only for continuity with pre-29-Jul figures; never fit on it.
+        "naive_hit_rate": hits / (hits + misses) if hits + misses else None,
+        "hit_hits": unbiased_hit_rate(rounds)[0],
+        "hit_trials": unbiased_hit_rate(rounds)[1],
+        "hit_rate": (lambda h, t: h / t if t else None)(*unbiased_hit_rate(rounds)),
+        "enemy_hit_hits": unbiased_hit_rate(rounds, "eh", "em")[0],
+        "enemy_hit_trials": unbiased_hit_rate(rounds, "eh", "em")[1],
+        "enemy_evasion": enemy.get("effective_evasion"),
+        "enemy_accuracy": enemy.get("effective_accuracy"),
+        "enemy_defense": enemy.get("effective_defense"),
+        "enemy_attack": enemy.get("effective_attack_damage"),
+        "enemy_stats": enemy,
+        # gross intake and its recovery offsets (data-dictionary.md: prefixes
+        # are the OWNER of the effect -- ecd is the ENEMY'S corruption, i.e.
+        # damage dealt TO the player)
+        "dmg_out": sum(r.get("pa") or 0 for r in rounds),
+        "dmg_in": sum(r.get("ea") or 0 for r in rounds),
+        "corrupt_in": sum(r.get("ecd") or 0 for r in rounds),
+        "corrupt_out": sum(r.get("pcd") or 0 for r in rounds),
+        "regen": sum(r.get("prg") or 0 for r in rounds),
+        "starting_hp": shp,
+        "max_hp": mhp,
+        "final_hp": fight.get("final_hp"),
+        "start_frac": (shp / mhp) if shp is not None and mhp else None,
+        "rounds_detail": rounds,
+    }
+
+
+def sim_rows(mode="software_profiler", path=None):
+    """One row per simulator run, with the logged fights parsed out."""
+    rows = []
+    for record in sim_records(path):
+        if record.get("kind") != "sim":
+            continue
+        if mode and record.get("mode") != mode:
+            continue
+        result = record.get("result") or {}
+        form = record.get("form") or {}
+        context = record.get("context") or {}
+        fights = [f for f in (_sim_fight_row(result.get("first_victory")),
+                              _sim_fight_row(result.get("first_loss")))
+                  if f]
+        wins = result.get("wins") or 0
+        losses = result.get("losses") or 0
+        rows.append({
+            "key": record.get("key"),
+            "seen_ms": record.get("seen_ms"),
+            "mode": record.get("mode"),
+            "zone": result.get("zone_name") or result.get("zone_id"),
+            "enemy_level": result.get("requested_enemy_level"),
+            "n": result.get("simulation_count") or (wins + losses),
+            "wins": wins,
+            "losses": losses,
+            "win_rate": result.get("win_rate"),
+            "loss_archetype": result.get("most_common_loss_enemy_archetype"),
+            # which loadout produced it -- "current" or a saved gear set
+            "gear": form.get("profilerGearID") or "current",
+            "hack_level": context.get("hack_level"),
+            "combat_stats": context.get("combat_stats") or {},
+            "fights": fights,
+        })
+    rows.sort(key=lambda r: (r.get("seen_ms") or 0))
+    return rows
+
+
+def sim_regime_check(rows=None):
+    """Does the profiler start every fight at full HP?
+
+    This is the FIRST thing to establish and it gates every later use: if
+    fights start full, the profiler measures single-fight win probability and
+    is blind to attrition, so it cannot price Regen/Barrier/Max HP. Returns
+    (verdict, detail)."""
+    rows = sim_rows() if rows is None else rows
+    fracs = [f["start_frac"] for r in rows for f in r["fights"]
+             if f.get("start_frac") is not None]
+    if not fracs:
+        return "unknown", "no logged fights captured yet"
+    full = sum(1 for f in fracs if f > 0.999)
+    lo, hi = min(fracs), max(fracs)
+    if full == len(fracs):
+        return "full-hp", (
+            f"all {len(fracs)} logged fights start at 100% HP — the profiler "
+            "measures SINGLE-FIGHT win probability and cannot see attrition; "
+            "do not fit Regen/Barrier/MaxHP weights from it")
+    if full == 0:
+        return "carried-hp", (
+            f"{len(fracs)} logged fights start at {lo:.1%}-{hi:.1%} HP — HP "
+            "carries between sim fights, so the profiler DOES model attrition")
+    return "mixed", (
+        f"{full}/{len(fracs)} logged fights start full; range "
+        f"{lo:.1%}-{hi:.1%} — inspect before fitting anything")
+
+
+# ---- Streak simulator ------------------------------------------------------
+# Forward model of a whole streak, built ONLY from laws measured in this
+# workspace, so perturbing a player stat gives that stat's value in STREAKS --
+# the actual objective. Exists because the Software Profiler runs full-HP
+# SINGLE fights and is structurally blind to attrition, which is ~100% of how
+# runs end (decision-log.md, 29 Jul: the player dies at median enemy level
+# 1,798 where the profiler wins 300/300).
+#
+# Laws used, all measured:
+#   hit chance         logit = -0.164 + 1.420*ln(acc/eva)      mechanics.md §18
+#   damage            Atk * K/(K + Def - ArmorPen), K~205      mechanics.md §18
+#   regeneration      clamp(Regen - 1.5*ecd, 0, missing_hp)    mechanics.md §17
+#   barrier           absorbs exactly its value once per fight mechanics.md §16
+#   corruption        ~6 x stat per round at full stack        mechanics.md §19
+#   thorns            = stat per enemy hit landed              mechanics.md §19
+#   post-combat heal  5 * hack_level * 0.99^(streak-10)        mechanics.md §3
+#
+# Enemy stats come from per-class power-law fits of the ledger's own
+# `enemy_stats` (17,751 fights), and enemy level from the recent ledger's
+# streak->level curve, which is near-deterministic (+-1.6-2.6% spread).
+
+CORRUPT_STACK_CAP = 6           # measured max ecd/round ~= 6x the stat
+ENEMY_CLASSES_UNIFORM = True    # ledger: 10.7-11.5% each across 9 classes
+
+
+def _fight_ledger_rows():
+    rows = [r for r in stream_records() if r.get("kind") == "fight"]
+    rows.sort(key=lambda r: r.get("seen_ms") or 0)
+    return rows
+
+
+def enemy_level_curve(recent=4000, rows=None):
+    """{streak: median enemy level} from the RECENT ledger only.
+
+    Must be recent: enemy level tracks player level too, which rose
+    1,031 -> 1,283 over the archive, so a pooled fit understates the curve."""
+    rows = rows or _fight_ledger_rows()
+    buckets = {}
+    for r in rows[-recent:]:
+        f = r["fight"]
+        st, lv = f.get("current_win_streak"), f.get("enemy_level")
+        if st is not None and lv and f.get("victory"):
+            buckets.setdefault(int(st), []).append(lv)
+    return {s: statistics.median(v) for s, v in buckets.items() if len(v) >= 3}
+
+
+def enemy_stat_fits(rows=None, min_obs=20):
+    """{(class, field): (A, B)} for enemy_stat = A * enemy_level**B."""
+    fields = ("attack_damage", "effective_accuracy", "effective_defense",
+              "effective_evasion", "corruption", "thorns", "max_hp",
+              "attack_speed", "effective_armor_penetration",
+              "effective_crit_chance", "effective_crit_damage",
+              "damage_barrier")
+    rows = rows or _fight_ledger_rows()
+    obs = {}
+    for r in rows:
+        f = r["fight"]
+        es, c, lv = f.get("enemy_stats") or {}, f.get("enemy_class"), f.get("enemy_level")
+        if not (c and lv and es):
+            continue
+        for k in fields:
+            v = es.get(k)
+            if v and v > 0:
+                obs.setdefault((c, k), []).append((lv, v))
+    fits = {}
+    for key, pts in obs.items():
+        if len(pts) < min_obs:
+            continue
+        xs = [math.log(x) for x, _ in pts]
+        ys = [math.log(y) for _, y in pts]
+        n = len(xs)
+        sx, sy = sum(xs), sum(ys)
+        sxx = sum(x * x for x in xs)
+        sxy = sum(x * y for x, y in zip(xs, ys))
+        denom = n * sxx - sx * sx
+        if abs(denom) < 1e-12:
+            continue
+        b = (n * sxy - sx * sy) / denom
+        fits[key] = (math.exp((sy - b * sx) / n), b)
+    return fits
+
+
+def _enemy_at(fits, cls, level):
+    def g(field, default=0.0):
+        f = fits.get((cls, field))
+        return f[0] * level ** f[1] if f else default
+    return {
+        "atk": g("attack_damage"), "acc": g("effective_accuracy"),
+        "dfn": g("effective_defense"), "eva": g("effective_evasion"),
+        "corrupt": g("corruption"), "thorns": g("thorns"),
+        "hp": g("max_hp"), "spd": g("attack_speed", 1.0),
+        "apen": g("effective_armor_penetration"),
+        "crit_ch": g("effective_crit_chance"), "crit_dm": g("effective_crit_damage", 1.5),
+        "barrier": g("damage_barrier"),
+    }
+
+
+def player_combat_stats(capture=None):
+    """Our combat stats in the simulator's own vocabulary."""
+    cap = capture or load_capture()[0]
+    cs = (cap["state"].get("currentPlayer") or {}).get("combat_stats") or {}
+    sb = cap["state"].get("statsBreakdown") or {}
+    def sbt(name, fallback):
+        d = sb.get(name)
+        return d.get("total") if isinstance(d, dict) and d.get("total") else fallback
+    return {
+        "max_hp": sbt("max_hp", cs.get("MaxHP", 0)),
+        "atk": sbt("attack_damage", cs.get("AttackDamage", 0)),
+        "dfn": sbt("defense", cs.get("Defense", 0)),
+        "eva": sbt("evasion", cs.get("Evasion", 0)),
+        "acc": sbt("accuracy", cs.get("Accuracy", 0)),
+        "spd": sbt("attack_speed", cs.get("AttackSpeed", 1.0)),
+        "crit_ch": sbt("crit_chance", cs.get("CritChance", 0)),
+        "crit_dm": sbt("crit_damage", cs.get("CritDamage", 1.5)),
+        "regen": cs.get("Regeneration", 0),
+        "barrier": cs.get("DamageBarrier", 0),
+        "apen": cs.get("ArmorPenetration", 0),
+        "thorns": cs.get("Thorns", 0),
+        "corrupt": cs.get("Corruption", 0),
+    }
+
+
+def _attacks_this_round(speed, rng):
+    """Fractional attack speed = that many attacks, remainder as a coin."""
+    whole = int(speed)
+    return whole + (1 if rng.random() < speed - whole else 0)
+
+
+def simulate_fight(p, e, hp, rng, max_rounds=400):
+    """One fight from `hp`. Returns (won, hp_after, rounds)."""
+    ehp = e["hp"]
+    p_shield, e_shield = p["barrier"], e["barrier"]
+    p_stacks = e_stacks = 0
+    p_hit = hit_chance(p["acc"], e["eva"])
+    e_hit = hit_chance(e["acc"], p["eva"])
+    p_dmg = p["atk"] * damage_multiplier(e["dfn"], p["apen"])
+    e_dmg = e["atk"] * damage_multiplier(p["dfn"], e["apen"])
+    for rnd in range(1, max_rounds + 1):
+        # --- incoming ---
+        incoming = 0.0
+        landed = 0
+        for _ in range(_attacks_this_round(e["spd"], rng)):
+            if rng.random() < e_hit:
+                landed += 1
+                d = e_dmg
+                if rng.random() < e["crit_ch"]:
+                    d *= e["crit_dm"]
+                incoming += d
+        if landed:
+            e_stacks = min(e_stacks + landed, CORRUPT_STACK_CAP)
+        ecd = e["corrupt"] * e_stacks
+        incoming += ecd
+        # our thorns reflect on each enemy hit that landed
+        ehp -= p["thorns"] * landed
+        # barrier absorbs every channel, once, up to its value
+        if p_shield > 0:
+            used = min(p_shield, incoming)
+            p_shield -= used
+            incoming -= used
+        hp -= incoming
+        if hp <= 0:
+            return False, 0.0, rnd
+        # regeneration: NET of the corruption rider, capped at missing HP
+        hp += realized_regen(p["regen"], ecd, p["max_hp"] - hp)
+        # --- outgoing ---
+        outgoing = 0.0
+        our_landed = 0
+        for _ in range(_attacks_this_round(p["spd"], rng)):
+            if rng.random() < p_hit:
+                our_landed += 1
+                d = p_dmg
+                if rng.random() < p["crit_ch"]:
+                    d *= p["crit_dm"]
+                outgoing += d
+        if our_landed:
+            p_stacks = min(p_stacks + our_landed, CORRUPT_STACK_CAP)
+        outgoing += p["corrupt"] * p_stacks
+        hp -= e["thorns"] * our_landed          # enemy thorns reflect on us
+        if hp <= 0:
+            return False, 0.0, rnd
+        if e_shield > 0:
+            used = min(e_shield, outgoing)
+            e_shield -= used
+            outgoing -= used
+        ehp -= outgoing
+        if ehp <= 0:
+            return True, hp, rnd
+    return True, hp, max_rounds
+
+
+def simulate_streak(p, hack_level, level_curve, fits, rng, max_streak=400):
+    """Run one streak to death. Returns (streak_reached, fights)."""
+    classes = sorted({c for c, _ in fits})
+    hp = p["max_hp"]
+    streak = 0
+    levels = sorted(level_curve)
+    lo, hi = levels[0], levels[-1]
+    while streak < max_streak:
+        key = min(max(streak, lo), hi)
+        level = level_curve.get(key) or level_curve[min(levels, key=lambda s: abs(s - key))]
+        if streak > hi:                       # extrapolate past observed depth
+            level *= (1.0 + 0.011) ** (streak - hi)
+        e = _enemy_at(fits, rng.choice(classes), level)
+        won, hp, _rounds = simulate_fight(p, e, hp, rng)
+        if not won:
+            return streak
+        streak += 1
+        # post-combat heal: 5 * hack_level, decaying 0.99^(streak-10)
+        heal = 5.0 * hack_level * (0.99 ** max(0, streak - 10))
+        hp = min(p["max_hp"], hp + heal)
+    return max_streak
+
+
+def streak_distribution(p, hack_level, trials=300, seed=12345,
+                        level_curve=None, fits=None):
+    """Death-streak distribution for a stat vector. Returns sorted list."""
+    rng = random.Random(seed)
+    level_curve = level_curve if level_curve is not None else enemy_level_curve()
+    fits = fits if fits is not None else enemy_stat_fits()
+    return sorted(simulate_streak(p, hack_level, level_curve, fits, rng)
+                  for _ in range(trials))
 
 
 def fight_cadence(since_ms=None, zone="corporate_network", max_gap_s=900):
@@ -2153,7 +3207,9 @@ def experiment_status(experiment=None):
     detailed = [f for f in post_fights if f["detail"]]
     ph = sum(f["ph"] for f in detailed)
     pm = sum(f["pm"] for f in detailed)
-    segmented = [e for e in post_deaths if e["ended_at_ms"] >= exp["segment_ms"]]
+    segment_ms = exp.get("segment_ms")  # None -> no mid-window segment declared
+    segmented = ([e for e in post_deaths if e["ended_at_ms"] >= segment_ms]
+                 if segment_ms else post_deaths)
     recent_ms = exp.get("baseline_recent_ms", 0)
     return {
         "experiment": exp,
@@ -2192,7 +3248,8 @@ def experiment_mechanism(status):
     for f in status["fights"]:
         ms = f["ms"]
         if f["post"]:
-            era = "post-seg" if ms and ms >= exp["segment_ms"] else "post"
+            seg_ms = exp.get("segment_ms")  # None -> no mid-window segment
+            era = "post-seg" if seg_ms and ms and ms >= seg_ms else "post"
         elif ms and lo_ms <= ms < exp["equip_ms"]:
             era = "pre"
         else:

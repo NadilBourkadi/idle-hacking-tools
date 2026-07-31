@@ -281,7 +281,7 @@ Every approved craft recommendation is delivered as an explicit contract with ex
 5. **Augment phase** (only if a slot is open; run first for cost reasons) — forced side, cost, pre-declared Continue/Conditional/Abort outcome classes. Recapture immediately after.
 6. **Do-not-touch list** — affixes already at target with rolls ≥80%; and never Refactor an affix whose *other* effect rolls ≥60% (Refactor rerolls **all** effects of the affix — learned on of Rending, 22 July).
 7. **Refactor pass** — qualifying lines (roll <20% after VU work), maximum count, minimum Stability (floor + 1).
-8. **Compile** — floor 8, preferred finish 8–12 remaining; always the final action.
+8. **Compile** — floor **2**, preferred finish 2–6 remaining; always the final action. (Was "floor 8, preferred finish 8–12" from 22 July until **28 July 2026**, when a sweep over 0/2/4/6/8/10 on three live candidates showed a lower floor better on mean, median, p10 **and** p90 in every case; 2 rather than 0 keeps one Refactor in hand. Any contract written before that date reserved ~6 Stability too many.)
 9. **Recapture checkpoints** — after Augment, after each phase group, after Compile.
 10. **Post-craft test** — equip rule, number of streaks, metrics vs recorded baseline (death streak, rounds/fight at high streak, start-HP at death), explicit keep/revert criterion, decision-log entry.
 

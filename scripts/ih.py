@@ -39,6 +39,7 @@ import argparse
 import statistics
 import sys
 import textwrap
+from datetime import datetime
 
 import ihlib
 
@@ -241,6 +242,8 @@ def cmd_history(args):
 
 
 def cmd_potential(args):
+    for _line in ihlib.pending_refit_banner():
+        print("# " + _line)
     cap, path = ihlib.load_capture(args.file)
     # ladders come from the WHOLE capture archive, not this capture: an affix's
     # tier range is a game constant, so decompiling an item must not delete the
@@ -256,8 +259,10 @@ def cmd_potential(args):
     print(f"# Projected post-craft ceilings ({depth}, Compile floor "
           f"{args.floor}{backup}); score = bottleneck planning heuristic "
           "(ihlib.CRAFT_WEIGHTS_*), not a game formula.")
-    print("# These are optimal-plan ceilings; a §10.1 contract with attempt "
-          "caps and a hard floor lands ~5 points lower — discount accordingly.")
+    print("# These are optimal-plan ceilings. Judge close calls with "
+          "`ih.py contract` (outcome distribution), never a flat discount — "
+          "calibration shows realized runs ABOVE projection in every "
+          "uncapped era (`ih.py calibration`).")
     # ladder law re-fitted from the archive, not hard-coded (ihlib.fit_tier_steps)
     shallow_step, deep_step = ihlib.fit_tier_steps(cap, ladders=ladders)
     print(f"# Tier ladder fitted over {len(ihlib.capture_paths())} captures: "
@@ -401,12 +406,15 @@ def cmd_homelab(args):
     room = (info.get("max_queue_jobs") or 0) - len(pending)
     if free or room:
         picks = ihlib.homelab_fill_suggestions(cap, limit=free + room)
-        print(f"\n  FILL NOW ({free} slot(s), {room} queue place(s) free) — "
-              f"ranked by total points, because an idle slot costs more than a "
-              f"better hourly rate:")
+        print(f"\n  QUEUE ({free} slot(s), {room} queue place(s) free) — ranked "
+              f"by pts/h, because tick throughput is a FIXED pool split across "
+              f"active jobs (mechanics.md §15). More slots do NOT add rate;\n"
+              f"  they only buffer work so progress never stops. Running a job "
+              f"alone is how you finish it soonest, at the cost of points:")
         for p in picks:
             print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
-                  f"+{p['points']:>3}pts  {p['hours']:.1f}h  "
+                  f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
+                  f"{p['hours']:.1f}h  "
                   f"{ihlib.fmt_cost(p['cost'])}")
             print(f"        under [{p['section']}]  {p['description'][:70]}")
         if not picks:
@@ -499,6 +507,9 @@ def cmd_hardware(args):
 
 def cmd_contract(args):
     """Price a §10.1 craft contract by simulation instead of by discount."""
+
+    for _line in ihlib.pending_refit_banner():
+        print("  " + _line)
     cap, path = ihlib.load_capture(args.file)
     ladders = ihlib.tier_ladders_archive()
     matches = ihlib.find_items(cap, args.item)
@@ -569,8 +580,21 @@ def cmd_contract(args):
                 preserve=preserve, trials=max(args.trials // 5, 2000),
                 baseline=baseline):
             label = " -> ".join(n for n, _ in order)
-            print(f"    {label:52s} P(>+5) {s['p_upgrade']:5.1%}  "
+            print(f"    {label:52s} P(>+{ihlib.UPGRADE_BAND:.0f}) "
+                  f"{s['p_upgrade']:5.1%}  "
                   f"mean {s['mean']:+5.2f}  p10 {s['p10']:+5.2f}")
+    if getattr(args, "deepen", False):
+        print("\n  deeper-than-planned variants (plan_craft stops at the "
+              "expected budget; over-committing is bounded-downside):")
+        for cand, sim in ihlib.deepen_search(base_item, ladders, phases,
+                                             floor=args.floor,
+                                             preserve=preserve,
+                                             baseline=baseline)[:6]:
+            label = ", ".join(f"{n}->T{t}" for n, t in cand)
+            print(f"    {label:52s} mean {sim['mean']:+7.2f}  p10 {sim['p10']:+6.2f}"
+                  f"  p90 {sim['p90']:+7.2f}  P(>+{ihlib.UPGRADE_BAND:.0f}) "
+                  f"{sim['p_upgrade']*100:5.1f}%")
+
 
 
 def cmd_cadence(args):
@@ -589,6 +613,76 @@ def cmd_cadence(args):
     print("  hour are set by streak depth. (mechanics.md §14)")
 
 
+def cmd_sims(args):
+    """Hacking Simulator runs banked by the userscript (docs/simulator-protocol.md)."""
+    rows = ihlib.sim_rows(mode=args.mode)
+    if not rows:
+        sys.exit(
+            "no simulator runs banked yet.\n"
+            "  Turn on 'Sim capture' in the IH Capture panel, then press RUN\n"
+            "  in the game's Homelab > Hacking Simulator panel. See\n"
+            "  docs/simulator-protocol.md.")
+
+    verdict, detail = ihlib.sim_regime_check(rows)
+    print(f"REGIME: {verdict} — {detail}\n")
+
+    print(f"{'when':>8}  {'zone':<18} {'gear':<10} {'lvl':>6} "
+          f"{'n':>4} {'win%':>6}  {'hit%':>6} {'rounds':>7}  loss-type")
+    for row in rows:
+        when = (datetime.fromtimestamp(row["seen_ms"] / 1000).strftime("%H:%M:%S")
+                if row.get("seen_ms") else "-")
+        rate = row.get("win_rate")
+        # unbiased per-attack hit rate: 2-attack rounds only (ihlib.unbiased_hit_rate)
+        attacks = sum(f["hit_trials"] for f in row["fights"])
+        hits = sum(f["hit_hits"] for f in row["fights"])
+        rounds = [f["rounds"] for f in row["fights"]]
+        arch = (row.get("loss_archetype") or {}).get("class") or "-"
+        print(f"{when:>8}  {str(row['zone'] or '-'):<18} "
+              f"{str(row['gear']):<10} {row['enemy_level'] or 0:>6} "
+              f"{row['n']:>4} "
+              f"{(rate * 100 if rate is not None else 0):>5.1f}%  "
+              f"{(hits / attacks * 100 if attacks else 0):>5.1f}% "
+              f"{(statistics.mean(rounds) if rounds else 0):>7.1f}  {arch}")
+
+    print(f"\n  {len(rows)} run(s), "
+          f"{sum(r['n'] for r in rows):,} simulated fights, "
+          f"{sum(len(r['fights']) for r in rows)} fully logged")
+    levels = sorted({r["enemy_level"] for r in rows if r.get("enemy_level")})
+    gears = sorted({r["gear"] for r in rows})
+    if levels:
+        print(f"  enemy levels covered: {levels[0]}-{levels[-1]} "
+              f"({len(levels)} distinct)")
+    print(f"  gear configurations: {', '.join(map(str, gears))}")
+    if len(gears) == 1:
+        print("  NOTE: one gear configuration only — this sample can fit the "
+              "enemy-level\n        response but CANNOT price any stat weight. "
+              "Create a second gear\n        set that differs in one stat and "
+              "re-run at a matched level.")
+
+
+def _hc_per_hour(contract, fights_per_hour):
+    """Hackcoin per hour of COMBAT for a contract, 0 if not combat-driven.
+
+    `kills` advances once per won fight. `drops` advances on a contract-item
+    drop at CONTRACT_DROP_PER_WIN (0.296/win, re-measured 31 Jul 2026 from
+    board accrual with the contract active -- the 29 Jul ledger fit of 0.0534
+    pooled mostly-inactive windows and was 5.5x low). `harvest` is gathering,
+    not combat -- no rate is measured, so it returns 0 rather than a guess.
+    """
+    target = contract.get("target") or 0
+    hc = (contract.get("rewards") or {}).get("hackcoin") or 0
+    done = contract.get("progress") or 0
+    left = max(target - done, 0)
+    if not left or not hc or not fights_per_hour:
+        return 0.0
+    kind = contract.get("type")
+    if kind == "kills":
+        return hc / (left / fights_per_hour)
+    if kind == "drops":
+        return hc / (left / (fights_per_hour * ihlib.CONTRACT_DROP_PER_WIN))
+    return 0.0
+
+
 def cmd_audit(args):
     """Anomaly sweep: things that are silently costing progress right now.
 
@@ -600,6 +694,15 @@ def cmd_audit(args):
     cap, path = ihlib.load_capture(args.file)
     print(f"# {path.name}")
     flags = []
+    # Known-wrong constants outrank every other finding: they mean the verdicts
+    # this tool is about to print are already known to be false. Listed first,
+    # by design -- an unfixed constant is progress being lost silently, which is
+    # exactly what this sweep exists to catch.
+    for _r in ihlib.pending_refits():
+        flags.append(("KNOWN-WRONG", f"{_r['name']} applied as {_r['applied']} "
+                                     f"since {_r['opened']}. Blocked on: "
+                                     f"{_r['blocked_on']} UNBLOCK: "
+                                     f"{_r['unblock']}"))
 
     # the whole capture can be stale, not just a panel inside it: the
     # auto-stream keeps running after the last capture click, so its newest
@@ -658,22 +761,35 @@ def cmd_audit(args):
         pend = len(homelab.get("pending_jobs") or [])
         free = (info.get("max_build_slots") or 0) - active
         room = (info.get("max_queue_jobs") or 0) - pend
-        if free or room:
-            picks = ihlib.homelab_fill_suggestions(cap, limit=free + room)
-            if picks:
-                # name the exact jobs -- "refill them" is not an action
-                named = "; ".join(
-                    f"{p['name']} [{p['section']}] -> L{p['target_level']} "
-                    f"(+{p['points']}pts, {p['hours']:.1f}h, "
-                    f"{ihlib.fmt_cost(p['cost'])})"
-                    for p in picks)
-                flags.append(("IDLE", f"homelab has {free} build slot(s) and "
-                                      f"{room} queue place(s) empty — fill with: "
-                                      f"{named}"))
-            else:
-                flags.append(("IDLE", f"homelab has {free} build slot(s) and "
-                                      f"{room} queue place(s) empty, and nothing "
-                                      f"affordable is left un-queued"))
+        # CORRECTED 29 Jul 2026. This used to flag every free slot as lost
+        # progress. It is not: homelab tick throughput is a FIXED pool split
+        # evenly across active jobs (mechanics.md §15), so one job running
+        # alone earns exactly what four running together earn. Free slots cost
+        # nothing while at least one job is going -- they only buffer work.
+        # The real loss is throughput reaching ZERO, i.e. nothing active AND
+        # nothing queued. Flag that hard; mention free slots only as coverage.
+        if not active and not pend:
+            picks = ihlib.homelab_fill_suggestions(cap, limit=3)
+            named = "; ".join(
+                f"{p['name']} [{p['section']}] -> L{p['target_level']} "
+                f"({p['pts_per_hour']:.0f}pts/h, +{p['points']}pts, "
+                f"{p['hours']:.1f}h, {ihlib.fmt_cost(p['cost'])})"
+                for p in picks) or "nothing affordable is available"
+            flags.append(("IDLE", f"homelab is making NO progress — 0 active "
+                                  f"jobs and 0 queued. Start: {named}"))
+        elif free or room:
+            hours_buffered = sum(
+                ((j.get("duration_ticks") or 0) - (j.get("progress_ticks") or 0))
+                for j in (homelab.get("active_jobs") or [])
+                + (homelab.get("pending_jobs") or [])) * \
+                (info.get("tick_seconds") or 5) / 3600.0 / \
+                max(ihlib.homelab_build_speed(info), 1e-9)
+            flags.append(("COVERAGE", f"homelab has {free} slot(s) and {room} "
+                                      f"queue place(s) free — this does NOT "
+                                      f"slow the running jobs (throughput is "
+                                      f"split, not added), but only "
+                                      f"~{hours_buffered:.1f}h of work is "
+                                      f"buffered before progress stops"))
         gates = [(d.get("name"), (d.get("cost") or {}).get("hackcoin") or 0)
                  for d in (definitions.get("installs") or [])
                  if not (homelab.get("installed") or {}).get(d.get("type"))]
@@ -690,6 +806,21 @@ def cmd_audit(args):
     board = ihlib.contract_board(cap)
     left = board["hours_left"]
     active = board["active"]
+    # NOTHING-ACCRUING check, added 31 Jul 2026: when a contract completes,
+    # the active slot empties and the board earns nothing until the player
+    # activates the next one. The sweep showed the pending list and the
+    # unclaimed reward that day but nothing said "the clock is running on an
+    # idle board" -- ~2h of board time were lost between Marathon Collection
+    # completing and the next capture surfacing it.
+    incomplete = [c for c in (board.get("pending") or [])
+                  if (c.get("progress") or 0) < (c.get("target") or 0)]
+    if not active and incomplete and (left or 0) > 0:
+        idle_hc = sum((c.get("rewards") or {}).get("hackcoin") or 0
+                      for c in incomplete)
+        flags.append(("CONTRACT", f"NOTHING ACCRUING — no active contract "
+                                  f"while {idle_hc} hc of incomplete "
+                                  f"contracts sit on the board and "
+                                  f"{left:.1f}h remain; activate one now"))
     if active and not active.get("completed"):
         done, target = active.get("progress") or 0, active.get("target") or 0
         rew = active.get("rewards") or {}
@@ -702,6 +833,46 @@ def cmd_audit(args):
                                       f"{target:,} ({done / target * 100:.0f}%) "
                                       f"— {window}; unfinished progress is "
                                       f"destroyed at reset. Pays {pay}"))
+            # Completability, added 29 Jul 2026, CORRECTED same day. The first
+            # version asserted "kills accrue only while the tab is open" from a
+            # single observation (Marathon at 40/2,848 eight hours into the
+            # window). That was a confound: the board holds SEVEN contracts,
+            # only the active one accrues, and Marathon had merely been made
+            # active minutes earlier. Offline accrual is NOT ruled out by any
+            # data here -- do not re-assert it. What is measured is the fight
+            # cadence, so quote combat-hours required and nothing more.
+            if active.get("type") in ("kills", "drops") and left:
+                rate = 3600.0 / ihlib.FIGHT_CADENCE_S
+                if active.get("type") == "drops":
+                    rate *= ihlib.CONTRACT_DROP_PER_WIN
+                need_h = (target - done) / rate
+                verdict = ("ACHIEVABLE" if need_h <= left * 0.9 else
+                           "AT RISK" if need_h <= left else "NOT REACHABLE")
+                flags.append(("CONTRACT", f"  -> {verdict}: {target - done:,} "
+                                          f"left = ~{need_h:.1f}h of combat at "
+                                          f"~{rate:.0f}/h progress, in a "
+                                          f"{left:.1f}h window"))
+    # The board is not one contract. Only the active one accrues (queue
+    # capacity 0), so every pending contract is hackcoin sitting still, and the
+    # clear bonus needs ALL of them. Added 29 Jul 2026 after `contract_board`
+    # was found to be returning only the active row -- an advisory priced this
+    # board at 11 hackcoin when it was worth 25.
+    pending = board.get("pending") or []
+    if pending:
+        rate = 3600.0 / ihlib.FIGHT_CADENCE_S
+        hc = sum((c.get("rewards") or {}).get("hackcoin") or 0 for c in pending)
+        flags.append(("CONTRACT", f"{len(pending)} other contract(s) on the "
+                                  f"board are at 0 and earn NOTHING until made "
+                                  f"active — {hc} hackcoin idle. Only the "
+                                  f"active contract accrues."))
+        for c in sorted(pending, key=lambda c: -_hc_per_hour(c, rate)):
+            rew = (c.get("rewards") or {}).get("hackcoin") or 0
+            per = _hc_per_hour(c, rate)
+            eff = (f"{per:.2f} hc/combat-h" if per
+                   else "rate unmeasured (non-combat)")
+            flags.append(("CONTRACT", f"    {c.get('name')} — "
+                                      f"{c.get('target'):,} {c.get('type')}, "
+                                      f"pays {rew} hc  [{eff}]"))
     for c in board["unclaimed"]:
         rew = c.get("rewards") or {}
         flags.append(("CONTRACT", f"{c.get('name')} is COMPLETE and unclaimed "
@@ -1012,6 +1183,8 @@ def main():
     p.add_argument("--order", action="store_true",
                    help="search every phase permutation")
     p.add_argument("--file")
+    p.add_argument("--deepen", action="store_true",
+                   help="also test plans deeper than plan_craft proposes")
     p.set_defaults(fn=cmd_contract)
 
     p = sub.add_parser("calibration",
@@ -1038,6 +1211,11 @@ def main():
 
     p = sub.add_parser("cadence", help="measured seconds per fight")
     p.set_defaults(fn=cmd_cadence)
+
+    p = sub.add_parser("sims", help="Hacking Simulator runs banked so far")
+    p.add_argument("--mode", default="software_profiler",
+                   choices=("software_profiler", "cicd_pipeline"))
+    p.set_defaults(fn=cmd_sims)
 
     p = sub.add_parser("potential")
     p.add_argument("--slot")

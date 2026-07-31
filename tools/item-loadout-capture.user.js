@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      1.5.0
-// @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources). Never performs gameplay or crafting actions.
+// @version      1.6.0
+// @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources) plus Hacking Simulator runs. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
 // @run-at       document-idle
@@ -21,11 +21,18 @@
 // an OPT-IN auto-stream timer may also POST a lightweight combat-only
 // payload on an interval (boundary amended 23 Jul 2026 at the player's
 // request — still zero game interaction, localhost only).
+//
+// v1.6.0 adds Hacking Simulator capture. The player clicks RUN in the
+// game's own Simulator panel; this script only *observes* the result the
+// game has already computed, by reading the page-scope result bindings
+// and the game's own IndexedDB history store. It never sends
+// RUN_HACKING_SOFTWARE_PROFILER (or any other message) itself — the
+// no-game-interaction boundary is unchanged.
 
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "1.5.0";
+  const TOOL_VERSION = "1.6.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
 
   // Auto-stream: combat-only payload pushed on a timer while enabled.
@@ -35,6 +42,22 @@
   const STREAM_BINDINGS = ["combatLog", "recentLossStreaks", "hackingState"];
   const STREAM_INTERVAL_MS = 150000;
   const STREAM_PREF_KEY = "ihc-auto-stream-enabled";
+
+  // Sim capture: watches the two page-scope result bindings the game fills
+  // in when the player runs a simulation, and pushes each NEW result once.
+  // Polled at 2s against the profiler's own 5s cooldown, so back-to-back
+  // runs can never be missed. Nothing is sent while the results are
+  // unchanged, so leaving this on during normal play is silent.
+  const SIM_SCHEMA = "idle-hacking-sim-runs-v1";
+  const SIM_BINDINGS = [
+    "homelabSoftwareProfilerResult",
+    "homelabPipelineSimulationResult",
+    "homelabSimulatorFormState",
+  ];
+  const SIM_POLL_MS = 2000;
+  const SIM_PREF_KEY = "ihc-sim-capture-enabled";
+  const SIM_DB_NAME = "idlehack.hacking-simulator-history";
+  const SIM_DB_STORE = "runs";
 
   // Page-context window. Under @grant the script runs in the
   // Tampermonkey sandbox; page globals are only visible via unsafeWindow.
@@ -478,6 +501,259 @@
     applyStreamState();
   }
 
+  // ---- Hacking Simulator capture ------------------------------------------
+  // The game stores each simulation result in a page-scope binding and
+  // mirrors the last 10 per mode into its own IndexedDB store. Both are
+  // read-only observations of a result the player already asked the game
+  // to compute.
+
+  let simTimer = null;
+  const simSeen = new Set();
+
+  function simEnabled() {
+    try {
+      return localStorage.getItem(SIM_PREF_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function setSimStatus(message) {
+    const element = document.querySelector(
+      "#ih-capture-panel [data-role='sim-status']",
+    );
+    if (element) {
+      element.textContent = message;
+    }
+  }
+
+  // Stable fingerprint so an unchanged binding is pushed exactly once. The
+  // hub dedupes authoritatively too; this only keeps the wire quiet.
+  function fingerprint(value) {
+    const text = JSON.stringify(value);
+    let hash = 5381;
+    for (let i = 0; i < text.length; i += 1) {
+      hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+    }
+    return `${text.length}:${hash}`;
+  }
+
+  // A sim result is only interpretable next to the stats it was run with:
+  // gear_set_items says which items a "gear set" run used, and combat_stats
+  // pins the currently-equipped baseline.
+  function buildSimContextBody() {
+    return `
+      const p = typeof currentPlayer === "undefined" ? null : currentPlayer;
+      return JSON.stringify(!p ? null : {
+        hack_level: p.hack_level,
+        current_zone: p.current_zone,
+        current_win_streak: p.current_win_streak,
+        combat_stats: p.combat_stats,
+        gear_sets: p.gear_sets,
+        gear_set_items: p.gear_set_items,
+        gear_set_capacity: p.gear_set_capacity,
+        hacking_simulator: p.hacking_simulator,
+      });`;
+  }
+
+  // Read the game's own history store. Never opens with a version number
+  // (that would trigger an upgrade transaction) and never writes.
+  function readSimHistoryFromIDB() {
+    return new Promise((resolve) => {
+      let db;
+      try {
+        db = pageWindow.indexedDB;
+      } catch {
+        resolve({ records: [], note: "indexedDB unavailable" });
+        return;
+      }
+      if (!db) {
+        resolve({ records: [], note: "indexedDB unavailable" });
+        return;
+      }
+
+      let settled = false;
+      const done = (value) => {
+        if (!settled) {
+          settled = true;
+          resolve(value);
+        }
+      };
+      setTimeout(() => done({ records: [], note: "indexedDB timed out" }), 4000);
+
+      const request = db.open(SIM_DB_NAME);
+      request.onerror = () => done({ records: [], note: "indexedDB open failed" });
+      request.onsuccess = () => {
+        const handle = request.result;
+        try {
+          if (!handle.objectStoreNames.contains(SIM_DB_STORE)) {
+            handle.close();
+            done({ records: [], note: "no simulation history yet" });
+            return;
+          }
+          const store = handle
+            .transaction(SIM_DB_STORE, "readonly")
+            .objectStore(SIM_DB_STORE);
+          const all = store.getAll();
+          all.onsuccess = () => {
+            handle.close();
+            done({ records: Array.isArray(all.result) ? all.result : [] });
+          };
+          all.onerror = () => {
+            handle.close();
+            done({ records: [], note: "indexedDB read failed" });
+          };
+        } catch (error) {
+          try {
+            handle.close();
+          } catch {
+            // already closing
+          }
+          done({ records: [], note: String(error) });
+        }
+      };
+    });
+  }
+
+  async function collectSimRuns(includeHistory) {
+    const result = await readGameBindings(SIM_BINDINGS);
+    const bindings = result.bindings ?? {};
+
+    const runs = [];
+    const add = (mode, payload, source) => {
+      if (!payload || typeof payload !== "object") {
+        return;
+      }
+      runs.push({ mode, source, result: payload });
+    };
+    add("software_profiler", bindings.homelabSoftwareProfilerResult, "live");
+    add("cicd_pipeline", bindings.homelabPipelineSimulationResult, "live");
+
+    let historyNote = null;
+    if (includeHistory) {
+      const history = await readSimHistoryFromIDB();
+      historyNote = history.note ?? null;
+      for (const record of history.records) {
+        if (record && typeof record === "object" && record.result) {
+          runs.push({
+            mode: record.mode || "unknown",
+            source: "history",
+            recorded_at_ms: record.recorded_at_ms || null,
+            result: record.result,
+          });
+        }
+      }
+    }
+
+    let context = null;
+    try {
+      context = await evaluateInPage(buildSimContextBody());
+    } catch {
+      context = null;
+    }
+
+    return {
+      runs,
+      historyNote,
+      form: bindings.homelabSimulatorFormState ?? null,
+      readMethod: result.readMethod,
+      context,
+    };
+  }
+
+  async function pushSimRuns({ includeHistory, quiet }) {
+    const collected = await collectSimRuns(includeHistory);
+
+    const fresh = collected.runs.filter((run) => {
+      const key = `${run.mode}:${fingerprint(run.result)}`;
+      if (simSeen.has(key)) {
+        return false;
+      }
+      simSeen.add(key);
+      return true;
+    });
+
+    if (!fresh.length) {
+      if (!quiet) {
+        setSimStatus(
+          collected.historyNote
+            ? `sim: nothing new (${collected.historyNote})`
+            : "sim: nothing new to send",
+        );
+      }
+      return;
+    }
+
+    const payload = {
+      schema: SIM_SCHEMA,
+      capturedAt: new Date().toISOString(),
+      sourceVersion: TOOL_VERSION,
+      readMethod: collected.readMethod,
+      state: {
+        runs: fresh,
+        form: collected.form,
+        context: collected.context,
+      },
+    };
+
+    if (typeof GM_xmlhttpRequest !== "function") {
+      setSimStatus("sim: GM_xmlhttpRequest unavailable");
+      return;
+    }
+
+    const stamp = new Date().toLocaleTimeString();
+    GM_xmlhttpRequest({
+      method: "POST",
+      url: HUB_EXPORT_URL,
+      headers: { "Content-Type": "application/json" },
+      data: JSON.stringify(payload),
+      timeout: 8000,
+      onload: (response) =>
+        setSimStatus(
+          response.status === 200
+            ? `${stamp} ${response.responseText.trim()}`
+            : `sim: hub HTTP ${response.status}`,
+        ),
+      onerror: () => setSimStatus("sim: hub unreachable"),
+      ontimeout: () => setSimStatus("sim: hub timed out"),
+    });
+  }
+
+  function applySimState() {
+    const button = document.querySelector(
+      "#ih-capture-panel [data-action='toggle-sim']",
+    );
+    const enabled = simEnabled();
+    if (button) {
+      button.textContent = `Sim capture: ${enabled ? "ON" : "OFF"}`;
+    }
+    if (enabled && !simTimer) {
+      simTimer = setInterval(() => {
+        pushSimRuns({ includeHistory: false, quiet: true }).catch((error) =>
+          setSimStatus(`sim failed: ${error}`),
+        );
+      }, SIM_POLL_MS);
+      setSimStatus("sim: watching for runs…");
+      pushSimRuns({ includeHistory: true, quiet: true }).catch((error) =>
+        setSimStatus(`sim failed: ${error}`),
+      );
+    }
+    if (!enabled && simTimer) {
+      clearInterval(simTimer);
+      simTimer = null;
+      setSimStatus("sim: off");
+    }
+  }
+
+  function toggleSim() {
+    try {
+      localStorage.setItem(SIM_PREF_KEY, simEnabled() ? "0" : "1");
+    } catch {
+      // private mode etc. — timer still applies for this page lifetime
+    }
+    applySimState();
+  }
+
   async function captureToHub() {
     setStatus("Reading full game state…");
     const { payload, summary } = await buildCapturePayload();
@@ -541,8 +817,15 @@
           <button data-action="toggle-stream" class="wide">
             Auto-stream: OFF
           </button>
+          <button data-action="toggle-sim" class="wide">
+            Sim capture: OFF
+          </button>
+          <button data-action="capture-sim" class="wide">
+            Send sim history now
+          </button>
         </div>
         <div class="ihc-status" data-role="stream-status">stream: off</div>
+        <div class="ihc-status" data-role="sim-status">sim: off</div>
         <div class="ihc-status" data-role="status">${status}</div>
       </div>
     `;
@@ -571,6 +854,18 @@
 
       if (action === "toggle-stream") {
         toggleStream();
+      }
+
+      if (action === "toggle-sim") {
+        toggleSim();
+      }
+
+      if (action === "capture-sim") {
+        setSimStatus("sim: reading results…");
+        pushSimRuns({ includeHistory: true, quiet: false }).catch((error) => {
+          console.error("[IH Capture] Sim capture failed:", error);
+          setSimStatus(`sim failed: ${error}`);
+        });
       }
 
       if (action === "collapse") {
@@ -668,6 +963,7 @@
   addStyles();
   createPanel();
   applyStreamState();
+  applySimState();
   updateReadiness();
   setInterval(updateReadiness, 3000);
 

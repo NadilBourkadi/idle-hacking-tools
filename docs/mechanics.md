@@ -590,3 +590,262 @@ The decisive test: the Driver equip at 21:50Z moved attack speed **1.819 → 1.9
 - This puts the 22 July "tempo does not move the death ceiling" law in question — see `open-questions.md`. `driver-ab-2026-07-27` tests it directly.
 
 One unexplained ~2.7% step (5.000 → 4.867 s/fight) sits between the 17:00 and 18:00Z buckets. It did not recur at the 21:50 attack-speed change, so it is not tempo-driven. Cause unknown — logged in `open-questions.md`.
+
+## 15. Homelab build throughput is a fixed pool, split across active jobs (verified 29 July 2026)
+
+**Corrected the same day it was written.** The first version of this section claimed slot count did not affect build speed. That was wrong — it came from reading `homelabBuildSpeedBreakdown()` (which computes the global multiplier `o` and genuinely has no slot term) and generalising from one function without reading where `o` is *applied*. The Build Scheduler upgrade states the true behaviour in its own in-game description: **"Adds an additional active Homelab build slot (splits progress, doesn't speed up building)."**
+
+The division happens in `homelabJobEstimates()` (`vendor/game-js/homelab.js`), where `n` is the number of **active jobs**:
+
+```js
+const n = Math.max(1, e.length);          // e = active jobs
+e.remaining -= l * o * t / n;             // each job gets 1/n of the pool
+```
+
+So:
+
+- **Total throughput** = `o / tick_seconds` ticks per second, where `o = clamp((1 + upgradeEffects + global_build_speed_bonus) * global_multiplier, 1, 20)`.
+- **Per-job rate** = `o / (n * tick_seconds)`.
+- **Total is independent of `n`.** Slots split the pool; they never add to it.
+
+Verified against the capture, exactly (`ihlib.homelab_build_speed`):
+
+| quantity | measured | predicted |
+|---|---|---|
+| per job, n=2 | 0.1580 ticks/s | `1.58 / (2 x 5)` = 0.1580 |
+| total, n=2 | 0.3161 ticks/s | `1.58 / 5` = 0.3160 |
+
+### Consequences (these overturn the previous homelab policy)
+
+1. **Progress points per hour do not depend on how many slots are busy.** Running one job earns exactly what running four earns. The long-standing "4 slots sat empty 23–27 Jul, that is the real loss" framing was wrong in mechanism, and overstated: an empty slot costs nothing as long as **at least one** job is running.
+2. **The real failure is throughput reaching zero** — nothing active *and* nothing queued. That is the only state that actually loses points, and it is what `ih.py audit` now flags (`IDLE`); free slots are reported as `COVERAGE` with the hours of work still buffered.
+3. **Rank jobs by points per tick (= points per slot-hour), not by total points.** Ticks are the fixed resource, so point-efficiency per tick is the whole question. `ihlib.homelab_fill_suggestions` sorted by *total points* on the opposite rationale and has been corrected; total points now only breaks ties, because a longer job buffers more unattended work at the same rate.
+4. **Slots are a buffer against idling, not a throughput purchase.** Their value is that work keeps flowing while nobody is refilling.
+5. **Adding a job actively slows every job already running.** To finish one specific target soonest — an install gate, say — run it with as few concurrent jobs as possible. With `n=2`, the Hacking Simulator's remaining 2,257 ticks take ~4.0h; alone it would take ~2.0h. That is a real trade against point-efficiency: VLAN Rules earns 0.109 pts/tick against the Simulator's 0.035, so concentrating on the Simulator costs points to buy time.
+6. **Overclock is the only genuine speed purchase**, and it is priced steeply: `HOMELAB_OVERCLOCK_COST_MULTIPLIERS = {1:1, 2:5, 3:15, 4:25, 5:40}` — 2x speed for 5x resources. `max_build_overclock` is currently **1**, so none is available.
+
+## 16. Corruption damage bypasses Defense, and it is what sets the death ceiling (measured 29 July 2026)
+
+Segmenting post-Kernel fights (streak 106–145, n=381 victories) by enemy class splits them cleanly in two, on the enemy's own `corruption` stat:
+
+| | enemy `corruption` | direct `ea`/rnd | corruption `ecd`/rnd | `ea+ecd` | realized `prg`/rnd | **NET/rnd** |
+|---|---|---|---|---|---|---|
+| **Trojan Wall** | 31.8 | 225 | **104** | 329 | 316 | **+34.8** |
+| **Rootkit** | 31.3 | 233 | **108** | 341 | 290 | **+15.0** |
+| **Stealth Worm** | 31.0 | 228 | **104** | 332 | 302 | **+11.1** |
+| Spike Router | 4.6 | 339 | 14 | 354 | 401 | −19.6 |
+| Logic Bomb | 6.8 | 302 | 20 | 322 | 367 | −22.0 |
+| Zero-Day | 7.2 | 309 | 22 | 331 | 335 | −22.2 |
+| Glitch Phantom | 4.7 | 345 | 15 | 360 | 368 | −28.8 |
+| Siege Daemon | 4.9 | 347 | 16 | 363 | 364 | −31.6 |
+| Brute Force | 6.9 | 295 | 20 | 316 | 328 | −45.1 |
+
+**Total incoming damage is nearly identical across all nine classes** (`ea+ecd` = 316–363). What differs is the **channel**: the three lethal classes deliver about a third of their damage as corruption DoT, and the other six deliver almost all of it as direct attacks.
+
+**Defense only reduces the direct channel.** That is visible in the table — direct `ea`/round against the corruption classes is *lower* (225–233) than against the safe ones (295–347), which is Defense working exactly as expected. The corruption third simply goes around it.
+
+Consequences:
+
+1. **These three classes caused 11 of 11 post-craft deaths.** They are the only ones with positive net drain. The death ceiling is set by them alone, and by the length of the worst *run* of them — the mean across classes is ≈ −12/round, but two or three Trojan Walls in a row cost ~2,000 HP each against a 17.6K pool.
+2. **Defense is now a low-value stat at the margin.** It is blind to the channel that kills. This is why the +37.4 Kernel craft — overwhelmingly Defense and Barrier — bought only **+3.8 death streaks**: it spent almost all of its value on the two-thirds of incoming damage that was never the constraint.
+3. **CORRECTED 29 July 2026 (evening): a corruption-resistance upgrade DOES exist.** The original claim -- "there is no corruption-resistance stat" -- was made by reading `statsBreakdown`, which only shows stats the player already has. **Isolated Sandbox** [Virtualization Cluster] "divides incoming corruption damage by 1.01 (+0.01/level)", max level 200 (up to ÷3.00), **gated at homelab 11** and therefore invisible in the UI at homelab 10. Virtualization Cluster is already installed and the upgrade costs 25M credits at base with no hackcoin. This is the same accessibility trap `CLAUDE.md` warns about, run in reverse: absence from the current stat block is not absence from the game. The other counters stand: (a) **fewer rounds**, since corruption is charged per round, and (b) **regeneration and Max HP**.
+4. **RESOLVED 29 July 2026 (evening) — corruption carries a healing-reduction rider, and it is exact.** `prg = clamp(Regeneration − 1.5 × ecd, 0, max_hp − php)`, verified on **288/288 rounds (100%)** of Software Profiler logs across 4 fights, 4 enemy classes and 2 enemy levels. Each point of incoming corruption damage destroys **1.5 HP/round of regeneration on top of the damage it deals**, so incoming corruption costs **2.5× its face value**. See §17.
+
+**Method note:** this was found by comparing the two cohorts' full `enemy_stats` vectors, which surfaced `corruption` at 5.4x separation while every other field sat within 20% — including `attack_damage`, which is *lower* for the lethal classes. Do this before theorising about a matchup: the ledger already carries the enemy's whole stat line.
+
+
+## 17. Regeneration is exact, and corruption suppresses it 1.5:1 (measured 29 July 2026, Software Profiler)
+
+**`prg = clamp(Regeneration − 1.5 × ecd, 0, max_hp − php)`**
+
+Verified on **288 of 288 rounds (100.0%, residual ≤ 1.0)** from four fully-logged
+Software Profiler fights — Siege Daemon and Trojan Wall at enemy level 2537,
+Zero-Day and Trojan Wall at 2300. `Regeneration` is the listed total from
+`statsBreakdown.regeneration.total` (537.85 at measurement); the uncapped term
+fits with residual **exactly 0.0** over 190 non-capped rounds.
+
+Three separate long-standing questions collapse into this one line:
+
+1. **Corruption is a healing-reduction effect, not just a DoT.** Each point of
+   `ecd` removes **1.5 HP/round of regeneration** *in addition to* the damage it
+   deals, so incoming corruption costs **≈2.5× face value**. Against Trojan Wall
+   at profiler level 2537 (`ecd` ≈ 200/round) that is **300/round of a 537.85
+   pool destroyed — 56% of the build's regeneration**, which is precisely why
+   Trojan Wall / Rootkit / Stealth Worm cause ~72% of all deaths (88 of 123 in
+   the ledger) while dealing *less* direct damage than the safe classes.
+2. **Overheal capping is real and exact.** `prg` is truncated to `max_hp − php`,
+   so a listed-Regeneration buy realizes **nothing** while near full HP and
+   **1:1** once depleted. This confirms the 28 July working model at formula
+   level and explains its band pattern (+0.4% / +4.7% / +11.5% realized at
+   streak 60-85 / 86-105 / 106-130) without needing any extra mechanism.
+3. **`prg` is a NET figure.** Any analysis that treated it as gross
+   regeneration double-counted corruption. `Σprg/rounds` measures
+   *regeneration after suppression*, which is why it looked like regeneration
+   "under-performs against exactly three enemy classes".
+
+Corollaries worth acting on:
+
+- **A point of listed Regeneration is worth 1 HP/round while depleted** — over a
+  ~55-70 round fight that is 55-70 HP, against **1 HP** for a point of Barrier
+  (a once-per-fight shield equal to its value, §16 / `data-dictionary.md`).
+  `CRAFT_WEIGHTS_FLAT` prices these at 0.6 and 0.043, a ratio of 14×, where the
+  mechanism implies ~55-70× at depth. The gap is the overheal cap, which is
+  *not* binding at the depths where runs actually end. **Treat the Regen:Barrier
+  ratio as unresolved and measure it with a gear-set A/B** — do not re-fit from
+  this alone.
+- **The enemy's regeneration is already fully suppressed by ours.** `erg` is 0 in
+  95%+ of rounds (player `pcd` 17-145/round × 1.5 exceeds every observed enemy
+  regeneration of 30-104), so additional player Corruption buys **no further
+  suppression** — only direct damage. `CRAFT_WEIGHTS_FLAT["Corrupt"] = 0.7`
+  measured that direct share and needs no change on this account.
+- The logged `php` appears to be the round's HP **before** regeneration is
+  applied — that is the reading under which `prg = max_hp − php` at the cap.
+  Working model; it also predicts that the long-standing "damage_taken − Σprg −
+  Σpbs = HP drop does not close" residual is an off-by-one-round artefact.
+
+**Method note.** This was found in the first two Software Profiler runs ever
+taken, from `enemy_stats` + full round logs, in about ten minutes. The same
+question had been open for a day against 381 live fights, because live logs
+never carry a clean pairing of a known Regeneration total with a controlled
+range of enemy corruption.
+
+
+## 18. Hit chance and damage mitigation — RESOLVED formula-level, 29 July 2026 (Software Profiler sweep)
+
+Both were open since 21 July (`open-questions.md` §7, §8). A 21-run sweep of enemy
+levels 1400–2537 (2,100 simulated fights, 32 fully logged) settled them, because
+every profiler fight carries the **enemy's own stat line** next to a full round log.
+
+### Hit chance
+
+**`logit(hit) = −0.164 + 1.420 × ln(Accuracy / Evasion)`** — `ihlib.hit_chance`
+
+Fitted on the **unbiased 2-attack-round sample** (1,004 rounds, 32 fights) across
+enemy evasion **3,002–7,699** at fixed player Accuracy 9,226.9.
+
+> **Corrected 29 Jul 2026 (late).** A first fit of `0.532 + 1.208·ln(Acc/Eva)`
+> was shipped from a **biased denominator**. `pm` flags only that the *first*
+> attack of the round missed (client: "First hit misses, but N hits land"), so
+> `hits/(hits+missflags)` cannot see a round whose first attack hits and second
+> misses — it read 0.757 where the truth is **0.638**. The clean sample is
+> 2-attack rounds, identifiable without knowing the attack count: `ph=2,pm=0`
+> (both hit) vs `ph=1,pm=1` (first missed, second hit), so
+> `p = n(2,0)/(n(2,0)+n(1,1))`. The model self-validates three ways —
+> predicted `n(0,1)` 335 vs 354 observed, total rounds 1,930 vs 1,949, and
+> implied attacks/round **1.815 against an AttackSpeed stat of 1.8458**. The obvious ratio-power form `acc^k/(acc^k+eva^k)` is
+**rejected** (NLL 1666.8 vs 1622.6); a linear-in-`eva/acc` form and
+`1 − c·eva/(eva+acc)` fit equally well and are indistinguishable on this data.
+
+- **Accuracy is NOT saturated, and it is worth roughly double the biased fit
+  implied.** At the evasion the deep bands actually face (4,857–5,386 at streak
+  120–159) true per-attack hit rate is **65–68%**, and +1% of the Accuracy
+  *stat* buys **+0.45–0.50% damage output**. The 27 July "accuracy is saturated" reading came
+  from comparing pooled streak bands, where enemy evasion moves with composition.
+- `CRAFT_WEIGHTS_PCT["Acc"]` settled at **0.21** after two corrections in one
+  session (see §19). Covers the output channel only, so it remains a floor.
+
+### Damage mitigation
+
+**`damage_dealt = AttackDamage × K / (K + Defense − ArmorPen)`, K ≈ 205** —
+`ihlib.damage_multiplier`
+
+The same functional form fits **both directions independently**: K = **190.2**
+outgoing (32 fights, enemy Defense 743–1,990) and K = **219.3** incoming (28
+fights, our Defense 1,487, enemy ArmorPen 26–406). Two independent fits landing
+within 15% is the strongest evidence available that this is the real law.
+
+- **Defense elasticity is −Defense/(K+Defense) = −0.88** at our 1,487, close to
+  the live readings of −0.93 to −0.96 and *below* the applied weight of 1.0.
+- **ArmorPen is validated at its inherited 0.05.** +97 points (10 → 107) is
+  **+6.1%** output vs enemy Defense 1,500 and **+7.0%** vs 1,300 — 0.044–0.051
+  per point on the AtkDmg = 0.7 scale. The law is **convex**, so value per point
+  *rises* as ArmorPen approaches enemy Defense; do not extrapolate far above the
+  fitted range (our ArmorPen 10, enemy Defense 743–1,990).
+- **Defense only touches the direct channel, and that is now quantified.**
+  Against the three classes causing ~72% of deaths, direct damage is 25,391 of an
+  effective 52,131 per fight once corruption is counted at its measured 2.5×
+  (§17) — Defense addresses **~49%** of what actually kills. `CRAFT_WEIGHTS_PCT["Def"]`
+  is registered in `ihlib.PENDING_REFITS` for this reason: the mechanism says 1.0
+  is roughly double any defensible value, but converting a mitigation elasticity
+  into the weight scale needs an output↔mitigation exchange rate that only a
+  gear-set A/B can supply.
+
+**Regime.** Fitted in Corporate Network at enemy levels 1400–2537 against a
+single loadout (Accuracy 9,226.9, Defense 1,487, ArmorPen 10). Enemy stats are
+**not** a pure function of enemy level — at level 2300 a Zero-Day rolled evasion
+7,221 against a Trojan Wall's 5,138, a wider spread than between levels 2300 and
+2537 — so per-level replication is mandatory and single-run points are noise.
+
+
+## 19. The craft weight table, re-fitted from measurement (29 July 2026)
+
+Every `CRAFT_WEIGHTS_*` value except `AtkDmg` had been asserted or inherited.
+The profiler sweep made most of them directly measurable, and the re-fit moved
+almost all of them — several by more than 2×.
+
+### The scale, and the error that had inflated half the table
+
+A **"+1%" affix does not raise a stat by 1%.** It adds one point to that stat's
+shared additive pool (§13), so the stat moves by **1/pool**:
+
+| stat | additive pool | stat % per +1% affix |
+|---|---|---|
+| AttackDamage | 1.4580 | **0.686%** |
+| MaxHP | 1.5435 | 0.648% |
+| AttackSpeed | 1.8348 | 0.545% |
+| Evasion | 2.1036 | 0.475% |
+| Defense | 2.2983 | 0.435% |
+| Accuracy | 2.3347 | 0.428% |
+
+`AtkDmg` anchors the scale: 0.686% output per affix point against an applied
+weight of **0.7**. So a weight means **"% output-equivalent per +1% affix"** —
+and the pool-heavy stats (Defense, Evasion, Accuracy) had been priced as though
+their affixes moved the stat a full 1%, which is why they were the most
+over-weighted. This conversion is the single largest correction in the table.
+
+### The two families, and their exchange rate
+
+- **Output stats** (AtkDmg, CritCh, CritDmg, AtkSpd, Acc, ArmorPen, Thorns,
+  Corrupt) shorten the fight. Rounds ∝ 1/output, and net drain = net-per-round ×
+  rounds, so **+1% output = −1% net HP drain, exactly.**
+- **Mitigation stats** (Def, Eva, Barrier, Regen) cut a gross term without
+  changing fight length, so they are **leveraged by `gross / net`** — because
+  net drain is a *difference* between gross incoming and regeneration.
+
+Measured leverage against the three classes that cause ~72% of deaths:
+**2.52× (Stealth Worm), 2.67× (Trojan Wall), 3.14× (Rootkit)**. Against the safe
+classes it runs 4.5–20×, and at enemy level 1800 (where deaths actually happen)
+it is higher still — so the values below are conservative.
+
+### Re-fitted table
+
+| weight | was | now | basis |
+|---|---|---|---|
+| `AtkDmg` | 0.7 | **0.7** | anchor; self-validates at 0.686 |
+| `CritCh` | 0.7 | **0.7** | **validated** — crit rate 0.2631 on 954 single-hit rounds vs stat 0.2558 |
+| `Def` | 1.0 | **0.45** | −0.88 elasticity × 0.435 pool × 0.41 channel × 2.7 leverage |
+| `Eva` | 1.0 | **0.22** | same law, same slope, from the enemy side; Eva/Def = 0.497 |
+| `AtkSpd` | 0.9 | **0.56** | 0.545% stat per affix point, linear in attacks/round |
+| `CritDmg` | 0.35 | **0.22** | multiplier measured 1.883 vs stat 1.846; +1pp = +0.214% output |
+| `Acc` | 0.14 | **0.21** | 0.428 pool × 0.45–0.50% output per stat-% (unbiased fit) |
+| `Thorns` | 0.05 | **0.13** | `ptd` = 72.08 per enemy hit vs stat 73.4 — exact |
+| `ArmorPen` | 0.05 | **0.068** | +97 pts = +6.1% output at enemy Defense 1,500 |
+| `MaxHP` | 0.5 | 0.5 | **still unmeasured** — pure attrition buffer, invisible to a full-HP regime |
+| `Regen` | 0.6 | 0.6 | **still unmeasured** — same reason |
+
+**`Def` and `Eva` fell hardest** (2.2× and 4.5×), and both for the same two
+reasons: the pool conversion, and the fact that neither touches the corruption
+channel — Evasion does not even dodge it, since ticks land on missed rounds
+(§16).
+
+**`Thorns` rose 2.6×.** It is charged per enemy hit taken, so its value grows
+with fight length: 0.120 at enemy level 1800, 0.157 at 2100, 0.141 at 2500.
+
+### What is still unpriced
+
+`MaxHP` and `Regen` are the two largest remaining holes, and they are the same
+hole: both are pure attrition terms, and the Software Profiler runs **full-HP
+single fights**. Neither can be measured until the **CI/CD Pipeline** (homelab
+12). Given that deaths are ~100% attrition (`decision-log.md`, 29 Jul), these
+are probably the two most valuable stats in the build and they are currently
+carried on 22 July guesses.

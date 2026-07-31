@@ -600,3 +600,445 @@ It justified itself immediately: the live checker for `CREDITS_PER_HOUR` reporte
 **Two findings logged to `open-questions.md`.** (1) **Realized regeneration is not flat in listed regeneration** — a +29.7% listed buy realized +0.4% / +4.7% / +11.5% of `prg`/round across streak bands 60–85 / 86–105 / 106–130, rising monotonically with depth. Working model: overheal capping. First evidence of diminishing returns on the build's confirmed win condition, and the reason the standing chip advice caps ECC instead of spending the whole budget. (2) **First isolated read on Defense** — gross damage/round at depth 349.0 → 368.6 (+5.6%) against Defense −6.05%, roughly 1:1. `damage_taken` is gross intake, which regeneration does not touch, so the Firewall's opposite-signed Def/Regen move is what made this readable at all. Both weights updated in `ihlib.assumptions()` so the register carries the new evidence rather than the old claim.
 
 **Tooling fixed.** `ih.py ab` was still reporting the closed Driver test as active and folding Firewall-era deaths into its post-equip window. Also fixed a crash in `experiment_status` when an experiment carries no `boundary_fight_id` — that field only disambiguates the single capture straddling an equip, and is meaningless when the equip was not caught mid-session.
+
+## 29 July 2026 — Session 13: Kernel contract approved, barrier absorption measured, contract-board clock found
+
+**Recorded BEFORE the readout, per the A/B amendment rule: `firewall-ab-2026-07-28` is being truncated at n=17 of a planned 24 deaths.** The reason is that the Kernel craft approved below ships in the same session, and progression is not gated on measurement. This is a stopping-rule truncation, not a rule amendment — the keep rule itself is unchanged and the primary outcome governs.
+
+**Readout at n=17: KEEP.** Post-equip mean death streak **132.3 vs baseline 119.8 (+12.5)**, against a KEEP threshold of ≥117.8 and a REVERT threshold of ≤114.8; 16 of 17 post-equip deaths sit above the baseline mean. Contamination checks all pass:
+- **Start-HP gate passes.** Deaths starting above 70% HP: **1/14 post (7%) vs the baseline 2/16 (13%)** — burst exposure fell rather than rose, which was the flank the −6.05% Defense put at risk.
+- **Hit-rate gate passes on the correct reading.** Pooled hit rate is 79.7% vs 81.0%, but pooled comparison measures composition — enemy evasion scales with streak and the post window dies ~12 streaks deeper. Within streak bands the rate is flat: 24–42 82.8→83.3, 60–85 81.7→81.8, 86–105 79.7→78.5, 106–130 77.7→**78.7**.
+- **No zone change** — corporate_network throughout.
+
+**Craft approved: `Assault Kernel of Corruption` → Kernel**, replacing `Hearty Kernel of Decay`, the last original baseline and the last structural gap. Contract simulated, not discounted: mean **+16.13**, median +17.05, p10 **+14.66**, p90 +18.54, **P(Δ > +5) = 98.0%**, P(all phases complete) 90.1%. Recorded to `data/predictions.jsonl` at contract time — **the first graded craft under the `uncapped+floor2+archive` planner**, so its realized value is a calibration run.
+
+**The tool's own default plan was rejected, and this is the reusable part.** `plan_craft` proposed `of the Phoenix T3→T1, of Corruption T8→T2, of Isolation T8→T6` for a mean of +24.14 — a higher number that buys less. Reading the `from:` decomposition, **18.4 of that 26.0 ceiling was Acc + Corrupt**: Accuracy is measured saturated (worth ~0), and the Corruption phase pushes loadout Corruption to **31.3, above the ~25 ceiling of the range the Corrupt weight was fitted in** — i.e. the phase's entire value is extrapolation, and it was budgeted **11.6 of 23 Stability**. Dropping it and spending that Stability on `of Isolation T8→T3` instead gives a *lower* score that is almost entirely real: **loadout Def +7.41%, Barrier +93.3% (281 → 543), Regen anchor preserved (+0.96%), Accuracy −0.20%, Corruption −6.0% (stays inside the fitted range)**, cost **MaxHP −4.67%**. Execution order **of the Phoenix first, then of Isolation** — the order search puts P(Δ>+5) at 98.0% vs 90.5% reversed. No Augment (the item's forced side is prefix; the plan promotes two existing suffixes).
+
+Mechanism, and why this beat the higher-scoring `Untouchable Payload of Lightning` (+19.9 adjusted): at streak 106–130 the build takes 20,098 gross per fight over 53.3 rounds with net drain still **+668/fight**. Defense elasticity measured ~0.93 on 28 Jul, so Def +7.41% removes ~1,387 HP/fight and takes net drain **negative** — the same mechanism that produced the +20.5-streak result on 27 July. The Payload's adjusted score is carried by AtkSpd +10.46% at loadout, which measures **−2% to −5% rounds**, i.e. ~−23 HP/fight. The heuristic ranked them the other way because `CRAFT_WEIGHTS` are per item-level percentage point and cannot see that Defense's loadout pool is small (619 × pool) while attack speed's is not. **Score decomposition plus loadout-level `stat_total` is what separated them; the scalar alone said the wrong thing.**
+
+**New mechanic measured: barrier absorbs ~1.68× its stat value per fight.** `docs/data-dictionary.md` carried `pbs` as an unverified working model ("probable per-round barrier absorption"). It is not per-round: `pbs` appears on ~2 rounds per fight and equals the *full* Barrier stat on those rounds (max `pbs` = 281 exactly matches the stat). At Barrier 281 the ledger gives **471.8 absorbed/fight = 1.68× the stat** over 140 detailed fights. Consequence: **+1 Barrier ≈ +1.68 HP/fight against +1 Regen ≈ +13.9 HP/fight at depth — a 1:7.5 ratio, where `CRAFT_WEIGHTS_FLAT` asserts 1:30.** Barrier is roughly **4× under-weighted**. The weight was **deliberately left at 0.02**: re-fitting moves live verdicts (Guided Daemon of the Ghost, Deadeye Kernel of Containment and Monolithic Daemon of Annihilation each carry 350–435 Barrier), so it belongs in its own change rather than a drive-by inside an advisory. Provenance updated in `ihlib.assumptions()`.
+
+**Chip plan re-derived from the measurement, and it inverts `ih.py hardware`'s ranking.** Converting each track to HP-saved per deep fight per 1,000 chips: **Packet Shield (barrier) 9.98 → 6.76 across L10–L14**, **Encryption Module (defense) 6.44**, **ECC Memory (regen) 3.29**. Packet Shield had been abandoned on 27 July as a track "whose gear-flat multiplicand was zero" — correct at the time, when Barrier was 0. Gear now supplies 281 and the approved craft takes it to 543, so **the track went live and nobody re-checked it**. Plan: Packet Shield L9 → **L14** (~2,700 chips; L15 falls to 6.24 and loses to Encryption), then Encryption Module L110 → **~L120** with the remainder (~74,500 chips). ECC is not bought — regeneration's diminishing returns are measured and depth-dependent, and Defense is linear in its pool.
+
+Denominator: **77,662 chips ≈ 13–19 hours of chip income** (ledger: 3,289/h on 23 Jul, 6,313/h on 27 Jul at the current streak depth), i.e. essentially the whole stock. Justified because chips buy nothing but hardware, idle chips return exactly zero, and hardware levels **refund ~fully at the monthly reset** (the cost curve self-validates against the game's own refund). The free reset is spent (`can_reset: false`); this is recoverable, not sunk. `hardware_plan` was deliberately **not** used — it is the model that returned a 108K-chip plan against a 37K balance, and the marginal analysis above is built from measured HP-per-fight rather than from `CRAFT_WEIGHTS`.
+
+**Contract board: kills accrue only while the tab is open, and this was previously unmodelled.** `Marathon Elimination` (2,848 successful hacking attempts) sat at 40/2,848 at 08:31Z — 8.5 hours after the 00:00Z board reset — then ran to 416 by 09:03Z. That is **376 kills in 0.527 h = 713/h**, matching the fixed 4.872 s cadence, and it means the ~8.5 preceding hours contributed ~nothing. The board pays **5 hackcoin + 19,353 chips + 46.5M credits**, and it is the **only** contract on the board, so clearing it also claims the **6-hackcoin board-clear bonus: 11 hackcoin total, ~92B credits-equivalent, against a 31 hc balance.** Requirement: **~3.4 hours of tab-open time before 00:00Z**, of ~14.9 h remaining. Unfinished progress is destroyed at reset.
+
+**Open tooling item:** `ih.py audit` flags idle chips and empty homelab slots but has no check for *contract completability* — it reports hours remaining without comparing required progress against the measured 713 kills/h. A contract that cannot finish in the tab time left is worth flagging early, while there is still time to act.
+
+### 29 July 2026 — Session 13 corrections (player-flagged)
+
+Three corrections, two of them to work shipped hours earlier in the same session.
+
+**1. `contract_board` was dropping most of the board, and an advisory was priced on the fragment.** The function returned only `active` + `unclaimed`, so the five-to-six contracts sitting incomplete at 0 progress were invisible. The 29 Jul board holds **seven** contracts worth **19 hackcoin + a 6 hackcoin clear bonus = 25 hc**, not the 11 hc the advisory quoted. Fixed: `contract_board` now returns `all`, `pending`, `board_hackcoin` and `queue_capacity`, and `ih.py audit` lists every pending contract ranked by hackcoin per combat-hour. **The player spotted this by looking at the game UI — the capture had the data all along and the query hid it.**
+
+**2. "Kills accrue only while the game tab is open" was wrong, and was asserted from a confound.** The evidence was Marathon Elimination sitting at 40/2,848 more than eight hours into the board window while the death ledger showed continuous play. The actual explanation is structural: **only the ACTIVE contract accrues** (`contract_queue_capacity` is 0 — no queue, one at a time), and Marathon had only just been made active. Offline accrual is **not** ruled out by anything measured here, and the player reports it does accrue. The claim has been removed from the audit check, which now quotes combat-hours required and nothing more.
+
+This is the `CLAUDE.md` "state the regime a model was fitted in" failure in its purest form — a single observation, one candidate explanation, no check for a competing one. It was flagged at the bottom of the same advisory as an open question ("either the board rotated a contract in, or kills only count after acceptance") **and shipped as a confident claim in the TL;DR anyway**. Noticing an alternative explanation and then not letting it demote the headline is worse than not noticing it: the correct move was to lead with the uncertainty, because it was already written down.
+
+**3. Homelab build slots are independent — verified formula-level** (`mechanics.md` §15). Build speed is `(1 + upgradeEffects + globalBonus) * globalMultiplier`; slot count is absent. Leaving slots empty to "finish the Hacking Simulator faster" does not work — the Simulator finishes at the same time either way, and the idle slots are forgone progress.
+
+**Craft realized: `Assault Kernel of Corruption` → `Assault Kernel of Blight`, +37.4 against a projection of +16.13 and a p90 of +18.54.** Third consecutive craft above projection and the second where **deviating from the contract paid**. The player used the Augment (adding a Phasing prefix, Eva +2.16%), pushed `of Isolation` **T8→T1** rather than the contracted T3, took `of Corruption` T8→T6, and spent Stability to 0 rather than the floor of 2. Both deep suffixes landed near-max: `of Perpetuity` T1 (Def +17.42% roll 92%, Regen +55 roll 94%) and `of Bastion` T1 (Barrier +467). Loadout: **Def +13.63% (1,258.8 → 1,430.4), Barrier +180.2% (281 → 787.5), Regen +3.27%, MaxHP −4.37%.** Era `uncapped+floor2+archive` now reads bias **+21.3**, coverage 0/1.
+
+The contract's caps and floor have now been the binding constraint on two of the best crafts on record. **The p90 is not an upper bound on what the item can do — it is an upper bound on what the contract permits.** Worth re-deriving the attempt caps and the floor from these two overruns rather than continuing to write conservative contracts the player then correctly ignores.
+
+**Hardware executed as recommended:** Packet Shield L9 → **L14** and Encryption Module L110 → **L120**, 46,498 chips (77,662 → 31,164). Both buys were sized on the measured barrier absorption rather than `CRAFT_WEIGHTS`.
+
+**New measured constant:** `CONTRACT_DROP_PER_WIN = 0.0534` (502 contract drops over 9,395 ledger wins). This reprices `drops` contracts hard — Standard Collection's 159 items is ~2,978 wins ≈ 4.0h of combat for 2 hackcoin (**0.50 hc/combat-h**), against Quick Elimination's 343 kills for 1 hc (**2.15 hc/combat-h**). It is the single contract that makes a full board clear unrealistic in one day.
+
+**Still open — decision-critical:** does switching the active contract **preserve or destroy** the abandoned contract's progress? The daily-board logic is not in the `vendor/game-js` copies, so it cannot be read out. It does not change today's advice (finishing Marathon first is optimal if switching wipes and tied if it preserves, for any session of ~6h or more) but it governs short sessions, and it should be settled by observation.
+
+### 29 July 2026 — correction 4: homelab throughput is split, not added
+
+**The player quoted the Build Scheduler's own description — "Adds an additional active Homelab build slot (splits progress, doesn't speed up building)" — and it is correct.** The `mechanics.md` §15 written hours earlier claimed the opposite and has been rewritten.
+
+The error: I read `homelabBuildSpeedBreakdown()`, found no slot term in it, and concluded slot count was irrelevant — without reading where the resulting multiplier `o` is *applied*. It is applied in `homelabJobEstimates()`, which divides by the active-job count:
+
+```js
+const n = Math.max(1, e.length);      // active jobs
+e.remaining -= l * o * t / n;
+```
+
+Verified against the capture to three decimals: with n=2, each job advanced **0.1580 ticks/s** and the total was **0.3161 ticks/s** = `o / tick_seconds` = 1.58/5. Total throughput is constant in `n`.
+
+**This reverses standing homelab policy, which had been wrong for a week:**
+
+- **Rank by points per slot-hour, not total points.** Ticks are fixed, so point-efficiency per tick is the entire question. `ihlib.homelab_fill_suggestions` sorted by total points on the explicit rationale that "an idle slot costs more than a better hourly rate" — the exact inversion. Corrected, along with the `FILL NOW` block (now `QUEUE`), `CLAUDE.md` and the `advise` skill.
+- **Empty slots cost nothing while any job runs.** The repeatedly-cited "4 slots sat empty 23–27 Jul" loss was overstated; the only state that loses points is nothing active *and* nothing queued. `audit` now flags that as `IDLE` and reports free slots as `COVERAGE` with hours of work buffered (currently ~3.9h).
+- **The player's homelab decision was right and my advice was wrong.** Leaving slots empty *does* make the Hacking Simulator finish sooner, because it takes a larger share of a fixed pool. At n=2 its remaining 2,257 ticks take ~4.0h; alone, ~2.0h. The honest framing is a trade, not a free win: VLAN Rules earns 0.109 pts/tick against the Simulator's 0.035, so concentrating buys time with points.
+
+**Process failure, and it is the same one twice in one session.** Correction 2 (contract accrual) asserted a mechanism from a single observation without checking a competing explanation. This one asserted a mechanism from a single *function* without reading the rest of the call path — and labelled it "formula-level", the vocabulary this workspace reserves for its strongest claims. Reading minified client code produces confident-looking wrong answers precisely because it looks like primary evidence. **In-game description text is primary evidence and outranks inference from client internals; when the two disagree, the text wins and the code read was incomplete.** Recorded in `CLAUDE.md`.
+
+### 29 July 2026 — `kernel-ab-2026-07-29`: contamination check mis-specified, recorded before the readout
+
+**The pre-declared check "deaths starting above 70% HP must not rise above the baseline 1/11 (9%)" has tripped: post-craft it is 3/3 (100%).** Recording the mis-specification now, before the outcome is readable (n=3 of a target 24), per the standing rule that a rule may be amended for impossibility or mis-specification but never after seeing a favourable result.
+
+**Why it was mis-specified.** It was written to detect the craft *losing* mitigation — the Kernel gave up MaxHP −4.37%, and burst was the exposed flank. But the metric cannot distinguish "burst got worse" from "attrition got fixed". Both raise the share of deaths that start near full HP, and they call for opposite decisions. The mechanism data says unambiguously that it is the second: net drain per round at matched streak band went **86–105: +0.2 → −23.5; 106–130: +11.3 → −5.8; 131+: +64.3 → +12.5** over 819 post-craft detailed fights. The player stopped bleeding out and now dies at full HP to single bad matchups deeper in.
+
+**Replacement check, declared now for the remainder of this A/B:** contamination is a rise in start-HP deaths **without** a corresponding improvement in net drain per round at matched band. The primary outcome (mean death streak ≥131.6 KEEP / ≤128.6 REVERT at n=24) governs unchanged. Start-HP share is demoted to a diagnostic.
+
+**This is the second A/B in a row whose contamination check was written against the mechanism rather than against a confound** (`driver-ab-2026-07-27` gated on rounds/fight; this one on start-HP). The lesson has not stuck: a contamination check must be something the craft **cannot** move if the effect is real. Anything the effect itself moves is a diagnostic, never a gate.
+
+**Two constants refined in `ihlib.assumptions()` from this window:**
+- **Defense elasticity is ~0.68, not the asserted 1:1.** Second read, opposite sign, 4× the sample: Defense +13.63% cut gross damage/fight at 106–130 by 9.2% (n=150 post vs n=50 pre). Confounded upward by 9 player levels of enemy scaling in the same window, so 0.68 is a floor and the truth sits in 0.68–0.93. Consequence: the Encryption Module valuation used in this session's chip plan (6.44 HP/1K chips) was ~27% optimistic; Packet Shield's lead over it widens.
+- **Barrier absorption is sub-linear.** At Barrier 787.5 the ledger gives ~1,100 absorbed/fight against the 1,323 a flat 1.68× predicts — the multiplier decays to ~1.40×. The linear model over-prices large Barrier buys by ~17%.
+
+### 29 July 2026 — both refined constants withdrawn; the era filter was contaminated
+
+The two constants "refined" earlier today from the Kernel window were computed on a **contaminated post-craft sample** and both are withdrawn. The filter selected post-craft fights by `17000 < max_hp < 18000` with **no date bound** — and the 28 July loadout had `max_hp` 17,345–17,374, so a day of pre-craft fights at Barrier 281 was pooled into a set that was supposed to be Barrier 787. Segmenting by gear era *and* date fixes it.
+
+| quantity | contaminated (published) | clean | direction of error |
+|---|---|---|---|
+| Defense elasticity | 0.68 | **0.96** | understated the stat |
+| Barrier marginal | "sub-linear, 1.40x" | **super-linear, 2.34 HP/fight per point** | understated it badly |
+
+**Defense is ~1:1 after all** — gross damage/fight at streak 106–130 fell 20,048 → 17,427 (−13.07%) against Defense +13.63%, n=149 post vs n=50 pre. The original 28 July assertion was right and my "correction" of it was the error.
+
+**Barrier is better than linear in this range, not worse.** Matched on band 106–130, Barrier 281 → 787 moved absorption 442 → 1,626/fight, because **both** terms rose: procs/fight 1.70 → 3.15 and per-proc 260 → 515. Marginal ≈ **2.34 HP/fight per Barrier point**. One caveat that is real: per-proc absorption is saturating — 515 of a 787 stat is 65% used, against ~93% at 281 — so the marginal must fall somewhere above 787 and 2.34 cannot be extrapolated far.
+
+**Net drain is negative in every band, including 131+**, on the clean sample: 86–105 **−43.4**/round, 106–130 **−20.8**, 131+ **−2.9** (was +0.2 / +11.3 / +64.3). The attrition bottleneck is gone across the whole range the player fights in.
+
+**Process note — this is the same failure as the homelab one, in a different medium.** There I read one function and generalised without reading the call path; here I built a cohort filter on one field (`max_hp`) without checking that the field uniquely identified the cohort. Both produced confident, specific, wrong numbers that survived because the output looked reasonable. The workspace already has the rule — "state the regime a model was fitted in" — and a cohort filter *is* a regime declaration. **Any era/cohort filter must be validated by printing the cohort's own boundaries (here: min/max `max_hp` and date range) before any statistic is computed from it.** Adding that discipline to segmentation work is cheaper than the three corrections it would have prevented today.
+
+### 29 July 2026 — `kernel-ab-2026-07-29` at 11/24, and the death cause is three enemy classes
+
+**A/B: n=11, mean 137.4 vs baseline 133.6 — +3.8, 95% CI [134.4, 140.4].** The interval now sits entirely above both the KEEP threshold (131.6) and the baseline mean, so the verdict is not in doubt; formally held open to n=24. Cohort validated before computing anything: max_hp 17,578–17,762, 09:49–11:50 on 29 Jul, per the rule added earlier today.
+
+**Correction to the same-day claim that these are burst deaths — they are not.** The largest single enemy hit in each fatal fight is **4.4–12.3% of starting HP**, across fights of 37–67 rounds. Starting a fight at 100% HP and dying in it is not burst; it is attrition *within* one fight. The Kernel craft fixed **cross-fight** attrition (fights now start near full) and that was mistaken for a change in kill mechanism. "Deaths start at high HP" and "deaths are fast" are independent, and only the first was measured.
+
+**The actual cause, and it is exact.** Net drain per round at streak 106–145, post-craft, segmented by enemy class:
+
+| class | gross/rnd | realized prg/rnd | prg ÷ gross | NET/rnd |
+|---|---|---|---|---|
+| **Trojan Wall** | 380 | 316 | **83%** | **+34.8** |
+| **Rootkit** | 341 | 290 | **85%** | **+15.0** |
+| **Stealth Worm** | 342 | 302 | **88%** | **+11.1** |
+| Spike Router | 407 | 401 | 99% | −19.6 |
+| Logic Bomb | 375 | 367 | 98% | −22.0 |
+| Zero-Day | 338 | 335 | 99% | −22.2 |
+| Glitch Phantom | 370 | 368 | 99% | −28.8 |
+| Siege Daemon | 364 | 364 | 100% | −31.6 |
+| Brute Force | 316 | 328 | 104% | −45.1 |
+
+**Exactly three classes have positive net drain, and those three account for 11 of 11 post-craft deaths** (Stealth Worm 5, Trojan Wall 3, Rootkit 3). Barrier absorption is flat across classes (26–36/round), so barrier is not the differentiator — **realized regeneration is**. It recovers 83–88% of incoming damage against the three killers and 98–104% against everything else.
+
+The pooled "net drain is negative in every band" figure was hiding a **bimodal** distribution. Depth is therefore limited by the worst *run* of bad matchups, not by the mean: the mean across classes is ≈ −12/round, but two or three consecutive Trojan Walls cost ~2,000 HP each against a 17.6K pool.
+
+**Why regeneration under-realizes against exactly those three is unknown** — logged to `open-questions.md`. It is not gross damage (Spike Router hits hardest at 407/round and is comfortably net-negative). Candidate mechanisms: a regen-suppression or healing-reduction effect on those classes, or `prg` being capped by something correlated with their attack pattern.
+
+**Consequences for the next craft.** No available candidate closes the Trojan Wall gap by regeneration — it needs ~+59 listed Regen (+11%) and every regen anchor is already crafted; via hardware it is ~35 ECC levels (~280K chips). Closing it by Defense needs +9.6% (~137 Defense, ~44 Encryption levels). Both are out of reach this session. The reachable lever is **fewer rounds in the bad matchups**: net drain is per-round, so a 10% cut in rounds is a 10% cut in HP lost per Trojan Wall. That points at the **Payload**, which is both the weakest equipped slot (49.4, next-lowest is 63.8) and the output slot. Expected magnitude is honest and small — roughly +2–4 streaks, not another +37 craft.
+
+**Max HP is rehabilitated in this regime.** The standing guardrail ("a buffer, not a substitute for mitigation or recovery") was fitted when deaths came from steady cross-fight bleed. Depth is now set by surviving a bad *run*, which is precisely what a buffer does. `CRAFT_WEIGHTS_PCT[MaxHP] = 0.5` (never validated) is likely too low now.
+
+### 29 July 2026 — Barrier absorbs corruption; weight re-fitted 0.02 -> 0.10 and the candidate board is re-ranked
+
+**Player question: does damage barrier absorb corruption? Answer: yes, in full.** Round-level test on post-craft fights:
+
+- Across **8,473 barrier-depletion rounds**, the drop in the `pbs` pool equals `ea + ecd + etd` in **100.0%** of cases. It matches `ea` alone in **0%**.
+- **Isolation test:** in **2,657 rounds where the enemy missed entirely (`ea` = 0) but corruption ticked**, the barrier pool still fell by exactly `ecd + etd` — 100%.
+
+`pbs` is therefore the **remaining barrier pool**, reported with a one-round lag, not a per-proc absorption. The earlier "~2 procs/fight" reading was an artifact: `pbs` is logged whenever the pool is non-zero, so a larger pool appears in more rounds. That also explains why "procs" appeared to rise with the stat (1.70 -> 3.15) — the pool simply survived longer.
+
+**This makes Barrier the only stat that mitigates the channel that causes every death.** Defense reduces `ea` only; corruption is 27.5% of incoming from Trojan Wall / Rootkit / Stealth Worm (`mechanics.md` §16), and those three caused 18 of 18 deaths.
+
+**Weight re-fitted `CRAFT_WEIGHTS_FLAT["Barrier"]` 0.02 -> 0.10**, moved from `inherited` to `measured`. Marginal 2.34 HP/fight per point against Regen's ~13.9 = 1:5.9, so 0.6/5.9 = 0.10. **No saturation risk: the pool is fully depleted in 94% of rounds** (barrier-up in only 5.3-5.7%), so added Barrier is absorbed rather than wasted. This is the change deliberately deferred earlier today as "belongs in its own change, not a drive-by inside an advisory" — it now has a measurement behind it.
+
+**The re-rank is dramatic, and it vindicates an item this workspace explicitly dismissed.** `Shielded Daemon of Quarantine` (ilvl 2131) was written off in the first advisory of the day as "loaded with economy affixes, not combat — the low scores are correct". Under the corrected weight it is the best candidate in the inventory by a distance: **ceiling +86.8**, contract mean **+81.8**, p10 **+68.2**, **P(Δ>+5) = 100%**, worst case across 20,000 runs **+24.2**. Its projected Barrier is **1,169**, against a current loadout total of 787.
+
+Other slots move similarly: Driver +48.9 (`Fortified Driver of Sandboxing`, Barrier +880), Router +39.7, Firewall +36.1, Shell +31.3.
+
+**Honest caveat, stated before the craft rather than after.** The 2.34 marginal was fitted on a real natural experiment (Barrier 281 -> 787) but this craft extrapolates to ~2,040 loadout Barrier, **2.6x beyond the fitted range**. The mechanism supports linearity — absorption ≈ pool size x refills, and the pool is starved 94% of rounds — but absorption per fight would have to roughly double again for the projection to hold. **This is the first craft here whose headline number rests on extrapolation outside the fitted regime, and it must be logged as such in the prediction ledger.** The direction is not in doubt; the magnitude is.
+
+**Note on what changed the answer.** The barrier weight was wrong for a week and no candidate ranking was trustworthy while it was. It was found only because the player asked a direct mechanical question about a stat, which forced a round-level test that no score-based workflow would ever have run. `ih.py potential` cannot audit its own weights.
+
+### 29 July 2026 — the deferral problem, named and made structurally impossible
+
+Player instruction: stop deferring fixes. The pattern, stated plainly: **when something is found to be wrong, it gets fixed in the session it is found, and there is no "later".**
+
+**What deferral actually cost today.** `CRAFT_WEIGHTS_FLAT["Barrier"]` was measured at ~5x its applied value in the morning and deliberately left at 0.02, with the written justification that re-fitting "moves live verdicts, so it belongs in its own change, not a drive-by inside an advisory". That sentence reads like discipline. Its effect was that every candidate ranking for the rest of the session — including a craft verdict that was acted on, a chip plan, and the claim "there is no corruption counter" — was computed from a number already known to be false. It surfaced only because the player asked an unrelated question about barrier hours later.
+
+**The asymmetry that makes the deferral reasoning wrong**, and which was missed at the time: leaving a known-bad constant in place *also* moves verdicts — away from the truth — and does it **invisibly**. A fix is visible and reviewable; a deferral produces clean-looking output with no flag on it. The rule that already existed ("if one unknown fact would flip the recommendation, resolve it or branch on it — never ship the confident version with the unknown as a caveat") covered exactly this case, but was written about *unknowns*. A **known-wrong value is strictly worse than an unknown one** and was not obviously in scope. It is now.
+
+**Fixed immediately, per the new rule, rather than logged:**
+- `CRAFT_WEIGHTS_PCT["Acc"]` **1.0 → 0.14 (measured)**. Within a fixed-Accuracy era (n=2,674 fights, 174K attempts) hit rate vs enemy `effective_evasion` has slope 7.44pp per 1.0 of acc/eva ratio; at the working ratio ~2.1 a +10% Accuracy buy is +1.56pp hit rate ≈ +2.0% output ≈ 0.197%/pp → 0.14 on the AtkDmg scale. **Accuracy is NOT saturated** — the 27 Jul "no hit-rate loss" test predicted −0.68pp against a ±0.9pp 95% CI on 8,195 attempts. It was **underpowered, not null**, and that misreading has been propagating through verdicts and guardrails since. Corrected in `CLAUDE.md` and the weight commentary.
+- `CRAFT_WEIGHTS_FLAT["Corrupt"]` **0.6 → 0.7 (measured)**. Now that `pcd` is known to be the *player's* corruption output, it is directly measurable: across four eras with the stat at 16.2–22.9 it is a stable 4.88–5.82 damage/round per point ≈ 1.04% of ~530/round output per point. Both prior claims were wrong — "deliberately conservative" and the later "~2x too generous". Linear only in the fitted 16–23 range; above ~25 remains extrapolation.
+
+**Structural enforcement, so this cannot recur silently:**
+- `ihlib.PENDING_REFITS` — the anti-deferral register. A constant goes in **only** when the fix is blocked on data that does not exist yet, and the row must carry an `unblock` naming the specific observation that resolves it. Its docstring says explicitly not to use it to avoid fixing things.
+- `ih.py audit` lists `KNOWN-WRONG` rows **first**, ahead of every other finding.
+- `ih.py potential` and `ih.py contract` print a banner whenever the register is non-empty, so numbers computed from a known-wrong constant can never look clean.
+- Exactly one legitimate row exists: `UPGRADE_BAND / INFERIOR_BAND`, blocked on needing ≥3 crafts graded under the current planner (only 1 exists). Unblock condition is named and mechanical.
+
+**Four further rules added to `CLAUDE.md`,** each from a distinct failure this session: declare the cohort before computing from it (`ihlib.cohort_summary`, which warns when `max_hp` spans a gear change); a log field's meaning is a hypothesis until shown to vary with what it measures; segment by the natural categorical before trusting a pooled mean; and **a scalar ranking cannot audit its own weights** — every weight defect here was found by testing a mechanism against the ledger, never by reading `potential` output.
+
+### 29 July 2026 — Daemon craft realized +131.5; the contract missed by 47 points and the cause is now a registered blocker
+
+**`Shielded Daemon of Quarantine` -> `Shielded Daemon of Bastion`, equipped.** Realized **+131.5** against a projection of +74.7 and a **p90 of +84.9**. The player again went deeper than contracted: `of Quarantine` T6->**T1** (contracted T2) and `of Spikes` T7->**T2** (contracted T6); `of Segmentation` T5->T1 as written. Both barrier suffixes landed at T1 max.
+
+Loadout: **Barrier 787.5 -> 2,529.5 (+221%)** against a projected 2,042; **MaxHP +9.84%** (projected +3.4%); Thorns 6.1 -> 73.4. Costs as expected: AtkDmg -11.5%, AtkSpd -8.1%, Eva -5.0%.
+
+**Calibration under the current planner is now 0/2 on p10-p90 coverage, bias +39.0.** Two crafts, both far above p90. That is a systematic interval failure, not luck, and it is the third planner-conservatism signal in a row.
+
+**A cost-model hypothesis was raised and then honestly rejected as undecidable.** The initial ledger note claimed "the executed plan should cost ~35 expected Stability and was done in 25, so the cost model is suspect". Scoring both models against the two crafts actually executed:
+
+| | spent | model A (success costs 1) | model B (failures only) |
+|---|---|---|---|
+| Kernel, 14 promotions | 25 | 26.5 (**-0.2 sd**) | 15.5 (+1.2 sd) |
+| Daemon, 14 promotions | 25 | 35.8 (-1.2 sd) | 21.8 (**+0.3 sd**) |
+
+Each craft favours a different model, and **a plan's own standard deviation is 8-9 Stability** — these are sums of geometric variables — which swamps the ~10-Stability gap between the models. **n=2 cannot decide it, and the original note overstated the evidence.** Corrected here rather than left standing.
+
+**Registered in `ihlib.PENDING_REFITS` with a named 30-second unblock:** note Stability, run ONE Version Upgrade, and check whether Stability falls on a **success**. If it does not, `vu_expected_stability` switches to failures-only, every plan becomes ~35-40% cheaper than budgeted, and `plan_craft` has been stopping short on every contract it has ever produced — which would explain the entire calibration miss in one stroke. This is the right shape for a deferral: blocked on an observation that does not exist yet, cheap and fully specified, and surfaced by `audit` on every run until resolved.
+
+The `UPGRADE_BAND` row was updated in the same change (it still said "only 1 graded craft exists") and now notes that the bands may not be the real defect — the Stability cost model would produce the same symptom and should be resolved first.
+
+**`daemon-ab-2026-07-29` is open but NOT yet readable.** Only 29 post-craft fights are banked and the streak is still climbing (39-67); the pre-declared primary metric — net drain per round against Trojan Wall / Rootkit / Stealth Worm at streak 106-150 — needs the 106+ band. Pre-craft baseline, from n=88/99/95 fights: **Trojan Wall +43.8, Rootkit +18.3, Stealth Worm +13.2** per round. KEEP if all three go <= 0. Barrier absorbed per fight pre-craft was 1,557 (1.98x the stat); the prediction for post-craft is ~4,200-4,600, and a reading materially below ~3,000 means the Barrier weight is saturating and must be re-fitted that session.
+
+### 29 July 2026 — `daemon-ab-2026-07-29` reads NOT MET; the Barrier measurement was wrong three times and is now settled
+
+**Verdict: the pre-declared rule is NOT met. 1 of 3 classes passes.** Matched on streak band 120–140 (mean streak 129–131 in both cohorts, so composition is controlled):
+
+| class | net drain/rnd before | after | |
+|---|---|---|---|
+| Trojan Wall | +78.4 | +72.4 | FAIL |
+| Rootkit | +28.5 | **−4.4** | PASS |
+| Stealth Worm | +35.0 | +70.7 | FAIL |
+
+Secondary metric, death depth: **144.8 vs 140.5, +4.2 streaks, NOT significant** (n=13, SE 2.5). Pooled across all classes in the same band net drain did improve (+8.6 → −17.7/round), but the rule was written per-class and per-class it fails. **Recording that as written rather than switching to the pooled figure that passes.**
+
+**The barrier gain itself landed exactly as predicted by the corrected model**: +1,742 Barrier produced +28 to +29 HP/round absorbed across all three classes, over ~60-round fights. What did not follow was net drain, because realized `prg`/round fell 9–13% in two of the three (333→302, 319→278). That interaction — barrier absorption partially displacing regeneration realization — is real, was not modelled, and is why a large barrier buy converts to much less than its face value.
+
+**The Barrier measurement was wrong three times today. Root cause, finally identified: `pbs` is the pool REMAINING — a stock — and I summed it over rounds.** A stock summed over time is meaningless, and it over-counts more when the pool is larger, because a bigger pool survives more rounds and contributes more terms. That single error manufactured two separate fake findings:
+
+- a fake "procs per fight rise with the stat" (1.70 → 3.15), which is just the pool appearing in more log rows;
+- a fake super-linear absorption curve — apparent 1.68x → 2.34x → 5.26x of the stat as Barrier grew.
+
+Measured correctly as pool **drawdown** (`Σ max(0, pbs[i-1] − pbs[i])` plus the last logged value), absorption is **exactly 1.00× the Barrier stat per fight in both cohorts**: 787.5 → 787 absorbed (n=879) and 2,529.5 → 2,529 absorbed (n=477). **Barrier is a once-per-fight shield equal to its value.** It still absorbs every channel including corruption — that finding stands and was independently verified — but its *size* was overstated by up to 5x.
+
+**`CRAFT_WEIGHTS_FLAT["Barrier"]` re-fitted 0.10 → 0.043** (1.00 HP/fight against Regen's ~13.8 marginal). **My "0.02 → 0.10" correction this morning was itself the error; the original 0.02 was nearer the truth.** `data-dictionary.md` now states that `pbs` must never be summed.
+
+Re-ranked after the fix, the board is completely different again: Payload leads (`Bastioned Payload of Contagion` +32.6, `Untouchable Payload of Lightning` +30.2), then Analyzer (`Overclocked Analyzer of Guarding` +22.7). The barrier-heavy Daemon and Driver candidates have collapsed out of contention.
+
+**Process lesson, and it is the sharpest one of the day.** Every previous failure today was a *missing* check — an unvalidated cohort, an unread call path, a field whose semantics were assumed. This one was different: the check was run, repeatedly, and it kept confirming a number that was wrong because the **quantity itself was ill-defined**. Three independent "measurements" agreed with each other because they shared the same error. **Agreement between measurements is not evidence when they share a derivation.** Before trusting a measured quantity, state what it is physically — stock or flow, per-round or per-fight — and check the units survive the arithmetic. Summing `pbs` should have been visibly wrong on dimensional grounds alone.
+
+**`kernel-ab-2026-07-29` closed at its full n=24: mean 140.5 vs baseline 133.6, +6.9, KEEP** (threshold 131.6). That verdict is unaffected — it rests on death depth, not on the barrier arithmetic.
+
+### 29 July 2026 — Stability cost model CLEARED by the player; the real planner defect found and fixed
+
+**Player confirmed: a successful Version Upgrade does cost Stability.** Model A stands, `vu_expected_stability` is correct as written, and the blocker registered hours earlier is retired. That assumption had been carrying the entire Stability budget while never having been checked — the 30-second observation settled in one line what two crafts' worth of outcome data could not (each craft favoured a different model, and a plan's own sd of 8–9 Stability swamps the gap).
+
+**With the cost model cleared, the actual defect is visible: `plan_craft` optimises the wrong objective.** It stops when the next step's expected Stability exceeds what is left (`cost > budget - spend`), i.e. it plans to roughly exhaust the budget *in expectation*. That maximises P(all phases complete), which is a vanity metric — tier value compounds while attempt cost only grows linearly, and **an over-committed plan that runs out of Stability simply stops, leaving a shallower craft that is still an upgrade and which you are free not to equip.** The downside of aiming too deep is bounded; the upside is not.
+
+Measured on the 29 Jul Daemon, same base, 20,000 trials each:
+
+| plan | mean | p10 | p90 | worst | P(all phases) |
+|---|---|---|---|---|---|
+| contracted (Quarantine T2) | +15.6 | +7.8 | +21.3 | −17.7 | 63.7% |
+| executed (Quarantine T1) | **+21.3** | +7.1 | **+32.9** | −17.7 | 4.1% |
+
+**+37% expected value for 0.7 of p10 and an identical worst case.** Deepening further (Spikes T6→T4→T2→T1) adds almost nothing (+21.0 → +21.4) — the entire gap is the single deepest step on the highest-value affix, which the budget check refused.
+
+**This also explains the calibration "bias" and it is not planner error.** `projected` and `realized` in `data/predictions.jsonl` describe **different plans** — the player has gone deeper than contracted on both graded crafts. Bias +39.0 and coverage 0/2 measure plan deviation, not model miscalibration. The `UPGRADE_BAND` blocker was updated to say so; the ledger needs to record the executed plan before the bands can be fitted.
+
+**Fixed now, not deferred:** `ihlib.deepen_search()` sweeps plans deeper than `plan_craft`'s and ranks them by simulated mean, exposed as `ih.py contract --deepen`. On the current top candidate it immediately finds a better plan than the default (`of Contagion T1, of Corruption T1`: mean +61.2 / p10 +51.2, against the default's plan). **Every future contract must be written with `--deepen`**, and the §10.1 template's attempt caps should be read as "stop when Stability runs out", not "stop at the planned tier".
+
+**The player was right twice before this was modelled.** Both overruns were logged at the time as the player "beating the contract", which framed it as deviation rather than as evidence the contract was wrong. Treat a repeated, successful deviation from a recommendation as a defect report about the recommendation.
+
+---
+
+### 29 July 2026 — Hacking Simulator unlocked; measurement channel built; two doc defects fixed
+
+**What actually landed.** The Homelab install "Hacking Simulator" (5B cr + 3 hc) ships two tools and only one is live:
+
+- **Software Profiler L1 — LIVE.** 100 fights against a *chosen enemy level* in a chosen zone, with the equipped loadout **or a saved gear set**. No daily limit — a 5-second cooldown only (`profiler_cooldown_ms: 5000`), i.e. **~72,000 simulated fights per hour at zero cost**. Returns `wins`/`losses`/`win_rate`, the most common loss archetype, and **two fully-logged fights (`first_victory`, `first_loss`) carrying `combat_log_compact` and `enemy_stats`**.
+- **CI/CD Pipeline L0 — LOCKED at homelab 12** (currently 10). This is the gear-customised *full-streak* sim, 5 runs/day per level, reporting `final_streak`, `xp_per_hour`, `credits_per_hour`, `chips_per_hour`. `hacking_simulator.daily_limit = 0` in the capture is **this** tool's budget, not the profiler's.
+
+**Why it matters more than any previous instrument.** `enemy_stats` on every logged fight supplies the other side of every combat formula — enemy `effective_evasion`, `effective_defense`, `effective_attack_damage`. Until now the workspace inferred *weights* from confounded live windows; the profiler measures *mechanisms* against a controlled dose. And with `gear_set_capacity: 2` (0 sets created), a gear A/B costs **~4 minutes and zero live disruption** — profiling a gear set does not equip it. Previously an A/B cost hours of play and was read through streak composition.
+
+**Regime constraint, registered before any use.** The profiler simulates fights at a chosen enemy level, not a streak. Whether HP carries between them is unknown until measured and decides everything: a full-HP-start sample is **blind to attrition** and may not price Regen/Barrier/MaxHP. `ihlib.sim_regime_check()` settles it from the first run and `ih.py sims` prints the verdict first. This is the T3-tier-cap failure mode pre-empted.
+
+**Channel built (userscript v1.6.0 → hub → `data/sim-runs/` → `ih.py sims`).** Opt-in "Sim capture" toggle polls the two page-scope result bindings every 2 s against the 5 s cooldown and pushes each new result once; a one-shot button also reads the game's own IndexedDB history store (last 10 per mode) to backfill. Hub deduped by result-body hash. **Safety boundary unchanged** — the script observes results the player asked the game to compute; it never sends `RUN_HACKING_SOFTWARE_PROFILER` or any other message.
+
+**Two defects fixed in the same change, not deferred:**
+
+1. `open-questions.md` claimed the gear-customised full-streak sim arrives at **homelab 10**. It arrives at **homelab 12**, as a separate upgrade. The tempo question ("does attack speed move the death ceiling?") was resting its resolution plan on a tool that is 5,490 homelab points away, not owned.
+2. The `ih.py assumptions` entry for `CRAFT_WEIGHTS_PCT[Acc]` still read "left unchanged... probably far too high" **after the value had already been cut 1.0 → 0.14**. The register described an unfixed defect that was fixed, which is as misleading as the reverse. Rewritten to state what 0.14 actually is: a placeholder sized to "nearly saturated", not a fit, whose regime is Corporate Network evasion at streak 60–130 only.
+
+**Ground truth banked for validation.** Live win rate by enemy level over 14,932 ledger fights: 1900–1999 99.0%, 2000–2099 99.5%, 2100–2199 97.8%, 2200–2299 91.9%, 2300–2399 85.6%. The profiler must be checked against these before its numbers enter a verdict — and if it starts fights at full HP, **profiler win rate minus live win rate at matched enemy level is the attrition penalty**, which decomposes the death ceiling into attrition vs final matchup for the first time.
+
+Protocol, ordered experiments and the pre-declared saturation branch: `docs/simulator-protocol.md`.
+
+---
+
+### 29 July 2026 (evening) — first two profiler runs resolve the regeneration law exactly
+
+Two Software Profiler runs (Corporate Network, equipped gear, enemy level 2300 and 2537 — 200 simulated fights, 4 fully logged) settled in ten minutes a question that 381 live fights had left open for a day.
+
+**REGIME: `full-hp`.** All logged fights start at 100% HP. The profiler measures **single-fight** win probability; Regen/Barrier/MaxHP weights may not be fitted from win rate. Registered before any use, per the T3-tier-cap lesson.
+
+**The law — `prg = clamp(Regeneration − 1.5 × ecd, 0, max_hp − php)`.** 288/288 rounds (100%), residual **exactly 0.0** across the 190 non-capped ones, over 4 enemy classes and 2 enemy levels. The base term is the player's listed `statsBreakdown.regeneration.total` (537.85) to the decimal. Three open items collapse into it (`mechanics.md` §17):
+
+- **"Regeneration under-performs against exactly three enemy classes" — RESOLVED, and hypothesis (1) was right.** Corruption carries a healing-reduction rider of **1.5 HP/round per point of `ecd`**, so incoming corruption costs **≈2.5× face value**. Against Trojan Wall at level 2537 (`ecd` ≈ 200/round) that destroys **300 of a 537.85 regeneration pool — 56%** — which is why three classes with *lower* direct damage cause 88 of 123 deaths.
+- **Overheal capping — CONFIRMED formula-level.** `prg` truncates to `max_hp − php`, so listed Regeneration realizes **nothing** near full HP and **1:1** once depleted. The 28 Jul band pattern needs no extra mechanism.
+- **`prg` is NET.** Every prior comparison of realized regeneration across cohorts with different enemy-class composition was measuring the opponents. `ihlib.gross_regen` added; `data-dictionary.md` corrected.
+
+**Defect fixed in the same change: `mechanics.md` §16 claimed "there is no corruption-resistance stat".** It was read off `statsBreakdown`, which only shows what the player already has. **Isolated Sandbox** [Virtualization Cluster] divides incoming corruption by 1.01/level to a max of ÷3.00 — **gated at homelab 11**, hence invisible at homelab 10. Virtualization Cluster is already installed; base cost 25M credits, no hackcoin. This is the accessibility rule run in reverse: absence from the current stat block is not absence from the game.
+
+**Consequent priority: homelab 11 is 1,490 points away (~13.5 h) and the homelab was idle.** Isolated Sandbox is the only known counter to the mechanism behind ~72% of deaths, and at low levels it pays homelab points at ~110/h — competitive with the best queue fillers — so it is not bought at the expense of progress toward homelab 12 / CI-CD Pipeline.
+
+**Two design facts for the sweep, from Exp 0's second check:** enemy stats are **not** a pure function of enemy level — at level 2300 a Zero-Day rolled evasion 7,221 against a Trojan Wall's 5,138, wider than the gap between levels 2300 and 2537. Per-level runs must therefore be replicated. And **win rate is not saturated at the zone cap** (73% at 2537 vs 99% at 2300), so the pre-declared saturation branch does not trigger and win rate remains a usable A/B outcome.
+
+**Unfitted but flagged:** a point of Regeneration is worth 1 HP/round while depleted (55-70 HP over a fight) against 1 HP for a point of Barrier, implying a ~55-70× ratio where `CRAFT_WEIGHTS_FLAT` prices 14×. Not re-fitted from mechanism alone — it needs a gear-set A/B, because the overheal cap decides how much of the gap is real.
+
+---
+
+### 29 July 2026 (evening) — profiler sweep resolves hit chance and mitigation; Acc re-weighted, Def registered
+
+21 runs, enemy levels 1400–2537, **2,100 simulated fights / 32 fully logged**, ~4 minutes of clicking. Two questions open since 21 July closed (`mechanics.md` §18).
+
+**Hit chance: `logit(hit) = 0.532 + 1.208 × ln(Acc/Eva)`** — 2,953 attacks, evasion 3,002–7,699. The ratio-power form `acc^k/(acc^k+eva^k)` is **rejected** (NLL 1666.8 vs 1622.6).
+
+**`CRAFT_WEIGHTS_PCT["Acc"] 0.14 → 0.19`, and the "Accuracy is saturated" reading is retired.** At the evasion the deep bands actually face (4,857–5,386 at streak 120–159) hit rate is 76–79% — nowhere near a cap — and +1% Accuracy buys +0.26–0.28% output, i.e. 0.18–0.20 on the AtkDmg = 0.7 scale. **The placeholder was ~30% too LOW, not too high**, which is the opposite of what a day of live analysis concluded. The 27 July result (cutting Accuracy 4.35% produced no measurable hit-rate loss over 8,195 attacks) was a composition artefact: pooled streak bands move enemy evasion underneath the comparison. 0.19 prices the output channel only and is a floor.
+
+**Mitigation: `damage = AttackDamage × K / (K + Defense − ArmorPen)`, K ≈ 205.** Fitted **independently on both directions** — K = 190.2 outgoing (32 fights, enemy Defense 743–1,990), K = 219.3 incoming (28 fights, enemy ArmorPen 26–406). Two independent fits within 15% is the strongest structural evidence this workspace has produced.
+
+**`CRAFT_WEIGHTS_FLAT["ArmorPen"] = 0.05` VALIDATED** — an inherited guess that had never been exercised turns out right: +97 points (10 → 107) is +6.1% output vs enemy Defense 1,500, i.e. 0.044–0.051/point. Noted that the law is **convex**, so per-point value rises as ArmorPen approaches the target's Defense — do not extrapolate far above the fitted range.
+
+**`CRAFT_WEIGHTS_PCT["Def"] = 1.0` entered `PENDING_REFITS`.** The mechanism says its own elasticity is −0.88, and worse, Defense touches only the direct channel: against the three classes causing ~72% of deaths it addresses **~49%** of effective incoming once corruption is counted at its measured 2.5× (§17). Nominal 1.0 is roughly double any defensible value. **Not corrected**, because converting a mitigation elasticity into this weight scale needs an output↔mitigation exchange rate nobody has ever measured; that is a legitimate block, and it carries an unblock (a Defense-only gear-set A/B). `audit`/`potential`/`contract` now banner it.
+
+**Design fact for all future sweeps: enemy stats are NOT a pure function of enemy level.** At level 2300 a Zero-Day rolled evasion 7,221 against a Trojan Wall's 5,138 — a wider spread than between levels 2300 and 2537. Single-run points are noise; replicate per level.
+
+**Every named loss archetype across the sweep was Trojan Wall, Rootkit or Stealth Worm** — the three corruption classes, 11 of 11 runs that recorded a loss. Independent confirmation of §16/§17 on 2,100 fresh fights.
+
+### 29 July 2026 (evening) — Experiment 1: deaths are ~100% attrition, ~0% matchup
+
+The decomposition the profiler was built for, and it is lopsided.
+
+| | |
+|---|---|
+| Median enemy level at death (live) | **1,798** (n=167 death records; 1,802 from the fight log, n=125 — independent agreement) |
+| Median streak at death | **117** (range 6–157) |
+| **Profiler win rate at level 1800, full HP** | **300 / 300 = 100.0%** |
+| Profiler win rate at 2100 / 2300 / 2400 / 2500 | 100% / 96.8% / 89.7% / 75.7% |
+
+**The player dies in fights the build wins 100% of the time at full HP.** Single-fight win probability does not fall below 100% until enemy level ~2,300 — roughly 500 levels beyond where runs actually end. The entire death mechanism is accumulated damage, not an unwinnable final matchup.
+
+Consequences, and they redirect the whole optimisation:
+
+1. **Win rate is the wrong outcome metric for this build.** A gear A/B read on profiler win rate measures matchup strength, which is already saturated where it matters. Run gear A/Bs on **HP lost per fight** and **rounds per fight** from the logged victory instead — both parsed by `ihlib.sim_rows`. Win rate is only meaningful for questions about pushing into new zones.
+2. **The binding constraint is exactly what the full-HP regime cannot price** — Regeneration, Barrier, Max HP and corruption mitigation. This is now a *measured* reason to want the **CI/CD Pipeline (homelab 12)**, not a speculative one: it is the only instrument that reports `final_streak`.
+3. **It raises the priority of Isolated Sandbox (homelab 11) again.** Corruption at 2.5× face value (§17) is the largest single component of per-fight net drain against the three classes that end runs.
+4. **It sharpens the Defense refit.** `CRAFT_WEIGHTS_PCT["Def"] = 1.0` buys matchup strength that is already at 100% where the player fights, on the ~49% of effective incoming it can touch. The `PENDING_REFITS` row stands and the direction is now unambiguous.
+
+**Method note.** This took one query against data already banked — the sweep was designed to fit curves, and the most valuable thing it produced was a comparison against the live ledger that cost nothing extra. The workspace had spent days modelling the death ceiling without ever asking whether the final fight was winnable.
+
+---
+
+### 29 July 2026 (evening) — the craft weight table re-fitted from measurement; 8 of 13 weights moved
+
+No new runs — all of this came out of the 32 fights already banked, plus `statsBreakdown`. Full derivation in `mechanics.md` §19.
+
+**The error that had inflated half the table.** A **"+1%" affix does not raise a stat by 1%** — it adds one point to that stat's shared additive pool (§13), so the stat moves by `1/pool`: 0.686% for AttackDamage (pool 1.458) but only 0.435% for Defense (2.298) and 0.428% for Accuracy (2.335). `AtkDmg`'s applied 0.7 against its true 0.686 anchors the scale and shows what a weight *means*: **% output-equivalent per +1% affix**. Every pool-heavy stat had been priced as though its affix moved the stat a full 1%. This alone is most of the Def and Eva correction.
+
+**The exchange rate between the two families, measured at last.** Output stats shorten the fight, and since rounds ∝ 1/output and net drain = net-per-round × rounds, **+1% output = −1% net drain exactly**. Mitigation stats cut a gross term without changing fight length, so they are **leveraged by `gross/net`** — net drain being a *difference* between incoming and regeneration. Measured leverage against the three lethal classes: **2.52× / 2.67× / 3.14×**. This is the number the `PENDING_REFITS` row for Def was blocked on; that row is now retired.
+
+| weight | was | now | why |
+|---|---|---|---|
+| `Def` | 1.0 | **0.45** | −0.88 elasticity × 0.435 pool × 0.41 channel share × 2.7 leverage |
+| `Eva` | 1.0 | **0.22** | same law, same 1.208 slope, fitted from the enemy side; Eva/Def = 0.497 |
+| `AtkSpd` | 0.9 | **0.56** | 0.545% stat per affix point |
+| `CritDmg` | 0.35 | **0.22** | multiplier measured 1.883 vs stat 1.846; +1pp = +0.214% output |
+| `Acc` | 0.14 | **0.115** | 0.428 pool × 0.255–0.281% output per stat-% |
+| `Thorns` | 0.05 | **0.13** | `ptd` = 72.08 per enemy hit vs stat 73.4 — exact, and charged per hit so it scales with fight length |
+| `ArmorPen` | 0.05 | **0.068** | +97 points = +6.1% output at enemy Defense 1,500 |
+| `CritCh` | 0.7 | **0.7** | **validated** — crit rate 0.2631 on 954 single-hit rounds vs stat 0.2558 |
+| `AtkDmg` | 0.7 | **0.7** | anchor; self-validates at 0.686 |
+
+**A correction to this session's own work.** `Acc` was moved 0.14 → **0.19** earlier this evening and that was wrong: the conversion multiplied a per-STAT elasticity straight onto the weight scale, forgetting the pool. The corrected value is **0.115** — so the original 0.14 was closer than the "fix", and the claim that the placeholder was "~30% too low" was backwards. The provenance row now records the mistake rather than just the answer.
+
+**Stale suspect-flag removed.** `SUSPECT_WEIGHTS` still discounted any Δ leaning on Accuracy as "measured saturated 27 Jul". §18 falsified that. A stale suspect flag is as misleading as a stale weight — it discounts a Δ that is now sound. `MaxHP` and `Regen` took its place, since both are pure attrition terms the full-HP regime cannot see.
+
+**What is still unpriced, and it is now the biggest hole.** `MaxHP` (0.5) and `Regen` (0.6) remain 22 July guesses. Both are pure attrition buffers; the profiler runs full-HP single fights and is structurally blind to them. Since deaths are ~100% attrition, **these are probably the two most valuable stats in the build and they are the two least measured.** Only the CI/CD Pipeline (homelab 12) can close it.
+
+**Sanity check: the live Payload verdict survives the re-fit** — Targeted Payload of Perfect Strike 36.4 vs Enduring Payload of Armageddon 31.5 vs equipped 24.8, same order as before.
+
+---
+
+### 29 July 2026 (late) — a biased denominator, an anchor error repeated, and two more weights re-fitted
+
+Prompted by "are we confident we've captured everything?" — the answer was no, and the gap was in work shipped hours earlier.
+
+**Defect 1: the hit-rate denominator was biased, and I fitted on it.** `pm` is a per-round flag meaning **the FIRST attack of the round missed** (client text: "First hit misses, but N hits land"), not a miss count. So `hits/(hits+missflags)` cannot see a round whose first attack hits and second misses, and it read **0.757 where the true per-attack rate is 0.638**. The clean estimator uses only provably-2-attack rounds — `ph=2,pm=0` (both hit) vs `ph=1,pm=1` (first missed, second hit) — giving `p = n(2,0)/(n(2,0)+n(1,1))`. The model self-validates three ways: predicted `n(0,1)` 335 vs 354 observed, total rounds 1,930 vs 1,949, and implied **attacks/round 1.815 against an AttackSpeed stat of 1.8458**.
+
+- Hit law re-fitted: **`logit(hit) = −0.164 + 1.420 × ln(Acc/Eva)`** (was `0.532 + 1.208`). The curve is **steeper**, so Accuracy is worth about double the biased fit: **`Acc` 0.115 → 0.21**.
+- **A claim from the previous entry is retracted.** "The slope is identical on both sides (1.208), strong independent confirmation" was an artefact of the shared bias. Unbiased, the two sides are **1.420 (ours, n=1,004)** and **1.184 (enemy, n=361)** — compatible within noise, but no longer evidence of an exact symmetry.
+- `Acc` has now moved 0.14 → 0.19 → 0.115 → **0.21** in one session. Only the last is sound; the provenance row records the whole path so the reasoning can be audited rather than just the answer.
+
+**Defect 2: the same anchor error was in the 29 Jul Corrupt fit.** `Corrupt` was set from "1.04% output per point × 0.7". The weight scale is **~1.02 per 1% output** (anchored on AtkDmg's 0.686% per affix point), not 0.7.
+
+**Defect 3: Corruption's "NON-LINEAR, invalid above ~25 points" flag was wrong.** Enemy corruption spans **3.94–50.47** across the profiler sample and max `ecd`/round tracks it at a constant ~6×: mean ratio **5.84 for stat < 10 vs 6.45 for stat > 30 (z ≈ 1.5, indistinguishable)**. Corruption damage is **linear in the stat**; the apparent non-linearity was stack accumulation varying with **fight length**. Mechanism: damage ≈ 6 × stat per round at full stack, stacks building one per landing hit over a rolling window — corroborated by the homelab upgrade "Resident Shader: +1 round to Corruption stack duration per level", which makes the window a real game term.
+
+- **`Corrupt` 0.7 → 1.0** (measured 0.92 at enemy level 1800, 1.18 at 2100–2537).
+- Suspect flag reworded to "LINEAR to ~50 (verified); above that is extrapolation" — it still fires on the top Payload candidate, whose projected Corrupt of 70.5 is genuinely beyond the verified range.
+
+**Three laws confirmed from banked data, no new runs:**
+
+- **Thorns, from the enemy side:** `etd` per hit we land = 0.965–0.978 × the enemy's thorns stat, matching our own 72.08/73.4 = 0.982. Consistent ~2–3% shortfall on both sides.
+- **Barrier: exactly 1.000×** the stat in drawdown per fight, 5/5 samples — the 29 Jul law holds under the profiler.
+- **Attacks per round = 1.815** vs an AttackSpeed stat of 1.8458, which validates treating `AtkSpd` as linear in output (weight 0.56).
+
+**Live verdict moved:** Bastioned Payload of Contagion went +31.7 → **+48.2** on the Corrupt re-fit, but the extrapolation flag correctly shows Δ ex-suspect is −10.9. That craft should not be approved on the headline number.
+
+---
+
+### 30 July 2026 — firewall A/B closed KEEP (+20.4 streaks); Payload contract approved at p10 +73
+
+**`firewall-ab-2026-07-28` closed: KEEP, decisively.** Post-equip mean death streak **140.2 over 89 deaths** against the pre-declared gate of ≥117.8 (baseline 119.8, n=16). That is **+20.4 streaks**, the largest single-window move on record. Contamination checks: hit rate 79.7% vs the 81.0% baseline (small move, explained below), no zone change in the window, and the readout is explicitly a **bundle** — 87 of 89 deaths fall after the VLAN +1% Def segment boundary, and the window also contains the 29 Jul Kernel and Daemon crafts (realized +37.4 and +131.5). The outcome gate governs; the bundle delivered. Realized regen/round at streak ≥60 rose 260.5 → 284.6. Consequence: **Brutal Firewall of Perpetuity (ilvl 314, the revert path) is released for decompile.** New standing death-streak baseline: **mean 140.2, Corporate Network** — retire the 116.2 figure.
+
+**Craft approved: Vital Payload of Striking (Payload, ilvl 2091, stab 28).** `ih.py contract --deepen --order`: the deepened plan (per the standing deepen-past-`plan_craft` rule) is **of Contagion T7→T1, then of Striking T9→T1, then of Obliteration T7→T6**, in that order — mean **+80.6**, p10 **+73.1**, p90 +87.5, P(Δ>+5) 100.0%, vs the contracted-depth plan's mean +49.2. Recorded in the prediction ledger **at the deepened plan's numbers**, which also addresses the PENDING_REFITS complaint that projected and realized have described different plans — this projection describes the plan the player will actually run. Δ is vs the equipped Bastioned Payload of Perfect Strike (score 30.6); if the finished Targeted Payload of Perfect Strike (36.6) is equipped in the interim per the audit flag, subtract 6.0 when grading realized. This is the third graded craft under uncapped+floor2+archive — grading it unblocks the UPGRADE_BAND re-fit.
+
+**Chips: 295,872 spent to the equal-marginal plan** (~37h of income at the measured 8.0K chips/h, recoverable at the monthly hardware reset): ECC Memory 110→119 (66.6K), **Packet Shield 14→88 (217.9K)** — its multiplicand is no longer zero now that gear Barrier is ~2,360 flat post-Daemon-craft — Malware Injector 16→17, Feedback Loop 4→11, Exploit Framework 0→1. Encryption Module correctly gets nothing (0.03/1K chips).
+
+---
+
+### 30 July 2026 (late) — Payload craft graded BELOW p10; UPGRADE_BAND re-derived to ±16; `payload-ab-2026-07-30` declared
+
+**Vital Payload of Striking realized +64.7 as Vital Payload of Extinction** (score 95.3 vs the Bastioned's 30.6). The executed tier plan matched the contract exactly for the first time on record — of Contagion T7→T1 (renamed of Zero-Day, Corrupt +61, roll 63%), of Striking T9→T1 (renamed of Extinction, AtkDmg +28.99%, **roll 3%**), of Obliteration T7→T6 (of Execution, CritDmg +17.40%, roll 78%) — and Stability was again spent to 0 rather than the floor of 2 (third consecutive craft; the floor is advisory in practice). Realized fell **below p10 (+73.1)**, the first sub-interval craft ever: era interval coverage is now **0/3 with misses on both sides**, so `simulate_contract`'s p10–p90 is too *narrow*, not merely biased. The shortfall driver is the 3%-of-range roll on the largest affix — roll variance within a tier is evidently wider than the sim assumes.
+
+**UPGRADE_BAND / INFERIOR_BAND re-derived +5/−5 → +16/−16 and the `PENDING_REFITS` row deleted** (its unblock condition — a third graded craft whose projection described the executed plan — was met by this craft). Basis: graded errors +21.3 / +56.8 / −15.9; the first two measure plan deviation, the −15.9 is the worst clean-protocol shortfall, so a projection must clear +16 for realized > 0 to have held against every graded error. n=1 clean observation — directional; re-derive as clean grades accumulate. Verdicts that moved: **Reinforced Router of Mending (+5.8) and Fortified Driver of Sandboxing (+14.4) are now sidegrades**, as are all former sub-16 "inferiors" now inside the band. No live recommendation rested on the moved labels.
+
+**`payload-ab-2026-07-30` declared as ACTIVE_EXPERIMENT** (baseline: the 89-death post-Firewall window, mean 140.2; KEEP ≥ 138.2, REVERT ≤ 135.2, n=24). The window is a **declared bundle** with the 287K-chip hardware package (Packet Shield 14→88 on ~2,364 gear-flat Barrier, ECC 110→119) that landed minutes before. Three treatment predictions are pre-registered *before any post data existed*: hit rate −3.8pp per-attack from the fitted hit law (Acc stat −11.2%), max outgoing corruption ≈ 6 × 71.6 ≈ 430/round at full stack (extends the corruption linearity range 50 → ~72), rounds/fight −10–13%. A large miss on either law is a defect report against the law regardless of the depth outcome. This equip is the strongest test yet of the 22 Jul "output does not move the death ceiling" law. Revert path: **Bastioned Payload of Perfect Strike, decompile-locked until the A/B closes.** Targeted Payload of Perfect Strike's interim-equip flag is superseded and it reverts to releasable-spent-alternate status.
+
+---
+
+### 30 July 2026 (later) — profiler post-arm readout: both laws hold, corruption mechanism refined
+
+10 post-equip Software Profiler runs (5×2100, 5×2500; pre-arm skipped — equip preceded the runs). **Hit law held out-of-sample** at Accuracy −11.2% (observed per-attack 63.6% vs ~64% predicted, n=195, per-face tracking via `enemy_stats.effective_evasion`). **Corruption linearity extended 50 → 72** (avg pcd/round per stat point 5.19× → 4.95× across a 4.1× stat change); the "6× at full stack" multiple is **side-dependent** — per-stack tick ≈ 0.95× stat, and full-stack count follows attacks landing per round (ours 8.5–9×, enemy ~6×). `ihlib` Corrupt provenance updated. **Rounds/fight −39–41%** at matched levels and **1,000/1,000 wins** including enemy 2500 (was 70–81%) — single-fight closing power is no longer a failure mode; both figures bundle the craft with the same-day hardware package. Depth still unread: full-HP single-fight regime — `payload-ab-2026-07-30`'s live-streak gate stands unchanged.
+
+---
+
+### 31 July 2026 — the −15.9 "shortfall" was a scale bug; UPGRADE_BAND reverted to ±5; Firewall craft approved
+
+**Defect: the `--deepen` block printed absolute scores as deltas.** `ih.py`'s deepen path called `ihlib.deepen_search` without passing `baseline`, so `simulate_contract` returned absolute post-craft scores and the CLI printed them beside delta-scale contract numbers. Proven arithmetically on today's Firewall run: a deepen variant with the contract's own phases printed mean +128.14 against the contract's +38.40 — difference exactly the equipped baseline (89.9); p10 identity 107.27 − 89.9 = 17.40 to the decimal. Fixed same session (baseline now threaded through; the hardcoded "P(>+5)" labels in the order/deepen printers now read the live band).
+
+**Casualty 1 — the 30 Jul Payload grade.** That contract was "recorded at the deepened plan's numbers", i.e. read off the buggy block: +80.6/+73.1/+87.5 were absolute (equipped Bastioned = 30.6). Corrected: **projected +50.0, p10 +42.5, p90 +56.9 → realized +64.7 is error +14.7, ABOVE projection and above p90** — not the "first sub-interval craft" but the third consecutive high-side miss. Both ledger rows scale-corrected in place with the original values preserved in the note (the 29 Jul Kernel/Daemon rows were checked and are clean — their notes carry order-search fields the deepen block never printed, and the Daemon note states its delta decomposition explicitly).
+
+**Casualty 2 — UPGRADE_BAND.** The 30 Jul re-derivation to ±16 rested entirely on the phantom −15.9 as "the worst clean-protocol shortfall". Corrected in-era errors are **+21.3 / +56.8 / +14.7 — all positive, all above p90** — so the worst-shortfall method yields no band at all. **Reverted to ±5** (the pre-bug 22 Jul value) as a switching-cost indifference band, pending the first genuine negative grade; provenance records the full 5 → 16 → 5 path. Era calibration after correction: bias +30.9, over-realized 3/3, verdict held 3/3, coverage 0/3 with every miss on the HIGH side — `simulate_contract`'s p10 has never been breached. Verdict labels that moved on reversion: Resilient Analyzer of Puncturing (+12.7), Citadel Shell of Isolation (+10.1), Overclocked Analyzer of Guarding (+9.8) and Fortified Driver of Sandboxing (+14.2) are UPGRADE again; Reinforced Firewall of Restoration (−6.0) is inferior.
+
+**Two stale annotations fixed in the same sweep:** the Corrupt suspect-note now reads "LINEAR to ~72" (the 30 Jul profiler extension; it still fires correctly on candidates that push the stat to ~106–128), and `potential`'s header no longer instructs a ~5-point discount that calibration retired two days ago (the advise skill's judgement rules carried the same stale text and were rewritten to read the band from `ih.py assumptions`).
+
+**Craft approved and recorded: Predatory Firewall of Restoration** (ilvl 2502, dropped 30–31 Jul, the highest-ilvl item owned). Deepened plan of Restoration T5→T1 → of Renewal T4→T1 → of Piercing T9→T5: **mean +39.11, p10 +17.40, p90 +50.87, P(Δ>+5) 97.1%**, P(all phases) 40.1% (over-committed by design; worst −24.2 bounded and optional to equip). Ceiling Δ +43.8 with ex-suspect +12.3, so the verdict clears the band on measured weights alone; the suspect share is Regen/MaxHP, and the buy direction (net Regen +62 flat, Def +25.2pp affix) matches the measured bottleneck. Nearest misses held on the one-craft rule: Shielded Shell of Segmentation (mean +30.7, the robustness pick at ex-suspect +24.5 — next in line) and Slippery Driver of Sandboxing (mean +19.5 on fully measured weights). Equipping the finished Firewall is a declared segment boundary inside `payload-ab-2026-07-30` (18/24 deaths, mean 156.4 vs gate 138.2 — KEEP is arithmetically near-locked; the formal close stays at n=24).
+
+---
+
+### 31 July 2026 (later) — Firewall realized +36.8, the first in-interval craft; payload A/B closed KEEP at 155.0; the contract drop rate was 5.5× low
+
+**Predatory Firewall of Restoration realized +36.8 as Predatory Firewall of Immortality** (score 126.7 vs the equipped Resilient's 89.9) against projected +39.1 — error **−2.3, the smallest on record**, and the **first craft ever to land inside p10–p90** (era interval coverage now 1/4). It is also the first craft whose projection was recorded after the deepen-scale bug fix, which is consistent with the interval story: every miss was recorded before the fix or executed off-plan. Execution vs contract: of Restoration T5→T1 **exact** (renamed of Perpetuity — Def +20.25% roll 70%, Regen +72 roll 19%), of Piercing T9→T5 **exact** (renamed of Sundering — ArmorPen +77), of Renewal stalled at T2 (renamed of Immortality — Regen +100, roll 67%), one tier short: the 20%-VU chase the sim priced as the likely stall (P(all phases) 40.1%). Stability spent to 0, fourth consecutive time — the floor is confirmed advisory-only. Graded in the ledger; equip pending at write time; **`firewall-ab-2026-07-31` declared** (KEEP ≥ 153.0 over 24 deaths, mitigation/hit/regen predictions pre-registered, and the −7.8% MaxHP side is the first live test of the unmeasured MaxHP weight).
+
+**`payload-ab-2026-07-30` closed KEEP**: mean **155.0 over 29 deaths** vs gate 138.2 (+14.8 over baseline), pre-declared n=24 reached, contamination clean. Hit and corruption laws held their pre-registered predictions (77.5% pooled vs ~76; linearity to ~72). **New standing baseline: 155.0** — retire 140.2. Revert path **Bastioned Payload of Perfect Strike released**; Resilient Firewall of Perpetuity takes its place as the locked revert path for the new window.
+
+**`CONTRACT_DROP_PER_WIN` re-measured 0.0534 → 0.296 (5.5× low), and the morning's "abandon Marathon Collection" advice is REVERSED.** The 29 Jul fit pooled 9,395 ledger wins recorded mostly with no collection contract active — it measured a different quantity. The board's own accrual (Marathon 1 → 466 across the 09:40 → 11:59 captures, contract active throughout, ~1,569 stream wins) is the direct measurement: **0.296 drops/win, ~219 drops/h**. Marathon is ACHIEVABLE with ~10h to spare. The constant also had **no assumptions-register row** (introduced 29 Jul in violation of the same-change rule): row added with a live self-check that re-measures from any two captures sharing an active drops contract, and `audit`'s completability verdict now covers `drops` contracts, not just `kills`.
+
+**Addendum, ~12:50Z:** the equal-marginal chip package was executed — evidenced by balance (120,782 → ~13,484 live, ≈107K spent vs the 112.8K plan; the hardware panel in the 12:50 capture is stale, so exact end levels get confirmed at the next Hardware-tab capture). The spend sits inside `firewall-ab-2026-07-31` as declared. Firewall equip confirmed by the A/B stream boundary (first post-equip death at streak 175 — the deepest run on record).
+
+**Addendum, session close — learnings folded into the models:** (1) `audit` gained a NOTHING-ACCRUING flag — a completed contract empties the active slot silently, and ~2h of board time were lost that way today. (2) Provenance rows updated with the window's evidence: Regen realized ~100% of listed at streaks 150–180 (the "second buy realizes less" prediction did not bite at depth); MaxHP has its first live bound (−7.8% max_hp in a mitigation-compensated trade raised the ceiling — the 0.5 weight is not grossly under-priced); the hit law's third out-of-sample hold (+0.7pp predicted and observed); Def's first live corroboration at depth (−10/−11% per-round gross at deep bands, bundled). (3) CLAUDE.md guardrails de-staled: the Accuracy-saturation bullet (falsified 29 Jul) replaced with the fitted hit law; the 22 Jul output/tempo law demoted to bundle-confounded form; the untested-constants count corrected to 3 of 26. (4) `open-questions.md` tempo entry rewritten (strict law dead, size question open) and a new sub-question added: shallow-band damage-per-round fell 24–44% vs the −9% Defense prediction — hypothesis is superlinear corruption-stack exposure vs fight length, testable with paired profiler arms.
