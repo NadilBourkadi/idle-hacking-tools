@@ -22,7 +22,6 @@ Stdlib only. Run directly or via the systemd user unit in scripts/.
 
 import json
 import re
-import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
@@ -30,7 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import ihlib  # noqa: E402  (fight_key + STREAM_DIR shared with analysis)
+import ihlib  # noqa: E402  (fight_key + STREAM_DIR shared with the ledger)
 
 HOST = "127.0.0.1"
 PORT = 8123
@@ -45,64 +44,15 @@ SCHEMA_ROUTES = {
     "idle-hacking-state-capture-v1": CAPTURES,
 }
 
-# After saving a state capture, run the standing A/B analysis and return its
-# summary in the POST response — the userscript panel displays it, closing
-# the feedback loop at capture time. Read-only with respect to the game.
-ANALYSIS_CMD = [sys.executable, str(ROOT / "scripts" / "ih.py"), "ab", "--brief"]
-
-
-def analysis_summary():
-    try:
-        proc = subprocess.run(
-            ANALYSIS_CMD, capture_output=True, text=True, timeout=20, cwd=ROOT
-        )
-    except Exception as error:  # analysis must never break capture saving
-        return f"(analysis unavailable: {error})"
-    output = (proc.stdout or "").strip()
-    if proc.returncode != 0 or not output:
-        return "(analysis unavailable: ih.py ab failed — see hub logs)"
-    return output
-
-
-# The analysis subprocess re-parses the whole stream ledger and its runtime
-# grows with it: 3.4s on the morning of 31 Jul 2026, 6.3s by evening (194MB
-# of ledger), at which point save+analysis crossed the userscript's 8s POST
-# timeout and every capture response died with BrokenPipeError -- the panel
-# showed "hub unreachable" while every capture was in fact SAVED (the save
-# precedes the analysis). Fix: respond instantly with the freshest cached
-# summary and refresh the cache in a background thread, so the response time
-# no longer depends on ledger size at all.
-_analysis_lock = threading.Lock()
-_analysis_cache = {"summary": None, "for_capture": None, "running": False}
-
-
-def _refresh_analysis(capture_name):
-    summary = analysis_summary()
-    with _analysis_lock:
-        _analysis_cache["summary"] = summary
-        _analysis_cache["for_capture"] = capture_name
-        _analysis_cache["running"] = False
-
-
-def analysis_summary_cached(capture_name):
-    """Freshest available summary, instantly; refresh runs in the background.
-
-    At worst the summary shown is one capture behind (tagged so). Back-to-back
-    captures while a refresh is running reuse the in-flight refresh rather
-    than piling up subprocesses.
-    """
-    with _analysis_lock:
-        cached = _analysis_cache["summary"]
-        stale = _analysis_cache["for_capture"] != capture_name
-        if not _analysis_cache["running"]:
-            _analysis_cache["running"] = True
-            threading.Thread(target=_refresh_analysis, args=(capture_name,),
-                             daemon=True).start()
-    if cached is None:
-        return ("(A/B summary is computing in the background — it will "
-                "accompany the next capture)")
-    return cached + (" [summary is from the previous capture; refreshing]"
-                     if stale else "")
+# The capture response used to run `ih.py ab --brief` synchronously and
+# return its summary for the userscript panel. REMOVED 31 Jul 2026: the
+# subprocess's runtime grows with the stream ledger (3.4s morning -> 6.3s
+# evening against 194MB), it crossed the userscript's 8s POST timeout — every
+# capture was saved but every response died with BrokenPipeError, and the
+# panel showed "hub unreachable" — and the player confirmed the in-panel
+# summary was unused. The hub is now pure save-and-ledger: no subprocesses,
+# response time independent of ledger size. A/B status lives in
+# `ih.py ab` / `ih.py brief`.
 
 
 # ---- Combat stream ledger --------------------------------------------------
@@ -346,10 +296,7 @@ class Handler(BaseHTTPRequestHandler):
             directory, sanitise_name(self.headers.get("X-Export-Name"))
         )
         path.write_bytes(body)
-        response = f"Saved {path.relative_to(ROOT)}\n"
-        if directory == CAPTURES:
-            response += analysis_summary_cached(path.name) + "\n"
-        self._send(200, response)
+        self._send(200, f"Saved {path.relative_to(ROOT)}\n")
 
     def log_message(self, format, *args):
         sys.stdout.write(
