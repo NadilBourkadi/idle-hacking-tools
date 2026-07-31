@@ -64,6 +64,47 @@ def analysis_summary():
     return output
 
 
+# The analysis subprocess re-parses the whole stream ledger and its runtime
+# grows with it: 3.4s on the morning of 31 Jul 2026, 6.3s by evening (194MB
+# of ledger), at which point save+analysis crossed the userscript's 8s POST
+# timeout and every capture response died with BrokenPipeError -- the panel
+# showed "hub unreachable" while every capture was in fact SAVED (the save
+# precedes the analysis). Fix: respond instantly with the freshest cached
+# summary and refresh the cache in a background thread, so the response time
+# no longer depends on ledger size at all.
+_analysis_lock = threading.Lock()
+_analysis_cache = {"summary": None, "for_capture": None, "running": False}
+
+
+def _refresh_analysis(capture_name):
+    summary = analysis_summary()
+    with _analysis_lock:
+        _analysis_cache["summary"] = summary
+        _analysis_cache["for_capture"] = capture_name
+        _analysis_cache["running"] = False
+
+
+def analysis_summary_cached(capture_name):
+    """Freshest available summary, instantly; refresh runs in the background.
+
+    At worst the summary shown is one capture behind (tagged so). Back-to-back
+    captures while a refresh is running reuse the in-flight refresh rather
+    than piling up subprocesses.
+    """
+    with _analysis_lock:
+        cached = _analysis_cache["summary"]
+        stale = _analysis_cache["for_capture"] != capture_name
+        if not _analysis_cache["running"]:
+            _analysis_cache["running"] = True
+            threading.Thread(target=_refresh_analysis, args=(capture_name,),
+                             daemon=True).start()
+    if cached is None:
+        return ("(A/B summary is computing in the background — it will "
+                "accompany the next capture)")
+    return cached + (" [summary is from the previous capture; refreshing]"
+                     if stale else "")
+
+
 # ---- Combat stream ledger --------------------------------------------------
 # Auto-stream payloads (schema below) are NOT stored raw: fights and deaths
 # are extracted, deduped (fights by ihlib.fight_key — ids are per-session —
@@ -307,7 +348,7 @@ class Handler(BaseHTTPRequestHandler):
         path.write_bytes(body)
         response = f"Saved {path.relative_to(ROOT)}\n"
         if directory == CAPTURES:
-            response += analysis_summary() + "\n"
+            response += analysis_summary_cached(path.name) + "\n"
         self._send(200, response)
 
     def log_message(self, format, *args):
