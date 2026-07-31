@@ -1717,13 +1717,14 @@ def assumptions():
          "ladder; gain per expected Stability point peaks at T3->T2",
          "27 Jul 2026", None),
         ("HARVEST_PER_GATHER_HOUR", HARVEST_PER_GATHER_HOUR, "measured",
-         "LOWER BOUND, 31 Jul 2026: an Extended Harvest (1,331 actions, 4 hc "
-         "claimed) cleared inside a 4.37h capture window -> >=305/h if "
-         "gathering ran continuously, higher if not. Passive accrual is "
-         "~zero (the follow-up Extended sat at 3/1,374 through hours of "
-         "idle combat), so harvest contracts pay per GATHER-hour only. "
-         "Tighten by noting gathering start/stop times around any harvest "
-         "contract", "31 Jul 2026", None),
+         "LOWER BOUND, path 305 -> 700 in one evening (31 Jul 2026). First "
+         "bound: an Extended Harvest (1,331 actions) cleared inside a 4.37h "
+         "window of unknown gathering coverage. Second: 3 -> 294 actions "
+         "across a 24.3-min two-capture window with the contract active at "
+         "both ends = ~718/h; 700 recorded. Both are lower bounds -- the "
+         "true rate needs a window with known continuous gathering. Passive "
+         "accrual ~zero: harvest pays per GATHER-hour only", "31 Jul 2026",
+         None),
         ("CONTRACT_DROP_PER_WIN", CONTRACT_DROP_PER_WIN, "measured",
          "0.0534 -> 0.296, 31 Jul 2026, and the old value had NO register row "
          "(introduced 29 Jul in violation of the same-change rule). The 29 "
@@ -1950,14 +1951,17 @@ def contract_board(capture):
 # vary with the thing it supposedly measures.
 CONTRACT_DROP_PER_WIN = 0.296
 
-# Harvest-contract actions per hour of ACTIVE gathering -- a LOWER BOUND,
-# measured 31 Jul 2026: an Extended Harvest (1,331 actions) cleared and was
-# claimed (+4 hc) inside the 15:30 -> 19:52 capture window, so the rate is at
-# least 1,331/4.37h ~= 305/h if gathering ran the whole window, higher if it
-# ran less. Passive accrual is ~ZERO: the next Extended sat at 3/1,374 while
-# combat idled for hours -- harvest contracts pay only while the player is
-# actively gathering, so quote hc per GATHER-hour, never per combat-hour.
-HARVEST_PER_GATHER_HOUR = 305
+# Harvest-contract actions per hour of ACTIVE gathering -- a LOWER BOUND.
+# RE-MEASURED 31 Jul 2026 evening on a tight two-capture window with the
+# contract active at both ends: Extended Harvest 3 -> 294 across 19:52:52 ->
+# 20:17:10 (24.3 min) = ~718/h if gathering ran throughout; 700 recorded as
+# the bound. The earlier same-day bound of 305 came from a 4.37h window
+# (1,331 actions) where gathering coverage was unknown -- both are lower
+# bounds, the tighter window simply wastes less. Passive accrual is ~ZERO
+# (that same Extended sat at 3/1,374 through hours of idle combat), so
+# harvest contracts pay only while the player is actively gathering: quote
+# hc per GATHER-hour, never per combat-hour.
+HARVEST_PER_GATHER_HOUR = 700
 
 # Credit income, measured from the stream ledger rather than assumed.
 CREDITS_PER_HOUR = 12e6
@@ -2565,14 +2569,17 @@ FIREWALL_AB_2026_07_31 = {
 
 SHELL_AB_2026_07_31 = {
     "name": "shell-ab-2026-07-31",
-    "item": "Shielded Shell of Segmentation",
+    "item": "Shielded Shell of Bastion",
     "slot": "Shell",
-    # Declared BEFORE the craft ran — the crafted item will carry different
-    # suffix names (rename-on-promotion); match the Shell slot's stat-change
-    # markers in the stream (Barrier +~650-730 gear-flat appearing on the
-    # Shell slot, Eva -17pp affix) and update `item` to the final name at
-    # grading. equip_ms is provisional.
-    "equip_ms": 1785529800000,          # 2026-07-31T20:30:00Z, provisional
+    # Declared BEFORE the craft ran (as "Shielded Shell of Segmentation");
+    # renamed on promotion, realized +44.2. BOUNDARY CONFIRMED from the
+    # stream's stats marker at 20:10:05Z -- MaxHP 22,801 -> 25,043, Evasion
+    # 6,365 -> 5,825, Regeneration 625.95 -> 656.31 -- the swap landed inside
+    # the poll window [20:07:35, 20:10:05]. The provisional 20:30:00Z was
+    # LATE and would have classified early post fights as pre. Runs span
+    # swaps at these depths: the clean post cohort is deaths whose run
+    # STARTED after the boundary (run_start ~= ended_at_ms - streak*4872).
+    "equip_ms": 1785528605313,          # 2026-07-31T20:10:05Z, confirmed
     "boundary_fight_id": None,
     # Baseline = the full firewall-ab-2026-07-31 post window (closed KEEP),
     # mean 167.6, n=34, Corporate Network.

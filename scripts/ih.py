@@ -845,16 +845,22 @@ def cmd_audit(args):
             # active minutes earlier. Offline accrual is NOT ruled out by any
             # data here -- do not re-assert it. What is measured is the fight
             # cadence, so quote combat-hours required and nothing more.
-            if active.get("type") in ("kills", "drops") and left:
-                rate = 3600.0 / ihlib.FIGHT_CADENCE_S
-                if active.get("type") == "drops":
-                    rate *= ihlib.CONTRACT_DROP_PER_WIN
+            if active.get("type") in ("kills", "drops", "harvest") and left:
+                if active.get("type") == "harvest":
+                    rate = ihlib.HARVEST_PER_GATHER_HOUR
+                    mode = ("ACTIVE gathering (lower-bound rate; passive "
+                            "accrual ~0)")
+                else:
+                    rate = 3600.0 / ihlib.FIGHT_CADENCE_S
+                    if active.get("type") == "drops":
+                        rate *= ihlib.CONTRACT_DROP_PER_WIN
+                    mode = "combat"
                 need_h = (target - done) / rate
                 verdict = ("ACHIEVABLE" if need_h <= left * 0.9 else
                            "AT RISK" if need_h <= left else "NOT REACHABLE")
                 flags.append(("CONTRACT", f"  -> {verdict}: {target - done:,} "
-                                          f"left = ~{need_h:.1f}h of combat at "
-                                          f"~{rate:.0f}/h progress, in a "
+                                          f"left = ~{need_h:.1f}h of {mode} "
+                                          f"at ~{rate:.0f}/h progress, in a "
                                           f"{left:.1f}h window"))
     # The board is not one contract. Only the active one accrues (queue
     # capacity 0), so every pending contract is hackcoin sitting still, and the
