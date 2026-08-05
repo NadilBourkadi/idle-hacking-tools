@@ -188,6 +188,20 @@ dedicated CI/CD pair isolating Barrier at matched depth. Until resolved, treat
 Barrier-carried score deltas at deep streaks as optimistic on depth — they may
 still be real on economy (shorter drawdown ⇒ fewer near-death fights).
 
+### 16. Contract carry-through — residual unknowns (mechanic in `mechanics.md` §20)
+
+The active contract surviving the daily reset is player-observed (6 Aug 2026,
+n=1). Still unobserved: (a) the **payout** of a carried contract completing
+after reset — presumed normal (credits/chips/hackcoin) but no balance-delta
+has been captured around one yet; (b) whether a **partially-progressed
+inactive** contract survives reset (within one board day inactive progress is
+retained — the 31 Jul Extended Harvest sat at 3/1,374 through hours — but
+across a reset it has never been watched); (c) what the board looks like
+while a carried contract runs — 7 fresh + 1 carried, or does the carried one
+occupy a slot; (d) whether ASIC Subsystem's +1 hc-per-board-reset lands on
+carried contracts. One capture taken while a carried contract is still
+running, and one shortly after it completes, settles all four.
+
 ## Decision record
 
 ### 21 July 2026 — candidate requests redefined

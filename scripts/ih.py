@@ -887,8 +887,10 @@ def cmd_audit(args):
         if target and done < target:
             flags.append(("CONTRACT", f"{active.get('name')} at {done:,}/"
                                       f"{target:,} ({done / target * 100:.0f}%) "
-                                      f"— {window}; unfinished progress is "
-                                      f"destroyed at reset. Pays {pay}"))
+                                      f"— {window}; the ACTIVE contract "
+                                      f"carries through reset and runs to "
+                                      f"completion (mechanics.md §20). "
+                                      f"Pays {pay}"))
             # Completability, added 29 Jul 2026, CORRECTED same day. The first
             # version asserted "kills accrue only while the tab is open" from a
             # single observation (Marathon at 40/2,848 eight hours into the
@@ -908,12 +910,28 @@ def cmd_audit(args):
                         rate *= ihlib.CONTRACT_DROP_PER_WIN
                     mode = "combat"
                 need_h = (target - done) / rate
-                verdict = ("ACHIEVABLE" if need_h <= left * 0.9 else
-                           "AT RISK" if need_h <= left else "NOT REACHABLE")
+                # Carry-through model (mechanics.md §20): running past reset
+                # is not a loss, it is OCCUPANCY -- the new board idles while
+                # the carried contract finishes. Only the clear bonus and the
+                # chance to start pending contracts die with the window.
+                if need_h <= left * 0.9:
+                    verdict = "COMPLETES IN WINDOW"
+                    tail = f"in a {left:.1f}h window"
+                elif need_h <= left:
+                    verdict = "TIGHT"
+                    tail = (f"in a {left:.1f}h window — either way it "
+                            f"finishes (carries through reset)")
+                else:
+                    verdict = "CARRIES PAST RESET"
+                    tail = (f"vs {left:.1f}h of board — completes "
+                            f"~{need_h - left:.1f}h after reset, occupying "
+                            f"the slot while the NEW board idles; weigh "
+                            f"its remaining hc/h against the new board's "
+                            f"best (~3 hc/combat-h)")
                 flags.append(("CONTRACT", f"  -> {verdict}: {target - done:,} "
                                           f"left = ~{need_h:.1f}h of {mode} "
-                                          f"at ~{rate:.0f}/h progress, in a "
-                                          f"{left:.1f}h window"))
+                                          f"at ~{rate:.0f}/h progress, "
+                                          f"{tail}"))
     # The board is not one contract. Only the active one accrues (queue
     # capacity 0), so every pending contract is hackcoin sitting still, and the
     # clear bonus needs ALL of them. Added 29 Jul 2026 after `contract_board`
@@ -926,7 +944,10 @@ def cmd_audit(args):
         flags.append(("CONTRACT", f"{len(pending)} other contract(s) on the "
                                   f"board are at 0 and earn NOTHING until made "
                                   f"active — {hc} hackcoin idle. Only the "
-                                  f"active contract accrues."))
+                                  f"active contract accrues, and pending "
+                                  f"contracts are REPLACED at reset (only the "
+                                  f"active one carries — start the largest "
+                                  f"keeper just before reset)."))
         for c in sorted(pending, key=lambda c: -_hc_per_hour(c, rate)):
             rew = (c.get("rewards") or {}).get("hackcoin") or 0
             per = _hc_per_hour(c, rate)

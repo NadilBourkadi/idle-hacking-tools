@@ -851,3 +851,31 @@ single fights**. Neither can be measured until the **CI/CD Pipeline** (homelab
 12). Given that deaths are ~100% attrition (`decision-log.md`, 29 Jul), these
 are probably the two most valuable stats in the build and they are currently
 carried on 22 July guesses.
+
+## 20. Contract board reset: the ACTIVE contract carries through (player-observed 6 Aug 2026)
+
+**A started (active) contract survives the daily UTC board reset and runs to
+completion.** What the reset replaces is the rest of the board: unstarted
+contracts and the clear-bonus opportunity. Provenance: direct player
+observation at the 6 Aug 00:00 UTC reset (Marathon Elimination active and
+mid-progress through the boundary), n=1. The prior model — "unfinished
+progress is destroyed at reset" — was **asserted on 28 Jul and never
+tested**; a 9-pair straddle scan of the capture archive cannot distinguish
+the two models (every post-reset capture lands hours late, after a carried
+contract would have completed and been claimed), so the live observation is
+the only direct evidence in existence and it wins.
+
+Consequences, encoded in `ih.py audit`:
+
+- An active contract that cannot finish inside the board window is **not a
+  loss** — it carries. Its real cost is **occupancy**: while it runs past
+  reset, the new board's contracts idle (only one contract accrues, queue
+  capacity 0). Price it against the new board's best rate (~3 hc/combat-h),
+  not against the reset clock.
+- The endgame play in the last hours of a board: clear the small fast
+  contracts first (they die at reset if never started), then **start the
+  largest-remaining contract just before reset** so it carries.
+- The board-clear bonus still requires everything cleared before reset.
+
+Residual unknowns in `open-questions.md` §16 (payout observation, inactive
+partial progress, board state after a carried completion).

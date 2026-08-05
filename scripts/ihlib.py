@@ -1935,10 +1935,15 @@ def contract_board(capture):
     """Daily contract board state: reset clock, live progress, unclaimed pay.
 
     Added 28 Jul 2026 after the sweep missed it. The board resets at a fixed
-    UTC hour and **unfinished progress is destroyed** -- and contracts are the
-    game's only observed repeatable hackcoin source (1-5 hc each plus a
-    board-clear bonus), which is the scarcest currency in the model. Nothing
-    else in the capture surfaces that deadline.
+    UTC hour. CORRECTED 6 Aug 2026: the original "unfinished progress is
+    destroyed at reset" was asserted and never tested -- the ACTIVE contract
+    in fact CARRIES THROUGH the reset and runs to completion
+    (player-observed at the 6 Aug reset; mechanics.md §20 -- a 9-pair
+    archive straddle scan cannot distinguish the models, so the live
+    observation governs). What the reset replaces: unstarted contracts and
+    the clear-bonus opportunity. Contracts are the game's only observed
+    repeatable hackcoin source (1-5 hc each plus a board-clear bonus), which
+    is the scarcest currency in the model.
 
     Returns {reset_ms, hours_left, all, active, pending, unclaimed,
     clear_bonus, clear_bonus_claimed, board_hackcoin, queue_capacity}.
