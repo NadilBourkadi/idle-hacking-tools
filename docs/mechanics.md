@@ -589,6 +589,8 @@ The decisive test: the Driver equip at 21:50Z moved attack speed **1.819 → 1.9
 - `rounds` is therefore a *simulated* combat count resolved inside the fixed tick, not a wall-clock measure. Do not read rounds as duration.
 - This puts the 22 July "tempo does not move the death ceiling" law in question — see `open-questions.md`. `driver-ab-2026-07-27` tests it directly.
 
+**Re-read 1 August 2026: the tick ERA-STEPS.** Daily medians ran **4.873 → 4.750 → 4.788 → 4.605 → 4.641 → 4.666** over 27 Jul–1 Aug, with within-era sd ~0.01 — the tick is very tight inside an era but has moved −4.5% across them. The mover is unidentified: it is **not** rounds/fight (r = 0.42 across daily pairs, and the most-rounds day, 29 Jul at 39.1 rounds, sat at mid cadence) and not attack speed (the +9.9% equip test above moved it 0% within-window; no step aligns with the shell equip boundary either — 4.644 pre vs 4.655 post). The law survives in refined form: **within an era the tick is fixed and attack speed still buys no fights per hour**, but the constant is era-local. `ihlib.FIGHT_CADENCE_S` is re-fit to 4.65 (30 Jul–1 Aug era) and its register check now reads a trailing 50-death window so the next step fires DRIFT instead of averaging into history. Open question: what steps it (`open-questions.md`).
+
 One unexplained ~2.7% step (5.000 → 4.867 s/fight) sits between the 17:00 and 18:00Z buckets. It did not recur at the 21:50 attack-speed change, so it is not tempo-driven. Cause unknown — logged in `open-questions.md`.
 
 ## 15. Homelab build throughput is a fixed pool, split across active jobs (verified 29 July 2026)

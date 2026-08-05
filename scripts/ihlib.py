@@ -260,8 +260,9 @@ def item_header(item, slot=None, where=None):
 #     the 27 Jul "no hit-rate loss" test predicted -0.68pp against a +-0.9pp
 #     95% CI on 8,195 attempts -- it was UNDERPOWERED, not null.
 #   AtkSpd 0.9 -- the reason was wrong, the number may be right. Attack speed
-#     buys NO extra fights per hour (cadence is a fixed 4.872 s tick,
-#     mechanics.md §14); it pays by shortening fights in ROUNDS (-2% to -5%
+#     buys NO extra fights per hour (cadence is a fixed real-time tick,
+#     era-local value in FIGHT_CADENCE_S, mechanics.md §14); it pays by
+#     shortening fights in ROUNDS (-2% to -5%
 #     measured), which cuts enemy attacks per fight -- and rounds now matter
 #     directly, because corruption is charged per round (mechanics.md §16).
 CRAFT_WEIGHTS_PCT = {   # value per +1 percentage point
@@ -389,11 +390,15 @@ def pending_refit_banner():
 UPGRADE_BAND = 5.0   # delta > +5 -> genuine upgrade candidate
 INFERIOR_BAND = -5.0  # delta < -5 -> inferior; between -> sidegrade
 
-# Fixed fight tick, from the game's own death clock (27 Jul 2026) -- NOT from
-# the stream's poll interval, which measures the poller. Attack speed does not
-# move it: a +9.9% AtkSpd equip changed it 0%. Was a magic number repeated in
-# four places until 29 Jul 2026; `_chk_cadence` re-validates it every run.
-FIGHT_CADENCE_S = 4.872
+# Fight tick, from the game's own death clock -- NOT from the stream's poll
+# interval, which measures the poller. Attack speed does not move it (a +9.9%
+# AtkSpd equip changed it 0% within-window), but the tick is NOT one constant
+# forever: daily medians era-stepped 4.873 -> 4.750 -> 4.788 -> 4.605 ->
+# 4.641 -> 4.666 over 27 Jul-1 Aug (within-era sd ~0.01), mover unidentified
+# -- not rounds/fight (r=0.42, and the most-rounds day sat at mid cadence).
+# 4.65 is the 30 Jul-1 Aug era. `_chk_cadence` re-validates on a trailing
+# window every run; when it fires DRIFT, re-read the recent medians.
+FIGHT_CADENCE_S = 4.65
 
 # Stability held back for Compile. Was 8 ("+4% Compile") from 22 Jul 2026 to
 # 28 Jul 2026 -- a default nobody ever tested, and it was suppressing EVERY
@@ -1468,10 +1473,15 @@ def _chk_cadence(cap):
     rows = fight_cadence()
     if not rows:
         return ("SKIP", "no death records in the ledger")
-    values = sorted(s for _ms, s in rows)
-    mid = values[len(values) // 2]
-    return (("OK" if abs(mid - FIGHT_CADENCE_S) < 0.15 else "DRIFT"),
-            f"n={len(values)} median {mid:.3f} s/fight vs recorded {FIGHT_CADENCE_S}")
+    # Trailing window only: the tick era-steps (4.87 -> 4.65 over 27 Jul-
+    # 1 Aug), so an all-history median averages eras together and hides
+    # exactly the drift this check exists to catch (it sat "OK" at 4.750
+    # pooled while the current era ran 4.65).
+    recent = sorted(s for _ms, s in sorted(rows)[-50:])
+    mid = recent[len(recent) // 2]
+    return (("OK" if abs(mid - FIGHT_CADENCE_S) < 0.10 else "DRIFT"),
+            f"trailing n={len(recent)} median {mid:.3f} s/fight vs recorded "
+            f"{FIGHT_CADENCE_S}")
 
 
 def _chk_credits_hr(cap):
@@ -1559,8 +1569,9 @@ def assumptions():
          "Isolated Sandbox level (mechanics.md §17)", "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_PCT[AtkSpd]", w["AtkSpd"], "asserted",
          "right number, wrong reason: buys NO extra fights/hour (cadence is a "
-         "fixed 4.872 s tick); pays -2% to -5% rounds per fight, i.e. it is a "
-         "mitigation stat", "27 Jul 2026 (rationale corrected)", None),
+         "fixed real-time tick, era-local -- see the cadence row); pays -2% "
+         "to -5% rounds per fight, i.e. it is a mitigation stat",
+         "27 Jul 2026 (rationale corrected)", None),
         ("CRAFT_WEIGHTS_FLAT[Corrupt]", f["Corrupt"], "measured",
          "RE-FIT 0.7 -> 1.0, 29 Jul 2026 (late), and BOTH earlier problems "
          "were artefacts. (a) The 'NON-LINEAR, invalid above ~25 points' flag "
@@ -1653,9 +1664,13 @@ def assumptions():
          "a MaxHP test): trading max_hp -7.8% for Def +11.4% / Regen +8% "
          "RAISED the death mean +12.5, and the A/B closed KEEP at n=34 "
          "(167.6 vs 155.1) -- in a mitigation-compensated trade the 0.5 "
-         "weight did not under-price Max HP. A bound, not a fit; the "
-         "shell-ab-2026-07-31 window probes the REVERSE sign (+7% max_hp)",
-         None, None),
+         "weight did not under-price Max HP. SECOND BOUND 1 Aug: the "
+         "shell-ab-2026-07-31 REVERSE probe (+7% max_hp inside a "
+         "mitigation-weighted-positive bundle) also raised the mean, +5.8 "
+         "at n=25 (173.5 vs 167.7) -- both signs moved with the "
+         "mitigation-weighted totals, so 0.5 is bracketed from both "
+         "directions. Bounds, not a fit; the magnitude still needs the "
+         "CI/CD Pipeline", None, None),
         ("CRAFT_WEIGHTS_PCT[CritDmg]", w["CritDmg"], "measured",
          "RE-FIT 0.35 -> 0.22, 29 Jul 2026. Crit multiplier measured at 1.883 "
          "on 251 crit vs 703 non-crit single-hit rounds, against a "
@@ -1679,7 +1694,10 @@ def assumptions():
          "hits, per-fight ratio 72.03-72.54 -- extremely tight). Value scales "
          "with fight LENGTH because it is charged per enemy hit: 0.120 at "
          "enemy level 1800, 0.157 at 2100, 0.141 at 2500. 0.13 is the value "
-         "at the levels where runs actually end", None, None),
+         "at the levels where runs actually end. CONFIRMED at a second stat "
+         "level 1 Aug 2026 (shell-ab-2026-07-31 close): ptd/landed-hit "
+         "75.08 -> 125.28 as the gear affix added +48 -- delta 1.046x the "
+         "affix through the pool multiplier, per-hit law holds", None, None),
         ("CRAFT_WEIGHTS_FLAT[Barrier]", f["Barrier"], "measured",
          "0.02 -> 0.10 -> 0.043 in one day; the 0.10 is WITHDRAWN and was my "
          "error. Barrier absorbs ALL incoming channels (8,473 depletion rounds "
@@ -1768,9 +1786,16 @@ def assumptions():
          "the step is region-dependent; one constant 1.4 was fitted on "
          "shallow tiers only and over-projected a T6->T1 chase by 1.9x",
          "27 Jul 2026", None),
-        ("fight cadence 4.872 s", FIGHT_CADENCE_S, "measured",
-         "from the game's own death clock, never the stream's poll interval",
-         "27 Jul 2026", _chk_cadence),
+        ("fight cadence (s/fight)", FIGHT_CADENCE_S, "measured",
+         "from the game's own death clock, never the stream's poll interval. "
+         "RE-FIT 4.872 -> 4.65 on 1 Aug 2026: the tick ERA-STEPS (daily "
+         "medians 4.873 -> 4.750 -> 4.788 -> 4.605 -> 4.641 -> 4.666 over "
+         "27 Jul-1 Aug, within-era sd ~0.01), mover unidentified -- not "
+         "rounds/fight (r=0.42) and not AtkSpd (the +9.9% equip moved it 0% "
+         "within-window). The economic law stands (AtkSpd buys no fights/"
+         "hour); the CONSTANT is era-local and the live check now reads a "
+         "trailing window so the next step fires DRIFT",
+         "1 Aug 2026", _chk_cadence),
         ("hardware cost curve", "A*L**p", "measured",
          "fitted live off next_cost and self-validates against the game's own "
          "reset refund", "27 Jul 2026", _chk_hardware_curve),
@@ -2593,6 +2618,17 @@ FIREWALL_AB_2026_07_31 = {
 }
 
 SHELL_AB_2026_07_31 = {
+    "concluded": "KEEP — 1 Aug 2026. Mean 173.5 over 25 deaths (pre-declared "
+                 "n=24) vs gate 165.6, +5.8 over the 167.7 same-loadout "
+                 "baseline. Contamination clean: zone unchanged, cadence "
+                 "4.644 pre vs 4.655 post across the boundary (the standing "
+                 "4.872 CONSTANT was stale -- era-stepped to ~4.65 since 30 "
+                 "Jul, re-fit in the same session; no step at the equip). "
+                 "All 25 deaths post-date the VLAN +1% Def boundary, so the "
+                 "window reads as a bundle. All four pre-registered "
+                 "predictions graded -- see equipment-tests.md; the Barrier "
+                 "one exposed and fixed the soak stock-sum bug in "
+                 "_fight_record. New standing baseline 173.5.",
     "name": "shell-ab-2026-07-31",
     "item": "Shielded Shell of Bastion",
     "slot": "Shell",
@@ -2637,9 +2673,82 @@ SHELL_AB_2026_07_31 = {
                  "the 0.5 weight is bracketed from both directions.",
 }
 
+DRIVER_AB_2026_08_03 = {
+    "name": "driver-ab-2026-08-03",
+    "item": "Slippery Driver of Armageddon",  # crafted from "of Striking" 5 Aug, realized +44.0
+    "slot": "Driver",
+    # Declared BEFORE the craft ran (base name above; it will rename on
+    # promotion). equip_ms is a FAR-FUTURE SENTINEL: the first provisional
+    # (3 Aug 14:05Z, declaration time) leaked a pre-craft death (the 188
+    # record) into the post window because the craft had not run -- an
+    # early boundary corrupts silently, an empty post window is visibly
+    # wrong. Set the REAL boundary from the stream stats marker at equip
+    # (Evasion jumps ~+5%, barrier start-pool ~+1,500 x Packet Shield
+    # multiplier; MaxHP nearly unchanged), the way the shell boundary was
+    # corrected to 20:10:05. Until then the post window MUST read empty.
+    # Boundary set 5 Aug 23:xx from capture-pair proof: last unequipped
+    # capture 21:52:50Z, first equipped capture 22:01:05Z. The stream stats
+    # marker (22:02:33Z, changed_from = Aegisbound-era values) has ~10-min
+    # cadence -- too coarse to pin the click, so the boundary is the first
+    # PROOF of equip: every fight after it is certainly post-equip. The
+    # <=8 ambiguous minutes fall into the pre side of the display; the gate
+    # numbers (172.2/169.2) were pre-registered off the frozen 74-death
+    # baseline, so they are unaffected.
+    "equip_ms": 1785967265758,          # 2026-08-05T22:01:05.758Z
+    "boundary_fight_id": None,
+    # Baseline = the full post-Shell same-loadout era (shell-ab closed KEEP
+    # 1 Aug at 173.5/25; era kept accruing): n=74, mean 174.2, run_start
+    # after the shell boundary at cadence 4.65.
+    "baseline_deaths": [167, 166, 173, 167, 170, 167, 171, 175, 177, 174,
+                        170, 176, 170, 170, 172, 187, 181, 172, 166, 179,
+                        184, 171, 177, 179, 180, 179, 183, 175, 164, 169,
+                        179, 159, 168, 169, 177, 176, 182, 170, 176, 172,
+                        171, 180, 173, 171, 170, 176, 185, 167, 179, 174,
+                        171, 168, 171, 176, 180, 185, 177, 171, 181, 182,
+                        167, 179, 167, 171, 172, 173, 167, 172, 183, 176,
+                        171, 181, 182, 184],
+    "baseline_hits": (299124, 89011),   # 77.1% ph/pm basis, post-Shell era
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785528605313,  # Shell equip -- same-loadout era
+    # DECLARED BUNDLE by policy: the ~365K-chip equal-marginal package (ECC
+    # L134->156, Packet Shield L89->110 -- which multiplies this craft's own
+    # Barrier), the Snapshot Rollback install and the CI/CD Pipeline install
+    # all land inside this window. Snapshot Rollback mechanically RAISES
+    # death depth (25% HP recovery on lethal, 1/10 fights) and is
+    # per-fight OBSERVABLE in the ledger (`homelab_snapshot_rollback`), so
+    # its share of any depth gain is separately readable -- diagnostic,
+    # not a gate.
+    "segment_ms": None,
+    "keep_rule": "KEEP if mean death streak >= 172.2 (baseline 174.2 - 2); "
+                 "REVERT if mean <= 169.2. Contamination checks only: no "
+                 "zone change in the window, and fight cadence must stay "
+                 "at the ~4.65 era value (trailing-window check). "
+                 "PRE-REGISTERED treatment predictions (diagnostics, not "
+                 "gates, written before the CRAFT ran, from the deepened "
+                 "contract's projection): (1) Barrier law -- gear Barrier "
+                 "rises ~+990 (of Quarantine T6->T1, median roll) and the "
+                 "per-fight start pool rises by 1.00x that TIMES the Packet "
+                 "Shield pool multiplier (1.4446 at L89, ~1.55 if the "
+                 "chip package lands first: start pool 4,584 -> ~6,050-"
+                 "6,500) -- the multiplier is priced IN this time, the "
+                 "shell pre-registration forgot it; (2) rounds/fight at "
+                 "matched streak band UP ~8-15% (AtkSpd -13.5pp per the "
+                 "measured -2..-5% rounds per +9.9%, plus ~-10% damage "
+                 "per landed hit from CritDmg 50.9->17.4pp at ~31% crit) "
+                 "-- the priced cost of the trade; (3) enemy hit rate on "
+                 "us DOWN ~1.5+-0.5pp at matched band (loadout Eva "
+                 "+6.88pp, inverse hit law -- third out-of-sample test); "
+                 "(4) player damage per landed hit at matched band falls "
+                 "~8-12%. WATCH (no law): longer fights raise enemy "
+                 "corruption-stack exposure (ecs) -- if damage_taken/round "
+                 "at matched band rises MORE than the enemy-hit prediction "
+                 "implies, the open-questions stack-exposure hypothesis "
+                 "gains a live data point.",
+}
+
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = SHELL_AB_2026_07_31
+ACTIVE_EXPERIMENT = DRIVER_AB_2026_08_03
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -2667,11 +2776,15 @@ def _fight_record(f, post, ms=None):
         "ph": sum(r.get("ph") or 0 for r in rounds),
         "pm": sum(1 for r in rounds if r.get("pm")),
         # gross intake + recovery components (see data-dictionary: net drain
-        # = dmg - rg - soak is directional; the identity does not close
-        # exactly, suspected overheal capping in prg)
+        # = dmg - rg - soak is directional). soak is pool DRAWDOWN per round
+        # (pbs = start, pbf = final): once-per-fight shield, 0 refills across
+        # 81K logged barrier rounds (1 Aug 2026). Until 1 Aug this summed the
+        # pbs STOCK -- the exact error the 29 Jul Barrier weight refit
+        # removed -- overstating absorption ~8-10x in every mechanism table.
         "dmg": f.get("damage_taken") or 0,
         "rg": sum(r.get("prg") or 0 for r in rounds),
-        "soak": sum(r.get("pbs") or 0 for r in rounds),
+        "soak": sum((r.get("pbs") or 0) - (r.get("pbf") or 0)
+                    for r in rounds),
         "sfrac": (shp / mhp) if shp is not None and mhp else None,
         "eva": (f.get("enemy_stats") or {}).get("effective_evasion", 0),
         "enemy": f.get("enemy_name"),
@@ -2869,15 +2982,50 @@ def sim_key(run):
 
 
 def sim_records(path=None):
-    """Yield deduped simulator records from data/sim-runs/*.jsonl."""
+    """Yield deduped simulator records from data/sim-runs/*.jsonl.
+
+    Dedupe is by the record's content `key`, keeping the earliest
+    occurrence. The hub's own dedup was day-scoped until 5 Aug 2026, so the
+    ledger holds cross-day re-ingests of the profiler panel's last-10
+    results (all of 2026-08-01 and 2026-08-03 duplicate 30 Jul runs); the
+    files are immutable, so the accessor is where they are filtered."""
     paths = [path] if path else sorted(SIM_DIR.glob("*.jsonl"))
+    seen = set()
     for p in paths:
         if not Path(p).exists():
             continue
         for line in Path(p).read_text().splitlines():
             line = line.strip()
-            if line:
-                yield json.loads(line)
+            if not line:
+                continue
+            record = json.loads(line)
+            key = record.get("key")
+            if key is not None:
+                if key in seen:
+                    continue
+                seen.add(key)
+            yield record
+
+
+def sim_ledger_duplicates(after=None):
+    """Count sim-ledger rows whose key already appeared in an earlier file.
+
+    Hub-regression sentinel (audit): the hub's write-side dedup was
+    day-scoped until 5 Aug 2026 and re-ingested the profiler panel's
+    last-10 results once per day. `after` (YYYY-MM-DD) scopes the count to
+    files dated later, so the 20 grandfathered pre-fix rows (filtered at
+    read time by sim_records) do not flag forever."""
+    seen = set()
+    dupes = 0
+    for p in sorted(SIM_DIR.glob("*.jsonl")):
+        for line in p.read_text().splitlines():
+            if not line.strip():
+                continue
+            key = json.loads(line).get("key")
+            if key in seen and (after is None or p.stem > after):
+                dupes += 1
+            seen.add(key)
+    return dupes
 
 
 def unbiased_hit_rate(rounds, hit_key="ph", miss_key="pm"):
@@ -2973,6 +3121,44 @@ def sim_rows(mode="software_profiler", path=None):
             "hack_level": context.get("hack_level"),
             "combat_stats": context.get("combat_stats") or {},
             "fights": fights,
+        })
+    rows.sort(key=lambda r: (r.get("seen_ms") or 0))
+    return rows
+
+
+def cicd_rows(path=None):
+    """One row per CI/CD Pipeline run. Each run is `sims` full-streak
+    simulations; the game returns only their aggregate (avg/min/max of
+    final_streak etc.) plus best/worst run detail, so the run-average is
+    the unit of analysis. `gear_set` is the player-chosen label — identify
+    arms from `player_combat_stats`, never from the label (the 5 Aug first
+    use had A=post-craft, B=pre-craft, the reverse of the instruction)."""
+    rows = []
+    for record in sim_records(path):
+        if record.get("kind") != "sim" or record.get("mode") != "cicd_pipeline":
+            continue
+        res = record.get("result") or {}
+        agg = res.get("aggregate") or {}
+        fs = agg.get("final_streak") or {}
+        arch = agg.get("most_common_final_enemy_archetype") or {}
+        rows.append({
+            "key": record.get("key"),
+            "seen_ms": record.get("seen_ms"),
+            "zone": res.get("zone_name") or res.get("zone_id"),
+            "gear_set": res.get("gear_set_name") or res.get("gear_mode") or "current",
+            "gear_set_id": res.get("gear_set_id"),
+            "sims": res.get("simulation_count"),
+            "starting_streak": res.get("starting_streak"),
+            "streak_avg": fs.get("average"),
+            "streak_min": fs.get("min"),
+            "streak_max": fs.get("max"),
+            "loss_archetype": arch.get("class"),
+            "player_combat_stats": res.get("player_combat_stats") or {},
+            "credits_per_hour": (agg.get("credits_per_hour_without_buffs") or {}).get("average"),
+            "xp_per_hour": (agg.get("xp_per_hour_without_buffs") or {}).get("average"),
+            "chips_per_hour": (agg.get("chips_per_hour_expected_without_buffs") or {}).get("average"),
+            "daily_used": res.get("daily_used"),
+            "daily_limit": res.get("daily_limit"),
         })
     rows.sort(key=lambda r: (r.get("seen_ms") or 0))
     return rows
@@ -3238,13 +3424,16 @@ def fight_cadence(since_ms=None, zone="corporate_network", max_gap_s=900):
     auto-stream's 150 s polling interval -- pooling `seen_ms` gaps instead
     just re-measures the poll rate, which is how this was nearly got wrong.
 
-    Measured 27 Jul 2026: **4.872 s/fight, sd 0.053, n=29 -> 739 fights/hour,
-    invariant** across every loadout change that day, including a +9.9%
-    Attack Speed equip that moved it 0%. See mechanics.md §14: fight cadence
-    is a fixed real-time tick, so **attack speed is not income** -- it pays in
-    rounds per fight, i.e. fewer enemy attacks per fight, i.e. mitigation.
-    Anything claiming a stat buys "fights per hour" is wrong until this
-    function says otherwise.
+    Measured 27 Jul 2026 at 4.872 s/fight (sd 0.053, n=29), invariant across
+    every loadout change that day including a +9.9% Attack Speed equip that
+    moved it 0%. RE-READ 1 Aug 2026: the tick ERA-STEPS -- daily medians
+    4.873 -> 4.750 -> 4.788 -> 4.605 -> 4.641 -> 4.666 over 27 Jul-1 Aug,
+    within-era sd ~0.01, mover unidentified (not rounds/fight, r=0.42; not
+    AtkSpd). Current era ~4.65 -> ~774 fights/hour. See mechanics.md §14:
+    within an era the tick is fixed, so **attack speed is still not income**
+    -- it pays in rounds per fight, i.e. fewer enemy attacks per fight, i.e.
+    mitigation. Anything claiming a stat buys "fights per hour" is wrong
+    until this function says otherwise; quote FIGHT_CADENCE_S, not 4.872.
     """
     deaths = {}
     for record in stream_records():

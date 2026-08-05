@@ -255,3 +255,66 @@ Pre-declared n=24 passed (first-24 mean 168.1); full window: **mean 167.6, +12.5
 ### `shell-ab-2026-07-31` — DECLARED **before the craft ran** (Shielded Shell of Segmentation)
 
 Strongest pre-registration yet: predictions written before any craft roll existed. Contract (deepened): of Rejuvenation T6→T1 → of Segmentation T5→T1 → of Reprisal T4→T3 → Vital T9→T8; **mean +35.5, p10 +24.8, p90 +44.6, P(Δ>+5) 99.9%, worst −1.35** vs the equipped Citadel Shell of the Phoenix (41.5). Baseline = the 34-death post-Firewall window (167.6). **KEEP ≥ 165.6 / REVERT ≤ 162.6 over 24 deaths.** Pre-registered: Barrier drawdown +1.00× the crafted affix per fight; `ptd` +0.97× the Thorns affix per enemy landed hit; enemy hit rate on us +2.5–3pp (Eva −7.4% stat — the priced cost); and the **reverse MaxHP probe** (+7% max_hp after the last window's −7.8%). Declared bundle: the 110.7K-chip equal-marginal spend. The crafted item renames on promotion — match the Shell-slot stat-change markers in the stream and update the experiment's `item` at grading. Citadel Shell of the Phoenix becomes the locked revert path on equip.
+
+### `shell-ab-2026-07-31` — **CLOSED KEEP, 1 August 2026**
+
+**Mean 173.5 over 25 deaths (pre-declared n=24) vs gate 165.6 — +5.8 over the
+167.7 same-loadout baseline. New standing baseline: 173.5.** Contamination
+clean: zone unchanged (Corporate Network throughout); cadence 4.644 s pre vs
+4.655 s post — no step at the equip boundary. (The standing 4.872 cadence
+*constant* proved stale during this check — it era-stepped to ~4.65 on 30 Jul,
+before this window opened; re-fit same session, `mechanics.md` §14.) All 25
+deaths post-date the VLAN +1% Def segment boundary, so the window reads as a
+**Shell + VLAN bundle** by construction; the declared 110.7K-chip spend also
+sits inside it. **Citadel Shell of the Phoenix released as revert path.**
+
+Prediction grades (all four pre-registered before the craft ran):
+
+1. **Barrier — mechanism confirmed, price mis-specified, and grading it found
+   a live bug.** Realized Segmentation affix **+809** (above the predicted
+   650–730). True pool drawdown/fight rose 3,415 → 4,584 at deep brackets:
+   **Δ +1,169 = 809 × 1.4446** — the flat affix through the Packet Shield L89
+   pool multiplier (+44.5%), which the prediction forgot. The once-per-fight
+   1.00×-stat law is *confirmed*: 0 refill rounds in 81K logged barrier
+   rounds, deep-bracket drawdown = the barrier stat exactly. Grading exposed
+   that `_fight_record.soak` still **summed the `pbs` stock** — the same error
+   the 29 Jul Barrier weight refit removed — so every mechanism `net` printed
+   since then overstated absorption ~8–10×. Fixed: soak = Σ(pbs − pbf).
+2. **Thorns — landed.** `ptd`/enemy-landed-hit 75.08 → 125.28 (Δ +50.2 =
+   1.046× the realized +48 affix vs ~0.97× predicted). The per-hit law now
+   holds at two stat levels; register row updated.
+3. **Enemy hit rate on us — landed.** +4.4 / +1.9 / +3.7 / +4.0 pp per streak
+   bracket vs +2.5–3 pp predicted — the priced Eva cost, slightly above
+   prediction at the tails; the outcome cleared KEEP anyway.
+4. **Reverse MaxHP probe — landed.** +7% max_hp inside a mitigation-weighted-
+   positive bundle raised the mean +5.8; with the firewall window's −7.8%
+   (also KEEP), **both signs moved with the mitigation-weighted totals** — the
+   0.5 weight is bracketed from both directions. Bounds, not a fit; magnitude
+   still needs the CI/CD Pipeline.
+
+Corrected mechanism table (soak = true drawdown, victorious detailed fights):
+net surplus **improved at every bracket** (−3,031 → −4,166 at streak 106–130),
+gross intake fell ~30–75% shallow-to-deep, rounds −0.9% to −2.9%, own hit rate
+flat (77.0%), realized regen/round 263.0 → 255.4, attrition onset shape
+unchanged (~124–153).
+
+## driver-ab-2026-08-03 — OPEN (Slippery Driver of Armageddon, equipped 5 Aug 22:01:05Z)
+
+Declaration and pre-registered predictions live in `ihlib.DRIVER_AB_2026_08_03`
+(gate: KEEP ≥ 172.2 / REVERT ≤ 169.2 over 24 post-equip deaths vs the frozen
+74-death baseline mean 174.2). Boundary is capture-proof (last unequipped
+capture 21:52:50Z, first equipped 22:01:05Z; the ≤8 ambiguous minutes fall
+pre, and the gate numbers are unaffected).
+
+**CI/CD cross-check, recorded BEFORE the live readout (5 Aug 23:11):** 15
+paired full-streak runs (8 new-loadout / 7 old-loadout, alternating, arms
+verified from `player_combat_stats`) measured the craft at **−0.58 ± 1.03
+streaks** — statistically zero. Prediction for the live close, written now so
+the instrument-validation pair is clean: **post-equip mean ≈ the pre mean
+(176.5 ± ~2), i.e. a comfortable KEEP with no depth gain.** Two graded
+sub-predictions: (a) if the live close lands inside ~174.5–178.5, the CI/CD
+paired readout is validated as an equip-decision instrument; (b) the sim's
+absolute level for the *old* loadout under current hardware is 187.3 — if the
+live post mean instead rises toward ~185+, the +10 sim-vs-live offset was
+mostly the 5 Aug hardware package being real (and the sim's absolute scale is
+usable too, not just its differences). First post death: 183 (n=1/24).

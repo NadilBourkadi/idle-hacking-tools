@@ -332,8 +332,11 @@ def cmd_potential(args):
             # it, which is how two Corruption artifacts topped this board
             parts = ihlib.score_contributions(plan["totals"], eq_totals)
             if parts:
+                # print EVERY term: parts sorts by signed value, so any cap
+                # drops the largest NEGATIVES first — a [:8] here hid a
+                # -18.3 AtkDmg and a -38.4 Regen counterweight (2026-08-03)
                 print("            from: " + "  ".join(
-                    f"{label} {value:+.1f}" for value, label in parts[:8]))
+                    f"{label} {value:+.1f}" for value, label in parts))
                 bad, labels = ihlib.suspect_share(parts)
                 if labels and abs(bad) > 2:
                     print(f"            !!    {abs(bad):.1f} of that is "
@@ -620,7 +623,8 @@ def cmd_cadence(args):
 def cmd_sims(args):
     """Hacking Simulator runs banked by the userscript (docs/simulator-protocol.md)."""
     rows = ihlib.sim_rows(mode=args.mode)
-    if not rows:
+    crows = ihlib.cicd_rows()
+    if not rows and not crows:
         sys.exit(
             "no simulator runs banked yet.\n"
             "  Turn on 'Sim capture' in the IH Capture panel, then press RUN\n"
@@ -662,6 +666,43 @@ def cmd_sims(args):
               "enemy-level\n        response but CANNOT price any stat weight. "
               "Create a second gear\n        set that differs in one stat and "
               "re-run at a matched level.")
+
+    if crows:
+        print("\n# CI/CD Pipeline — full-streak runs "
+              "(each row aggregates `sims` simulated streaks)")
+        print(f"{'when':>8}  {'zone':<18} {'set':<10} {'sims':>4} "
+              f"{'streak':>7} {'min-max':>9}  final-enemy")
+        for r in crows:
+            when = (datetime.fromtimestamp(r["seen_ms"] / 1000).strftime("%H:%M:%S")
+                    if r.get("seen_ms") else "-")
+            print(f"{when:>8}  {str(r['zone'] or '-'):<18} "
+                  f"{str(r['gear_set']):<10} {r['sims'] or 0:>4} "
+                  f"{r['streak_avg'] or 0:>7.1f} "
+                  f"{r['streak_min'] or 0:>4}-{r['streak_max'] or 0:<4}  "
+                  f"{r['loss_archetype'] or '-'}")
+        by_set = {}
+        for r in crows:
+            if r.get("streak_avg") is not None:
+                by_set.setdefault(r["gear_set"], []).append(r["streak_avg"])
+        if len(by_set) > 1:
+            print("\n  arms (mean of run-averages ± SE; identify arms from "
+                  "player_combat_stats, NOT the label):")
+            for name, means in sorted(by_set.items()):
+                se = (statistics.stdev(means) / len(means) ** 0.5
+                      if len(means) > 1 else float("nan"))
+                print(f"    {str(name):<10} runs={len(means)}  "
+                      f"{statistics.mean(means):7.2f} ± {se:.2f}")
+            if len(by_set) == 2:
+                (na, ma), (nb, mb) = sorted(by_set.items())
+                diff = statistics.mean(ma) - statistics.mean(mb)
+                se = ((statistics.variance(ma) / len(ma) +
+                       statistics.variance(mb) / len(mb)) ** 0.5
+                      if min(len(ma), len(mb)) > 1 else float("nan"))
+                print(f"    {na} − {nb} = {diff:+.2f} ± {se:.2f}")
+        last = crows[-1]
+        if last.get("daily_used") is not None:
+            print(f"  daily budget at last run: {last['daily_used']}"
+                  f"/{last['daily_limit']} used")
 
 
 def _hc_per_hour(contract, fights_per_hour):
@@ -727,6 +768,17 @@ def cmd_audit(args):
     for section, reason in ihlib.stale_panels(cap):
         flags.append(("STALE", f"{section}: {reason} — reopen that game tab "
                                f"and recapture before trusting it"))
+
+    # hub-regression sentinel: a duplicate sim row written after the 5 Aug
+    # 2026 cross-day dedup fix means the hub is double-ingesting the
+    # profiler panel's replayed results again (pre-fix rows are grandfathered
+    # and filtered by ihlib.sim_records)
+    sim_dupes = ihlib.sim_ledger_duplicates(after="2026-08-05")
+    if sim_dupes:
+        flags.append(("LEDGER", f"{sim_dupes} duplicate sim run(s) written "
+                                f"after the 5 Aug 2026 hub dedup fix — "
+                                f"capture-hub.py's seen-set has regressed; "
+                                f"fix it before trusting sim counts"))
 
     # model self-check against the game's own numbers: if stat_total cannot
     # reproduce a stat, every swap projection touching it is unsound

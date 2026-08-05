@@ -257,11 +257,86 @@ State these rather than letting the tool's confidence leak into them:
 
 ## 8. Getting the CI/CD Pipeline
 
-Homelab is level **10** with 11,510 points; level 12 needs **17,000** —
-**5,490 points away** at ~85–110 points/hour, so roughly **50–65 hours** of
-continuous building. The install itself then costs 10B credits + 1 hackcoin
-and ~2 days of build time.
+**Homelab 12 reached 3 Aug 2026 — the install is purchasable now**: ~20B
+credits + 2 hackcoin and an **8.0h build** (per the 3 Aug capture; the
+original "10B + 1 hc, ~2 days" estimate here was written at homelab 10 and
+was wrong on both numbers). At L1 it allows **5 runs/day**; each further
+level (of 20) adds 5. Build throughput is a fixed pool split across active
+jobs (`mechanics.md` §15), so run the install **alone** to land it in 8h —
+every concurrent job multiplies its wall time.
 
-The homelab was **idle** (0 active, 0 queued) when this was written, which
-directly delays the only tool that can answer the attrition questions. Keep
-the queue full; `ih.py audit` names the jobs.
+Once installed, the ordered fits it was held for (31 Jul / 1 Aug decisions):
+the Corruption >72 regime (unblocks Resilient Analyzer of Decay and
+Warmongering Kernel of Puncturing), the Regen magnitude scalar, and the
+MaxHP weight — then reset and re-cut the full hardware allocation.
+
+## 9. CI/CD Pipeline — operating protocol (first light 5 Aug 2026)
+
+Everything below was measured on the 5 Aug 15-run block (the instrument's
+first use); update it as the validation record grows.
+
+### 9.1 What a run is
+
+One run = **10 full simulated streaks** (fresh start at `starting_streak`,
+runs to the first death). The game returns only the **aggregate** of the 10
+(avg/min/max of `final_streak`, `fights_won`, rounds, economy rates) plus
+full combat logs for the best and worst run — so **the run-average is the
+unit of analysis**, and per-streak values are unrecoverable except for
+best/worst. Verified exact: `final_streak = starting_streak + fights_won`,
+with `starting_streak` = Session Recorder bonus (15 at L5). Daily budget is
+5 runs per pipeline level (L3 = 15); unused runs were NOT observed to bank
+across the 3–5 Aug gap — treat them as expiring daily.
+
+### 9.2 Paired A/B design (the standard use)
+
+- Two gear sets, **alternating runs** (A,B,A,B,…), ≥4 runs/arm; a full
+  15-run day gives SE ≈ 0.9–1.0 streaks on the difference.
+- **Identify arms from `player_combat_stats`, never from the label.** The
+  first use had the labels reversed vs the instruction; the stats caught it
+  (`ihlib.cicd_rows` docstring records the rule). Also confirm stats are
+  constant within each arm — a mid-block gear edit invalidates the arm.
+- **Read only the full planned block.** The 5 Aug half-block read +1.00;
+  the full block read −0.58. Half-block peeking on a ±1 SE instrument
+  manufactures effects.
+- Sets are built from **owned items as-is** — the pipeline can test a
+  *finished* item pre-equip, but cannot test a craft *ceiling*. Craft
+  approval stays with the §10.1 contract simulator; the pipeline's job is
+  the equip decision and weight fits.
+
+### 9.3 Instrument properties (validation record)
+
+| property | status |
+|---|---|
+| variance realism | **GOOD** — per-streak sd ~6–7 vs live 6.92 |
+| absolute level | **+~10 vs live, CONFOUNDED** (open question §14) — use differences only |
+| mechanics | final-streak arithmetic exact; final-enemy archetypes match live death profile (Trojan Wall/Rootkit) |
+| decision agreement with live | **n=0 pairs** — first pair closes with `driver-ab-2026-08-03` (prediction pre-registered in `equipment-tests.md`) |
+
+### 9.4 Role vs live A/B testing — the policy (5 Aug 2026)
+
+**The pipeline takes the *decision* role; the live ledger keeps the
+*validation* role. Neither replaces the other.**
+
+- **Sim-first equips:** every finished-item swap gets a paired CI/CD block
+  (minutes, zero disruption, both arms same-day so no drift) and the equip
+  decision is made on it.
+- **Live gates stay declared:** a pre-registered keep rule costs one
+  paragraph and the auto-stream ledger runs regardless, so every equip still
+  gets one. Its role shifts from decision to **confirmation + instrument
+  calibration** — each closed (sim prediction, live realization) pair grows
+  §9.3's agreement record. Revisit relaxing live gates to passive monitoring
+  only after ~3 agreeing pairs, and never for effects the sim cannot see.
+- **Live-first remains mandatory** for anything outside the sim's model:
+  real-time economy (fight cadence, rewards/hour, contract and hackcoin
+  throughput), proc systems until shown simulated (Snapshot Rollback — §14),
+  and any change not expressed in `player_combat_stats`.
+- **Re-validate once per gear era:** one current-vs-current block against
+  the trailing live mean re-measures the offset for free.
+
+### 9.5 First readout
+
+The +44.0-realized Driver craft measured **−0.58 ± 1.03 streaks** (8/7
+runs). A Barrier-carried score delta converting to ~zero depth at the 180+
+faces is the first direct score-vs-objective calibration point (open
+question §15). The live A/B remains the governor and its gate was not
+amended.

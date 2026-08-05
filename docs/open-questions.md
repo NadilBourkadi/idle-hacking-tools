@@ -156,6 +156,38 @@ Every A/B in this workspace has been read as if hack-level growth inside the win
 
 Not confirmed: n is 5–7 per bucket, the day also contains a zone change and the Analyzer/hardware/Router bundle, and enemy level at death ranged 1,673–1,843 without an obvious trend. Needs: peak death streak regressed on hack level within one zone and one gear configuration, over a window with no equipment change. Until then keep segmenting baselines at gear boundaries, but stop treating a multi-hour window as automatically spoiled by levelling.
 
+### 14. CI/CD Pipeline — what is the ~+10 absolute offset made of?
+
+First light 5 Aug 2026: the pipeline's old-loadout arm simulated a mean final
+streak of 187.3 while the live same-gear baseline is 176.5 (103 deaths).
+Variance realism is right (per-streak sd ~6–7 vs live 6.92) but the level is
+~+10 high. Confounded candidates: (a) the sim ran under the 5 Aug 290K-chip
+hardware package (ECC L171 / Packet Shield L120 / Malware Injector L74) while
+most of the live baseline predates it — some of the offset is *real*; (b) the
+sim may model no zone transitions, no mid-streak drift, or (c) proc systems
+differently — is Snapshot Rollback (25% HP on lethal, 1/10 fights) simulated
+at all? (`PostCombatHeal` does appear in the sim's stat vector; Rollback is a
+proc, not a stat.) **Resolves free of charge when `driver-ab-2026-08-03`
+closes**: live post mean ≈ 176–178 ⇒ offset is mostly instrument bias, use
+paired differences only; live post mean → ~185+ ⇒ the hardware package was
+real and the sim's absolute scale is usable. Until then, CI/CD readouts are
+differences, never levels.
+
+### 15. Does the Barrier weight over-price death-streak depth?
+
+The +44.0-realized Driver craft (Barrier +54.4 carrying the weighted score)
+measured **−0.58 ± 1.03 simulated streaks** on 15 paired CI/CD runs — a
+score-vs-objective gap. Both inputs are individually measured (Barrier's
+once-per-fight 1.00×-stat drawdown law; archive tier ladders), so the suspect
+is the *conversion*: at the 180+ streak faces the enemy alpha may consume the
+whole pool in ~1–2 rounds, making Barrier's marginal depth value shrink with
+depth even though the drawdown law holds at every depth. Prior Barrier-carried
+verdicts (Analyzer 27 Jul, Daemon 29 Jul) landed in shallower eras. Resolves:
+the live A/B close (does the live effect match the sim's ~0?), then a
+dedicated CI/CD pair isolating Barrier at matched depth. Until resolved, treat
+Barrier-carried score deltas at deep streaks as optimistic on depth — they may
+still be real on economy (shorter drawdown ⇒ fewer near-death fights).
+
 ## Decision record
 
 ### 21 July 2026 — candidate requests redefined
@@ -349,3 +381,22 @@ Candidate explanations, none tested:
 **How to test:** the enemy record in each fight carries `enemy_stats`. Compare the stat vectors of the three lethal classes against the six safe ones and look for a field that separates them cleanly; then check whether it correlates with the `prg`-to-gross ratio fight by fight. Both are already in the ledger — this needs no new data collection.
 
 </details>
+
+## What steps the fight tick? (added 1 August 2026)
+
+The death-clock cadence is tight within an era (sd ~0.01) but has **era-stepped
+−4.5% across five days**: daily medians 4.873 → 4.750 → 4.788 → 4.605 → 4.641 →
+4.666 over 27 Jul–1 Aug (`mechanics.md` §14 re-read). Ruled out so far:
+
+- **Rounds/fight** — r = 0.42 across daily pairs, and 29 Jul (most rounds,
+  39.1) sat at mid cadence while 30 Jul (31.9) is the lowest.
+- **Attack speed** — the +9.9% equip test moved it 0% within-window (27 Jul).
+- **The shell equip** — 4.644 pre vs 4.655 post across the 20:10Z boundary.
+
+Candidates untested: a game patch, zone/enemy-class composition of the run,
+homelab/hardware side effects, player level. The economic law is unchanged
+(within-era the tick is fixed, AtkSpd buys no fights/hour), but
+`FIGHT_CADENCE_S` is now **era-local** (4.65, re-fit 1 Aug) and its register
+check reads a trailing 50-death window so the next step fires DRIFT. If a step
+ever aligns with a single change-point, that change identifies the mover — the
+daily-median table is one `fight_cadence()` group-by away.

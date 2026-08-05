@@ -151,25 +151,27 @@ def absorb_stream(payload):
 SIM_SCHEMA = "idle-hacking-sim-runs-v1"
 _sim_lock = threading.Lock()
 _seen_sims = set()
-_seen_sims_day = None
+_seen_sims_loaded = False
 
 
 def _sim_ledger_path(now):
     return ihlib.SIM_DIR / f"{now:%Y-%m-%d}.jsonl"
 
 
-def _load_seen_sims(now):
-    global _seen_sims_day
-    day = f"{now:%Y-%m-%d}"
-    if _seen_sims_day == day:
+def _load_seen_sims():
+    # Seed from EVERY ledger file, not just today's: the profiler panel
+    # re-serves its last-10 results indefinitely, so a day-scoped seen-set
+    # re-ingests them as "new" on the first capture of each day (this put 20
+    # duplicate rows in the ledger over 1-3 Aug 2026). The hub is the only
+    # writer, so after the one-time seed the in-memory set stays complete.
+    global _seen_sims_loaded
+    if _seen_sims_loaded:
         return
-    _seen_sims.clear()
-    path = _sim_ledger_path(now)
-    if path.exists():
+    for path in sorted(ihlib.SIM_DIR.glob("*.jsonl")):
         for line in path.read_text().splitlines():
             if line.strip():
                 _seen_sims.add(json.loads(line).get("key"))
-    _seen_sims_day = day
+    _seen_sims_loaded = True
 
 
 def absorb_sims(payload):
@@ -178,7 +180,7 @@ def absorb_sims(payload):
     now = datetime.now(timezone.utc)
     seen_ms = int(now.timestamp() * 1000)
     with _sim_lock:
-        _load_seen_sims(now)
+        _load_seen_sims()
         new_records = []
         for run in state.get("runs") or []:
             if not isinstance(run, dict) or not isinstance(run.get("result"), dict):
