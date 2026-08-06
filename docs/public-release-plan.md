@@ -152,15 +152,29 @@ handover files (`00_START_HERE.md`, `01_PROJECT_INSTRUCTIONS.txt`,
 - [x] 5. Polish batch (task #7), full list above.
 - [x] 6. Tests ×8 (task #6) green under `python -m unittest`; sanitized fixture; CI workflow file.
 - [x] 7. Current-file anonymization: player name → "the player" in CLAUDE.md/docs; service path templated.
-- [ ] 8. `git rm --cached` all `data/` trees; commit.
-- [ ] 9. History rewrite (`git filter-repo`; fallback `filter-branch`): purge `data/` + handover manifest paths from all history; replace-text map (personal email → noreply, player name → "the player", `~` → `~`); author mailmap (name kept, email → placeholder noreply pending the real one). Verify: history-wide grep for the scrubbed strings comes back empty; `git gc`; sizes reported.
-- [ ] 10. Hub service restarted on the hardened code; full command matrix re-run against live data; final report.
+- [x] 8. `git rm --cached` all `data/` trees; commit.
+- [x] 9. History rewrite (`git filter-repo`; fallback `filter-branch`): purge `data/` + handover manifest paths from all history; replace-text map (personal email → noreply, player name → "the player", `~` → `~`); author mailmap (name kept, email → placeholder noreply pending the real one). Verify: history-wide grep for the scrubbed strings comes back empty; `git gc`; sizes reported.
+- [x] 10. Hub service restarted on the hardened code; full command matrix re-run against live data; final report.
 
 ## Post-release follow-ups (not blocking)
 
 - Owner supplies real GitHub noreply → final mailmap pass → create remote, push.
 - Optional: full 8-module package split; `_brief_*` structured-rows refactor;
   mypy on the numeric layer; `git maintenance start`.
+
+## Completion record (7 Aug, ~00:15)
+
+Every checklist item executed. History rewrite verified: all three identity
+patterns CLEAN across every historical blob; single noreply author; data and
+handover manifests purged; **repo 247M → 1.9M packed, 50 commits of full
+code+docs history preserved**. Pre-rewrite safety bundle (contains the
+un-anonymized history — keep it private) at
+`~/Dev/idle-hacking-tools-prerewrite-20260807.bundle`. Hub restarted on the
+hardened code (415 on the drive-by vector, userscript 1.7.0 served);
+fresh-clone simulation passes (graceful empty-data messages, 16/16 tests on a
+bare interpreter). Outstanding before push: the real GitHub noreply address
+(30-second mailmap re-run), create the remote, one manual Tampermonkey update
+to 1.7.0 (auto-update headers are gone by design).
 
 ## Addendum (7 Aug, during execution)
 
