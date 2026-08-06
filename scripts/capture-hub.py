@@ -5,8 +5,10 @@ Serves two roles on 127.0.0.1:8123 (reachable from the Windows browser
 via WSL2 localhost forwarding):
 
   GET /item-loadout-capture.user.js
-      Serves the userscript from tools/. Tampermonkey installs and
-      updates the script from this URL (@updateURL/@downloadURL).
+      Serves the userscript from tools/. Tampermonkey installs the
+      script from this URL; the published script no longer carries
+      @updateURL/@downloadURL (see the userscript header), so updates
+      are a manual re-install from here.
 
   POST /export
       Receives a JSON export from the userscript and routes it by its
@@ -15,15 +17,20 @@ via WSL2 localhost forwarding):
       snapshots); anything else goes to data/incoming/ for triage.
       The optional X-Export-Name header suggests a filename; it is
       sanitised and never allowed to escape the target directory or
-      overwrite an existing file.
+      overwrite an existing file. POSTs must be application/json, and
+      when IH_HUB_SECRET is set in the hub's environment they must also
+      carry a matching X-Hub-Secret header.
 
 Stdlib only. Run directly or via the systemd user unit in scripts/.
 """
 
+import hmac
 import json
+import os
 import re
 import sys
 import threading
+import traceback
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -34,6 +41,12 @@ import ihlib  # noqa: E402  (fight_key + STREAM_DIR shared with the ledger)
 HOST = "127.0.0.1"
 PORT = 8123
 MAX_BODY_BYTES = 32 * 1024 * 1024
+
+# Optional shared secret, read once at startup. When IH_HUB_SECRET is set,
+# every POST must carry a matching X-Hub-Secret header or is refused with
+# 403. The other half is the HUB_SECRET constant in the userscript — set
+# both or neither.
+HUB_SECRET = os.environ.get("IH_HUB_SECRET", "")
 
 ROOT = Path(__file__).resolve().parent.parent
 USERSCRIPT = ROOT / "tools" / "item-loadout-capture.user.js"
@@ -74,6 +87,13 @@ def _ledger_path(now):
 
 
 def _load_seen(now):
+    # Day-scoped seeding is DELIBERATE here, unlike the sim ledger below
+    # (archive-scoped since the 1-3 Aug 2026 duplicate-ingestion fix in
+    # _load_seen_sims): the client only ever re-sends its bounded ~50-fight
+    # combat-log window, so a fight cannot resurface days later the way the
+    # profiler's last-10 results do, and downstream analysis re-dedupes by
+    # fight_key archive-wide anyway. Worst case at a day boundary is a
+    # duplicate ledger line the analysis side already discards.
     global _seen_loaded_for, _last_stats
     day = f"{now:%Y-%m-%d}"
     if _seen_loaded_for == day:
@@ -83,10 +103,17 @@ def _load_seen(now):
     _last_stats = None
     path = _ledger_path(now)
     if path.exists():
-        for line in path.read_text().splitlines():
+        for number, line in enumerate(path.read_text().splitlines(), 1):
             if not line.strip():
                 continue
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except ValueError:
+                # A truncated tail line (crash mid-append) must not poison
+                # every subsequent stream POST — skip it and note where.
+                print(f"WARNING: skipping unparseable ledger line "
+                      f"{path.name}:{number}", file=sys.stderr)
+                continue
             if record.get("kind") == "fight":
                 _seen_fights.add(tuple(record.get("key") or ()))
             elif record.get("kind") == "death":
@@ -168,9 +195,18 @@ def _load_seen_sims():
     if _seen_sims_loaded:
         return
     for path in sorted(ihlib.SIM_DIR.glob("*.jsonl")):
-        for line in path.read_text().splitlines():
-            if line.strip():
-                _seen_sims.add(json.loads(line).get("key"))
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                # Same tolerance as _load_seen: a truncated line must not
+                # 500 every subsequent sim POST forever.
+                print(f"WARNING: skipping unparseable ledger line "
+                      f"{path.name}:{number}", file=sys.stderr)
+                continue
+            _seen_sims.add(record.get("key"))
     _seen_sims_loaded = True
 
 
@@ -227,16 +263,32 @@ def sanitise_name(raw):
     return name
 
 
-def unique_path(directory, name):
+def write_unique(directory, name, body):
+    # "xb" (O_CREAT|O_EXCL) makes claim-and-write atomic: the old
+    # exists()-then-write pair left a window in which a concurrent request
+    # — or a planted symlink — could take the name between the check and
+    # the write. O_EXCL also refuses to follow a symlink at the path.
     path = directory / name
     stem, counter = path.stem, 1
-    while path.exists():
-        path = directory / f"{stem}-{counter}.json"
-        counter += 1
-    return path
+    while True:
+        try:
+            with open(path, "xb") as handle:
+                handle.write(body)
+        except FileExistsError:
+            path = directory / f"{stem}-{counter}.json"
+            counter += 1
+        else:
+            return path
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Slowloris guard: a client that stops sending mid-request is dropped
+    # after 30s instead of holding a handler thread open forever.
+    timeout = 30
+    # Terse Server header — no Python/BaseHTTP version advertising.
+    server_version = "capture-hub"
+    sys_version = ""
+
     def _send(self, code, body, content_type="text/plain; charset=utf-8"):
         payload = body.encode("utf-8")
         self.send_response(code)
@@ -246,12 +298,21 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _reject(self, code, body):
+        # A rejection may leave an unread request body on the socket, so
+        # never reuse the connection for a further request.
+        self.close_connection = True
+        self._send(code, body)
+
     def do_GET(self):
         if self.path.split("?")[0] == "/item-loadout-capture.user.js":
             try:
                 source = USERSCRIPT.read_text(encoding="utf-8")
             except OSError as error:
-                self._send(500, f"Cannot read userscript: {error}\n")
+                # Details (paths) go to the log, never to the client.
+                print(f"ERROR: cannot read userscript: {error}",
+                      file=sys.stderr)
+                self._send(500, "Cannot read userscript\n")
                 return
             self._send(200, source, "text/javascript; charset=utf-8")
             return
@@ -264,45 +325,78 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path.split("?")[0] != "/export":
-            self._send(404, "Not found\n")
+            self._reject(404, "Not found\n")
             return
 
-        length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0 or length > MAX_BODY_BYTES:
-            self._send(413, "Body missing or too large\n")
+        if HUB_SECRET and not hmac.compare_digest(
+            self.headers.get("X-Hub-Secret") or "", HUB_SECRET
+        ):
+            self._reject(403, "Bad or missing X-Hub-Secret\n")
             return
 
-        body = self.rfile.read(length)
+        # Require application/json (parameters like "; charset=utf-8" are
+        # fine — self.headers is an email Message, so get_content_type()
+        # parses the media type properly). This closes the drive-by vector:
+        # a cross-origin text/plain POST is a CORS "simple request" that
+        # reaches localhost from any web page, but application/json forces
+        # a preflight, which fails because the hub sends no CORS headers —
+        # so no browser page can deliver one. The real userscript is
+        # unaffected: GM_xmlhttpRequest bypasses CORS and already sends
+        # application/json on all three POST paths.
+        if self.headers.get_content_type() != "application/json":
+            self._reject(415, "Content-Type must be application/json\n")
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self._reject(400, "Bad Content-Length\n")
+            return
+        if length <= 0:
+            self._reject(400, "Body required\n")
+            return
+        if length > MAX_BODY_BYTES:
+            self._reject(413, "Body too large\n")
+            return
+
+        try:
+            body = self.rfile.read(length)
+        except TimeoutError:
+            # Sender stalled mid-body and hit the socket timeout.
+            self._reject(408, "Request body timed out\n")
+            return
         try:
             payload = json.loads(body)
         except ValueError:
-            self._send(400, "Body is not valid JSON\n")
+            self._reject(400, "Body is not valid JSON\n")
             return
 
         schema = payload.get("schema") if isinstance(payload, dict) else None
         if schema == STREAM_SCHEMA:
             try:
                 self._send(200, absorb_stream(payload) + "\n")
-            except Exception as error:
-                self._send(500, f"stream absorb failed: {error}\n")
+            except Exception:
+                # Full traceback to the log; a generic line to the client.
+                traceback.print_exc()
+                self._send(500, "stream absorb failed\n")
             return
         if schema == SIM_SCHEMA:
             try:
                 self._send(200, absorb_sims(payload) + "\n")
-            except Exception as error:
-                self._send(500, f"sim absorb failed: {error}\n")
+            except Exception:
+                traceback.print_exc()
+                self._send(500, "sim absorb failed\n")
             return
         directory = SCHEMA_ROUTES.get(schema, INCOMING)
         directory.mkdir(parents=True, exist_ok=True)
-        path = unique_path(
-            directory, sanitise_name(self.headers.get("X-Export-Name"))
+        path = write_unique(
+            directory, sanitise_name(self.headers.get("X-Export-Name")), body
         )
-        path.write_bytes(body)
         self._send(200, f"Saved {path.relative_to(ROOT)}\n")
 
     def log_message(self, format, *args):
         sys.stdout.write(
-            "[%s] %s\n" % (self.log_date_time_string(), format % args)
+            f"[{self.log_date_time_string()}] {format % args}\n"
         )
         sys.stdout.flush()
 

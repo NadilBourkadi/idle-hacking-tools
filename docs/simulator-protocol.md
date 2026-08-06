@@ -224,7 +224,7 @@ in the player's level or server state during the session.
 
 Repeat 6.1's shape with set B rewritten each time to move **one stat family**
 against set A. Each configuration is one row: a known stat vector (computable
-from the capture with `ihlib.stat_total`) and a measured win rate. After ~8–10
+from the capture with `ihlib.composed_stat_total`) and a measured win rate. After ~8–10
 configurations, regress win rate on the stat deltas and **replace the asserted
 `CRAFT_WEIGHTS_*` table with fitted values.**
 

@@ -144,14 +144,14 @@ handover files (`00_START_HERE.md`, `01_PROJECT_INSTRUCTIONS.txt`,
 
 ## Execution checklist
 
-- [ ] 0. This plan committed; all outstanding work committed (pre-fix checkpoint).
-- [ ] 1. Hub hardening (task #1) + userscript fixes (task #2), `@version` bump, service template+hardening.
-- [ ] 2. LICENSE (MIT), README rewrite (portable-toolkit + campaign-log framing, quickstart from a fresh save), `.gitignore` (`data/`, `.mypy_cache/`), `pyproject.toml`.
-- [ ] 3. Library hygiene (task #5): exceptions at the boundary, ledger path injection, cache hygiene, `check_*` extraction, capture-load cache. **Campaign quarantine**: experiment dicts → `scripts/experiments.py` (pure data, re-exported by ihlib for compatibility).
-- [ ] 4. Fresh-save portability: every `ih.py` command degrades gracefully against an empty `data/` (friendly message, no traceback) — verified against a temp dir.
-- [ ] 5. Polish batch (task #7), full list above.
-- [ ] 6. Tests ×8 (task #6) green under `python -m unittest`; sanitized fixture; CI workflow file.
-- [ ] 7. Current-file anonymization: player name → "the player" in CLAUDE.md/docs; service path templated.
+- [x] 0. This plan committed; all outstanding work committed (pre-fix checkpoint).
+- [x] 1. Hub hardening (task #1) + userscript fixes (task #2), `@version` bump, service template+hardening.
+- [x] 2. LICENSE (MIT), README rewrite (portable-toolkit + campaign-log framing, quickstart from a fresh save), `.gitignore` (`data/`, `.mypy_cache/`), `pyproject.toml`.
+- [x] 3. Library hygiene (task #5): exceptions at the boundary, ledger path injection, cache hygiene, `check_*` extraction, capture-load cache. **Campaign quarantine**: experiment dicts → `scripts/experiments.py` (pure data, re-exported by ihlib for compatibility).
+- [x] 4. Fresh-save portability: every `ih.py` command degrades gracefully against an empty `data/` (friendly message, no traceback) — verified against a temp dir.
+- [x] 5. Polish batch (task #7), full list above.
+- [x] 6. Tests ×8 (task #6) green under `python -m unittest`; sanitized fixture; CI workflow file.
+- [x] 7. Current-file anonymization: player name → "the player" in CLAUDE.md/docs; service path templated.
 - [ ] 8. `git rm --cached` all `data/` trees; commit.
 - [ ] 9. History rewrite (`git filter-repo`; fallback `filter-branch`): purge `data/` + handover manifest paths from all history; replace-text map (personal email → noreply, player name → "the player", `~` → `~`); author mailmap (name kept, email → placeholder noreply pending the real one). Verify: history-wide grep for the scrubbed strings comes back empty; `git gc`; sizes reported.
 - [ ] 10. Hub service restarted on the hardened code; full command matrix re-run against live data; final report.
@@ -161,3 +161,17 @@ handover files (`00_START_HERE.md`, `01_PROJECT_INSTRUCTIONS.txt`,
 - Owner supplies real GitHub noreply → final mailmap pass → create remote, push.
 - Optional: full 8-module package split; `_brief_*` structured-rows refactor;
   mypy on the numeric layer; `git maintenance start`.
+
+## Addendum (7 Aug, during execution)
+
+- Owner directive mid-execution: **human-readable naming conventions** —
+  executed as a targeted rename of the cryptic minority (`composed_stat_total`
+  / `item_stat_totals` disambiguated, `version_upgrade_expected_*`,
+  `scale_percent_value` / `scale_flat_value`, `format_cost`,
+  `inflate_compact_combat_log`, `_hackcoin_per_hour`) with living docs
+  updated; history docs keep period names. `ih.py` retained as the typed CLI
+  name (documented ergonomic exception); full package split remains optional.
+- Audit-check extraction verified by byte-identical `audit` output pre/post.
+- 16-test suite green; ruff clean; CI workflow added.
+- New `CORRUPT` audit check (capture-truncation proxy) added with the
+  extraction.

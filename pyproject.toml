@@ -1,0 +1,22 @@
+[project]
+name = "idle-hacking-tools"
+version = "1.0.0"
+description = "Measurement-driven research toolkit for the browser game Idle Hacking: passive capture, provenance-tracked analysis, and simulated craft planning"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+# Deliberately zero runtime dependencies: everything runs on the standard
+# library. Dev tooling below is optional; the test suite is unittest-style
+# and runs with `python3 -m unittest discover tests` on a bare interpreter.
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+# E501: the narrative docstring/comment house style runs long deliberately.
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

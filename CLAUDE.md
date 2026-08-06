@@ -1,6 +1,6 @@
 # Idle Hacking — research, strategy and tooling workspace
 
-Long-running analysis workspace for the browser game **Idle Hacking** (player: the player). Migrated from a ChatGPT Project on 2026-07-22; the raw handover is preserved in the initial git commit. Three kinds of work happen here: loadout/crafting strategy analysis, game-mechanics research, and development of the passive capture userscript.
+Long-running analysis workspace for the browser game **Idle Hacking** (single-player campaign). Migrated from a ChatGPT Project on 2026-07-22; the raw handover is preserved in the initial git commit. Three kinds of work happen here: loadout/crafting strategy analysis, game-mechanics research, and development of the passive capture userscript.
 
 ## Source-of-truth order
 
@@ -42,7 +42,7 @@ Long-running analysis workspace for the browser game **Idle Hacking** (player: t
 **Run `ih.py audit` first, every time, before any optimization.** It sweeps for things silently costing progress — idle build slots and empty queue places, hardware tracks whose multiplicand is zero, unspent or shop-locked chips/hackcoin, finished crafts still unequipped, and stale lazy panels. Every check exists because a real instance was missed by going straight to modelling. The biggest wins of 27 Jul 2026 all came from reading neglected fields, not from better models.
 
 - `ih.py potential` plans as deep as the Stability budget allows (to T1, the game max). It used to stop at T3, which excluded the two best purchases on the ladder — gain per expected Stability point *rises* all the way down and peaks at T3→T2. Pass `--cap 3` only to reproduce pre-27-Jul-2026 numbers.
-- Reusable primitives in `ihlib`, verified against live captures: `stat_total` (reproduces every stat exactly; use it for "what if I add X pool/flat" instead of hand arithmetic), `hardware_cost_curve` / `hardware_cumulative` / `hardware_plan` (chip cost law and equal-marginal-value allocation; the curve self-validates to ~1.5% against the game's own reset refund), `panel_freshness` / `stale_panels`.
+- Reusable primitives in `ihlib`, verified against live captures: `composed_stat_total` (reproduces every stat exactly; use it for "what if I add X pool/flat" instead of hand arithmetic), `hardware_cost_curve` / `hardware_cumulative` / `hardware_plan` (chip cost law and equal-marginal-value allocation; the curve self-validates to ~1.5% against the game's own reset refund), `panel_freshness` / `stale_panels`.
 
 **Candidate judgements use post-craft ceilings, never current rolls.** Equipped items are at 0 Stability (final); inventory items carry 25–30 Stability of Version-Upgrade headroom, so `compare`/`candidates` output systematically understates them. `ih.py potential` projects realistic ceilings (empirical tier ladders, budget-limited tier depth, Compile floor) and prints a **`from:` decomposition** of every Δ — read it, because a scalar hides which weight is carrying the verdict, and it flags any Δ leaning on a known-bad weight.
 

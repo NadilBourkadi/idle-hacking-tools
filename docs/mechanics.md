@@ -436,7 +436,7 @@ additive pool** (open-questions §13 resolved). Four families:
 | **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache) × (1 + homelab_mult)` — the `homelab_mult` term appeared 31 Jul 2026 when Container Runtime L1 ("×1.01, multiplicative" per its own description) first populated it; confirmed formula-level, all four gathering stats reproduce to <1e-9 with it and sit +0.52% off without it |
 
 **Family membership is not guessable from the stat name.** `attack_damage` was
-absent from all three families until 27 July 2026, so `ihlib.stat_total`
+absent from all three families until 27 July 2026, so `ihlib.composed_stat_total`
 silently returned **0** for it against a real total of 2,050 — and it is exactly
 the stat the multiplicative-AtkDmg guardrail depends on. `post_combat_heal` and
 the five economy stats were wrong the same way. The docstring claiming the

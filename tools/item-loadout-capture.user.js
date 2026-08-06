@@ -1,15 +1,20 @@
 // ==UserScript==
 // @name         Idle Hacking Item & Loadout Capture
 // @namespace    https://www.idlehacking.com/
-// @version      1.6.0
+// @version      1.7.0
+//               (keep in sync with TOOL_VERSION below — bump both together)
 // @description  One-click read-only capture of the full game state (loadout, inventory, crafting data, resources) plus Hacking Simulator runs. Never performs gameplay or crafting actions.
 // @match        https://www.idlehacking.com/play*
 // @match        https://idlehacking.com/play*
 // @run-at       document-idle
-// @updateURL    http://localhost:8123/item-loadout-capture.user.js
-// @downloadURL  http://localhost:8123/item-loadout-capture.user.js
+// (@updateURL/@downloadURL removed for publication — auto-updating code
+// from an unauthenticated local port is a privilege-escalation footgun.
+// Local-hub development can re-add both, pointing at
+// http://localhost:8123/item-loadout-capture.user.js.)
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addElement
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      localhost
 // @connect      127.0.0.1
 // ==/UserScript==
@@ -20,7 +25,10 @@
 // requests except POSTing to the user's own localhost hub. Since v1.5.0
 // an OPT-IN auto-stream timer may also POST a lightweight combat-only
 // payload on an interval (boundary amended 23 Jul 2026 at the player's
-// request — still zero game interaction, localhost only).
+// request — still zero game interaction, localhost only). One documented
+// assumption underpins "no game code execution": game state objects are
+// plain data deserialized from the WS feed — JSON.stringify and dotted
+// reads would invoke getters/toJSON if the game ever defined them.
 //
 // v1.6.0 adds Hacking Simulator capture. The player clicks RUN in the
 // game's own Simulator panel; this script only *observes* the result the
@@ -28,12 +36,23 @@
 // and the game's own IndexedDB history store. It never sends
 // RUN_HACKING_SOFTWARE_PROFILER (or any other message) itself — the
 // no-game-interaction boundary is unchanged.
+//
+// v1.7.0 is the public-release hardening pass: prefs move to Tampermonkey's
+// value store (one-time migration from the game origin's localStorage), the
+// sim-history reader can no longer implicitly create the game's IndexedDB,
+// the auto-update headers are dropped, and an optional shared secret
+// (HUB_SECRET below) can authenticate hub POSTs.
 
 (() => {
   "use strict";
 
-  const TOOL_VERSION = "1.6.0";
+  // Keep in sync with the @version header above — bump both together.
+  const TOOL_VERSION = "1.7.0";
   const HUB_EXPORT_URL = "http://localhost:8123/export";
+  // Optional shared secret, matched against the hub's IH_HUB_SECRET
+  // environment variable — set both or neither. Sent as an X-Hub-Secret
+  // header only when non-empty.
+  const HUB_SECRET = "";
 
   // Auto-stream: combat-only payload pushed on a timer while enabled.
   // 150s comfortably out-paces the ~50-fight combat-log window (~5 min at
@@ -201,7 +220,10 @@
       try {
         const parsed = await attempt(method);
         preferredReadMethod = method;
-        return { readMethod: method, ...parsed };
+        // The page's result stays in its own `data` slot: spreading it
+        // here used to spray a stray readMethod key into whatever the
+        // reader returned, and turned a null read into a truthy object.
+        return { readMethod: method, data: parsed };
       } catch (error) {
         lastError = error;
       }
@@ -209,8 +231,14 @@
     throw lastError ?? new Error("all read strategies failed");
   }
 
-  function readGameBindings(names) {
-    return evaluateInPage(buildStateReaderBody(names));
+  async function readGameBindings(names) {
+    const result = await evaluateInPage(buildStateReaderBody(names));
+    const data = result.data ?? {};
+    return {
+      readMethod: result.readMethod,
+      bindings: data.bindings ?? null,
+      errors: data.errors ?? {},
+    };
   }
 
   // ---- Capture readiness --------------------------------------------------
@@ -270,7 +298,7 @@
     }
 
     try {
-      const r = await evaluateInPage(buildReadinessBody());
+      const r = (await evaluateInPage(buildReadinessBody())).data;
       // live = the newest (or next-to-newest, to allow an in-flight fight)
       // combat-log entry carries round detail
       const detailLive = r.roundDetail > 0 && r.detailGap >= 0 && r.detailGap <= 1;
@@ -363,6 +391,17 @@
 
   // ---- Delivery ----------------------------------------------------------
 
+  // All three POST paths (full capture, auto-stream, sim runs) send
+  // application/json — the hub rejects anything else — plus the optional
+  // shared secret when configured.
+  function hubHeaders(extra) {
+    const headers = { "Content-Type": "application/json", ...(extra ?? {}) };
+    if (HUB_SECRET) {
+      headers["X-Hub-Secret"] = HUB_SECRET;
+    }
+    return headers;
+  }
+
   function postToHub(payload, exportName, sendingMessage) {
     if (typeof GM_xmlhttpRequest !== "function") {
       setStatus("GM_xmlhttpRequest unavailable — reinstall from the hub URL");
@@ -374,10 +413,7 @@
     GM_xmlhttpRequest({
       method: "POST",
       url: HUB_EXPORT_URL,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Export-Name": exportName,
-      },
+      headers: hubHeaders({ "X-Export-Name": exportName }),
       data: JSON.stringify(payload, null, 2),
       timeout: 5000,
       onload: (response) => {
@@ -394,16 +430,39 @@
     });
   }
 
+  // ---- Preferences -------------------------------------------------------
+  // Script prefs live in Tampermonkey's own value store, not the game
+  // origin's localStorage — page code can read or clear its origin's
+  // storage, and the script shouldn't park its state there. ≤v1.6.0 did,
+  // so any old localStorage value is read once as a migration fallback.
+
+  function prefEnabled(key) {
+    const stored = GM_getValue(key, null);
+    if (stored !== null) {
+      return stored === "1";
+    }
+    try {
+      const legacy = localStorage.getItem(key);
+      if (legacy !== null) {
+        GM_setValue(key, legacy);
+        return legacy === "1";
+      }
+    } catch {
+      // page storage unreadable (private mode etc.) — treat as unset
+    }
+    return false;
+  }
+
+  function setPref(key, enabled) {
+    GM_setValue(key, enabled ? "1" : "0");
+  }
+
   // ---- Auto-stream -------------------------------------------------------
 
   let streamTimer = null;
 
   function streamEnabled() {
-    try {
-      return localStorage.getItem(STREAM_PREF_KEY) === "1";
-    } catch {
-      return false;
-    }
+    return prefEnabled(STREAM_PREF_KEY);
   }
 
   function setStreamStatus(message) {
@@ -436,7 +495,7 @@
     const result = await readGameBindings(STREAM_BINDINGS);
     const state = result.bindings ?? {};
     try {
-      state.playerLite = await evaluateInPage(buildPlayerLiteBody());
+      state.playerLite = (await evaluateInPage(buildPlayerLiteBody())).data;
     } catch {
       state.playerLite = null;
     }
@@ -455,7 +514,7 @@
     GM_xmlhttpRequest({
       method: "POST",
       url: HUB_EXPORT_URL,
-      headers: { "Content-Type": "application/json" },
+      headers: hubHeaders(),
       data: JSON.stringify(payload),
       timeout: 5000,
       onload: (response) =>
@@ -493,11 +552,7 @@
   }
 
   function toggleStream() {
-    try {
-      localStorage.setItem(STREAM_PREF_KEY, streamEnabled() ? "0" : "1");
-    } catch {
-      // private mode etc. — timer still applies for this page lifetime
-    }
+    setPref(STREAM_PREF_KEY, !streamEnabled());
     applyStreamState();
   }
 
@@ -511,11 +566,7 @@
   const simSeen = new Set();
 
   function simEnabled() {
-    try {
-      return localStorage.getItem(SIM_PREF_KEY) === "1";
-    } catch {
-      return false;
-    }
+    return prefEnabled(SIM_PREF_KEY);
   }
 
   function setSimStatus(message) {
@@ -556,22 +607,37 @@
       });`;
   }
 
-  // Read the game's own history store. Never opens with a version number
-  // (that would trigger an upgrade transaction) and never writes.
-  function readSimHistoryFromIDB() {
-    return new Promise((resolve) => {
-      let db;
-      try {
-        db = pageWindow.indexedDB;
-      } catch {
-        resolve({ records: [], note: "indexedDB unavailable" });
-        return;
-      }
-      if (!db) {
-        resolve({ records: [], note: "indexedDB unavailable" });
-        return;
-      }
+  // Read the game's own history store. NOTE a versionless open is NOT
+  // write-free: if the database does not exist yet, open() implicitly
+  // CREATES it (empty, version 1), which could break the game's own later
+  // store creation. So existence is checked first via indexedDB.databases()
+  // (Chromium — our target); where that API is unavailable, the open guards
+  // itself with an onupgradeneeded handler that aborts the transaction —
+  // with no version requested the upgrade only fires for a not-yet-existing
+  // database, and aborting it discards the implicit creation.
+  async function readSimHistoryFromIDB() {
+    let db;
+    try {
+      db = pageWindow.indexedDB;
+    } catch {
+      db = null;
+    }
+    if (!db) {
+      return { records: [], note: "indexedDB unavailable" };
+    }
 
+    if (typeof db.databases === "function") {
+      try {
+        const names = (await db.databases()).map((info) => info.name);
+        if (!names.includes(SIM_DB_NAME)) {
+          return { records: [], note: "no simulation history yet" };
+        }
+      } catch {
+        // enumeration failed — fall through to the abort-guarded open
+      }
+    }
+
+    return new Promise((resolve) => {
       let settled = false;
       const done = (value) => {
         if (!settled) {
@@ -582,7 +648,23 @@
       setTimeout(() => done({ records: [], note: "indexedDB timed out" }), 4000);
 
       const request = db.open(SIM_DB_NAME);
-      request.onerror = () => done({ records: [], note: "indexedDB open failed" });
+      let creating = false;
+      request.onupgradeneeded = () => {
+        // Fires only when the database is being created here — abort so
+        // the game keeps a clean slate for its own schema setup.
+        creating = true;
+        try {
+          request.transaction.abort();
+        } catch {
+          // already aborting
+        }
+      };
+      request.onerror = () =>
+        done(
+          creating
+            ? { records: [], note: "no simulation history yet" }
+            : { records: [], note: "indexedDB open failed" },
+        );
       request.onsuccess = () => {
         const handle = request.result;
         try {
@@ -647,7 +729,7 @@
 
     let context = null;
     try {
-      context = await evaluateInPage(buildSimContextBody());
+      context = (await evaluateInPage(buildSimContextBody())).data;
     } catch {
       context = null;
     }
@@ -705,7 +787,7 @@
     GM_xmlhttpRequest({
       method: "POST",
       url: HUB_EXPORT_URL,
-      headers: { "Content-Type": "application/json" },
+      headers: hubHeaders(),
       data: JSON.stringify(payload),
       timeout: 8000,
       onload: (response) =>
@@ -746,11 +828,7 @@
   }
 
   function toggleSim() {
-    try {
-      localStorage.setItem(SIM_PREF_KEY, simEnabled() ? "0" : "1");
-    } catch {
-      // private mode etc. — timer still applies for this page lifetime
-    }
+    setPref(SIM_PREF_KEY, !simEnabled());
     applySimState();
   }
 

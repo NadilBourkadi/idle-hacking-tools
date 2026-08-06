@@ -2,3 +2,11 @@
 *Zone.Identifier
 vendor/
 __pycache__/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# All game data is local-only: the public repo ships the toolkit and the
+# research log, never a player's save history. A fresh clone starts with an
+# empty data/ tree and the capture hub recreates the structure on first use.
+data/

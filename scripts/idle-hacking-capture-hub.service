@@ -1,10 +1,22 @@
 [Unit]
 Description=Idle Hacking capture hub (userscript server + export receiver)
+# Restart=on-failure below will retry-loop if something else is squatting
+# port 8123; these bound it to 5 attempts per 2 minutes instead of forever.
+StartLimitIntervalSec=120
+StartLimitBurst=5
 
 [Service]
-ExecStart=/usr/bin/env python3 ~/Dev/idle-hacking-tools/scripts/capture-hub.py
+# Assumes the repo is checked out at ~/Dev/idle-hacking-tools — installers should adjust the %h paths.
+ExecStart=/usr/bin/env python3 %h/Dev/idle-hacking-tools/scripts/capture-hub.py
 Restart=on-failure
 RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+# ProtectHome=read-only would block the one directory the hub writes (data/
+# lives under home), so instead: whole filesystem read-only via
+# ProtectSystem=strict, plus this single explicit writable path.
+ProtectSystem=strict
+ReadWritePaths=%h/Dev/idle-hacking-tools/data
 
 [Install]
 WantedBy=default.target

@@ -284,7 +284,7 @@ Still unresolved, and it decides the install-gate reserve: until a queued hackco
 
 Three consecutive crafts beat the planner's Stability budget by 1.2–1.5×, which looked like the documented chance table being wrong. The player identified the actual cause: **Snapshot Backups had reached level 2 (10% chance to preserve Stability on a failed Version Upgrade) while the cost model still assumed level 0.** Attempts and Stability are not the same quantity once that upgrade is above 0.
 
-Corrected model (`vu_expected_stability` = `1 + ((1-p)/p) × (1-preserve)`), applied to every contract craft with the preserve level that was live at the time:
+Corrected model (`version_upgrade_expected_stability` = `1 + ((1-p)/p) × (1-preserve)`), applied to every contract craft with the preserve level that was live at the time:
 
 | Craft | promotions | expected Stability | actual | ratio |
 |---|---|---|---|---|

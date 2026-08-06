@@ -1,0 +1,2970 @@
+{
+ "schema": "idle-hacking-state-capture-v1",
+ "capturedAt": "2026-08-06T20:35:09.118Z",
+ "sourceVersion": "fixture",
+ "_note": "Sanitized, trimmed capture fixture for the test suite \u2014 the one deliberate exception to the data-stays-local rule. Identity fields stripped; contains only statsBreakdown (the stat-model ground truth), the equipped set, and two craftable inventory items.",
+ "state": {
+  "statsBreakdown": {
+   "snippets": {
+    "base": 1,
+    "hardware": 0,
+    "homelab": 0.12,
+    "homelab_mult": 0.01,
+    "equipment": 1.5661617970388764,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.04343449298079289
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.519130766433938
+     },
+     {
+      "slot": "head",
+      "additive": 0.08575710385990665
+     },
+     {
+      "slot": "chest",
+      "additive": 0.21621763591662874
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.23557737915464255
+     },
+     {
+      "slot": "boots",
+      "additive": 0.4035206225964473
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.06252379609652028
+     }
+    ],
+    "global": 0,
+    "syndicate": 0,
+    "firewall_cache": 0,
+    "holiday_event": 0,
+    "rollback_compensation": 0,
+    "participation_bonus": 0,
+    "flat": 0,
+    "homelab_flat": 0,
+    "total": 2.7130234150092654
+   },
+   "cycles": {
+    "base": 1,
+    "hardware": 0,
+    "homelab": 0.12,
+    "homelab_mult": 0.01,
+    "equipment": 1.5661617970388764,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.04343449298079289
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.519130766433938
+     },
+     {
+      "slot": "head",
+      "additive": 0.08575710385990665
+     },
+     {
+      "slot": "chest",
+      "additive": 0.21621763591662874
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.23557737915464255
+     },
+     {
+      "slot": "boots",
+      "additive": 0.4035206225964473
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.06252379609652028
+     }
+    ],
+    "global": 0,
+    "syndicate": 0,
+    "firewall_cache": 0,
+    "holiday_event": 0,
+    "rollback_compensation": 0,
+    "participation_bonus": 0,
+    "flat": 0,
+    "homelab_flat": 0,
+    "total": 2.7130234150092654
+   },
+   "hashes": {
+    "base": 1,
+    "hardware": 0,
+    "homelab": 0.09,
+    "homelab_mult": 0.01,
+    "equipment": 1.5661617970388764,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.04343449298079289
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.519130766433938
+     },
+     {
+      "slot": "head",
+      "additive": 0.08575710385990665
+     },
+     {
+      "slot": "chest",
+      "additive": 0.21621763591662874
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.23557737915464255
+     },
+     {
+      "slot": "boots",
+      "additive": 0.4035206225964473
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.06252379609652028
+     }
+    ],
+    "global": 0,
+    "syndicate": 0,
+    "firewall_cache": 0,
+    "holiday_event": 0,
+    "rollback_compensation": 0,
+    "participation_bonus": 0,
+    "flat": 0,
+    "homelab_flat": 0,
+    "total": 2.6827234150092654
+   },
+   "packets": {
+    "base": 1,
+    "hardware": 0,
+    "homelab": 0.12,
+    "homelab_mult": 0.01,
+    "equipment": 1.5661617970388764,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.04343449298079289
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.519130766433938
+     },
+     {
+      "slot": "head",
+      "additive": 0.08575710385990665
+     },
+     {
+      "slot": "chest",
+      "additive": 0.21621763591662874
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.23557737915464255
+     },
+     {
+      "slot": "boots",
+      "additive": 0.4035206225964473
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.06252379609652028
+     }
+    ],
+    "global": 0,
+    "syndicate": 0,
+    "firewall_cache": 0,
+    "holiday_event": 0,
+    "rollback_compensation": 0,
+    "participation_bonus": 0,
+    "flat": 0,
+    "homelab_flat": 0,
+    "total": 2.7130234150092654
+   },
+   "credits": {
+    "base": 1,
+    "hardware": 0,
+    "homelab": 0,
+    "homelab_mult": 0,
+    "equipment": 0.4274900023178074,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.18607284304158406
+     },
+     {
+      "slot": "chest",
+      "additive": 0.09962969498119166
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.10151855264720419
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.040268911647827504
+     }
+    ],
+    "global": 0,
+    "syndicate": 0,
+    "firewall_cache": 0,
+    "holiday_event": 0,
+    "rollback_compensation": 0,
+    "participation_bonus": 0,
+    "flat": 0,
+    "homelab_flat": 0,
+    "total": 1.4274900023178074
+   },
+   "code_xp": {
+    "base_xp": 10,
+    "activity_additive": 0,
+    "activity_multiplicative": 1,
+    "gathering_additive": 0.3345121003474529,
+    "gathering_multiplicative": 1.05,
+    "global_additive": 0.19708348731521003,
+    "global_multiplicative": 1,
+    "global_applications": 1,
+    "equipment_additive": 0.3915955876626629,
+    "activity_equipment_additive": 0,
+    "gathering_equipment_additive": 0.1945121003474529,
+    "global_equipment_additive": 0.19708348731521003,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.1055025146723791
+     },
+     {
+      "slot": "head",
+      "additive": 0.16023893742723394
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.06453556555385802
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.061318570009191886
+     }
+    ],
+    "upgrade_additive": 0.14,
+    "activity_upgrade_additive": 0,
+    "gathering_upgrade_additive": 0.14,
+    "global_upgrade_additive": 0,
+    "homelab_additive": 0.14,
+    "activity_homelab_additive": 0,
+    "gathering_homelab_additive": 0.14,
+    "global_homelab_additive": 0,
+    "hardware_shop_multiplicative": 1.05,
+    "homelab_multiplicative": 1,
+    "firewall_cache_multiplicative": 1,
+    "holiday_event_multiplicative": 1,
+    "rollback_compensation_multiplicative": 1,
+    "supporter_recognition_multiplicative": 1,
+    "syndicate_multiplicative": 1,
+    "participation_multiplicative": 1,
+    "final_multiplier": 1.6081753670457961,
+    "total_xp_per_tick": 16.08175367045796
+   },
+   "compute_xp": {
+    "base_xp": 10,
+    "activity_additive": 0,
+    "activity_multiplicative": 1,
+    "gathering_additive": 0.3345121003474529,
+    "gathering_multiplicative": 1.05,
+    "global_additive": 0.19708348731521003,
+    "global_multiplicative": 1,
+    "global_applications": 1,
+    "equipment_additive": 0.3915955876626629,
+    "activity_equipment_additive": 0,
+    "gathering_equipment_additive": 0.1945121003474529,
+    "global_equipment_additive": 0.19708348731521003,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.1055025146723791
+     },
+     {
+      "slot": "head",
+      "additive": 0.16023893742723394
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.06453556555385802
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.061318570009191886
+     }
+    ],
+    "upgrade_additive": 0.14,
+    "activity_upgrade_additive": 0,
+    "gathering_upgrade_additive": 0.14,
+    "global_upgrade_additive": 0,
+    "homelab_additive": 0.14,
+    "activity_homelab_additive": 0,
+    "gathering_homelab_additive": 0.14,
+    "global_homelab_additive": 0,
+    "hardware_shop_multiplicative": 1.05,
+    "homelab_multiplicative": 1,
+    "firewall_cache_multiplicative": 1,
+    "holiday_event_multiplicative": 1,
+    "rollback_compensation_multiplicative": 1,
+    "supporter_recognition_multiplicative": 1,
+    "syndicate_multiplicative": 1,
+    "participation_multiplicative": 1,
+    "final_multiplier": 1.6081753670457961,
+    "total_xp_per_tick": 16.08175367045796
+   },
+   "mine_xp": {
+    "base_xp": 10,
+    "activity_additive": 0,
+    "activity_multiplicative": 1,
+    "gathering_additive": 0.3345121003474529,
+    "gathering_multiplicative": 1.05,
+    "global_additive": 0.19708348731521003,
+    "global_multiplicative": 1,
+    "global_applications": 1,
+    "equipment_additive": 0.3915955876626629,
+    "activity_equipment_additive": 0,
+    "gathering_equipment_additive": 0.1945121003474529,
+    "global_equipment_additive": 0.19708348731521003,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.1055025146723791
+     },
+     {
+      "slot": "head",
+      "additive": 0.16023893742723394
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.06453556555385802
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.061318570009191886
+     }
+    ],
+    "upgrade_additive": 0.14,
+    "activity_upgrade_additive": 0,
+    "gathering_upgrade_additive": 0.14,
+    "global_upgrade_additive": 0,
+    "homelab_additive": 0.14,
+    "activity_homelab_additive": 0,
+    "gathering_homelab_additive": 0.14,
+    "global_homelab_additive": 0,
+    "hardware_shop_multiplicative": 1.05,
+    "homelab_multiplicative": 1,
+    "firewall_cache_multiplicative": 1,
+    "holiday_event_multiplicative": 1,
+    "rollback_compensation_multiplicative": 1,
+    "supporter_recognition_multiplicative": 1,
+    "syndicate_multiplicative": 1,
+    "participation_multiplicative": 1,
+    "final_multiplier": 1.6081753670457961,
+    "total_xp_per_tick": 16.08175367045796
+   },
+   "sniff_xp": {
+    "base_xp": 10,
+    "activity_additive": 0,
+    "activity_multiplicative": 1,
+    "gathering_additive": 0.3345121003474529,
+    "gathering_multiplicative": 1.05,
+    "global_additive": 0.19708348731521003,
+    "global_multiplicative": 1,
+    "global_applications": 1,
+    "equipment_additive": 0.3915955876626629,
+    "activity_equipment_additive": 0,
+    "gathering_equipment_additive": 0.1945121003474529,
+    "global_equipment_additive": 0.19708348731521003,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.1055025146723791
+     },
+     {
+      "slot": "head",
+      "additive": 0.16023893742723394
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.06453556555385802
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.061318570009191886
+     }
+    ],
+    "upgrade_additive": 0.14,
+    "activity_upgrade_additive": 0,
+    "gathering_upgrade_additive": 0.14,
+    "global_upgrade_additive": 0,
+    "homelab_additive": 0.14,
+    "activity_homelab_additive": 0,
+    "gathering_homelab_additive": 0.14,
+    "global_homelab_additive": 0,
+    "hardware_shop_multiplicative": 1.05,
+    "homelab_multiplicative": 1,
+    "firewall_cache_multiplicative": 1,
+    "holiday_event_multiplicative": 1,
+    "rollback_compensation_multiplicative": 1,
+    "supporter_recognition_multiplicative": 1,
+    "syndicate_multiplicative": 1,
+    "participation_multiplicative": 1,
+    "final_multiplier": 1.6081753670457961,
+    "total_xp_per_tick": 16.08175367045796
+   },
+   "max_hp": {
+    "base": 100,
+    "level": 21910,
+    "equipment_flat": 0,
+    "equipment_pct": 0.49232730570442496,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.00892309825587286
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.03278868760615547
+     },
+     {
+      "slot": "head",
+      "additive": 0.02591143846083147
+     },
+     {
+      "slot": "chest",
+      "additive": 0.22175261897113935
+     },
+     {
+      "slot": "boots",
+      "additive": 0.07248425998491738
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.1304672024255085
+     }
+    ],
+    "hardware": 0,
+    "homelab": 0.11999999999999998,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 35487.32399855439
+   },
+   "attack_damage": {
+    "base": 10,
+    "level": 2629.2,
+    "equipment_flat": 0,
+    "equipment_pct": 0.80050246421221,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.42052534227409755
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.02828552020960193
+     },
+     {
+      "slot": "head",
+      "additive": 0.011925766655612808
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.3210230696781655
+     },
+     {
+      "slot": "boots",
+      "additive": 0.010162741606132746
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.00858002378859961
+     }
+    ],
+    "hardware": 0,
+    "homelab": 0.13999999999999999,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 5121.374103548864
+   },
+   "defense": {
+    "base": 5,
+    "level": 1095.5,
+    "equipment_flat": 0,
+    "equipment_pct": 1.0624713840185067,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.013515869416983892
+     },
+     {
+      "slot": "off_hand",
+      "additive": 0.30420789410065674
+     },
+     {
+      "slot": "chest",
+      "additive": 0.07881972287977516
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.015644985588814064
+     },
+     {
+      "slot": "boots",
+      "additive": 0.32356375848937347
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.006741466386728403
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.3199776871561748
+     }
+    ],
+    "hardware": 0.6,
+    "homelab": 0.15,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 3095.1247581123666
+   },
+   "crit_chance": {
+    "base": 0.05,
+    "level": 0,
+    "equipment_flat": 0,
+    "equipment_pct": 0.08537383539249432,
+    "equipment_slots": [
+     {
+      "slot": "head",
+      "additive": 0.08537383539249432
+     }
+    ],
+    "hardware": 0.027,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 0.1623738353924943
+   },
+   "crit_damage": {
+    "base": 1.5,
+    "level": 0,
+    "equipment_flat": 0,
+    "equipment_pct": 0.17400041598952076,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "additive": 0.17400041598952076
+     }
+    ],
+    "hardware": 0.011,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 1.6850004159895207
+   },
+   "attack_speed": {
+    "base": 1,
+    "level": 0,
+    "equipment_flat": 0,
+    "equipment_pct": 0.444162044396201,
+    "equipment_slots": [
+     {
+      "slot": "head",
+      "additive": 0.13996513411269212
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.15813180523772682
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.14606510504578207
+     }
+    ],
+    "hardware": 0.024,
+    "homelab": 0.05999999999999999,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 1.528162044396201
+   },
+   "evasion": {
+    "base": 50,
+    "level": 4382,
+    "equipment_flat": 0,
+    "equipment_pct": 0.28538037236260094,
+    "equipment_slots": [
+     {
+      "slot": "head",
+      "additive": 0.15286664531285507
+     },
+     {
+      "slot": "chest",
+      "additive": 0.02908810243540702
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.05535917977580361
+     },
+     {
+      "slot": "boots",
+      "additive": 0.011507810348120904
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.014936974543143324
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.02162165994727102
+     }
+    ],
+    "hardware": 0.5,
+    "homelab": 0.09,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 8311.685810311048
+   },
+   "accuracy": {
+    "base": 100,
+    "level": 6573,
+    "equipment_flat": 0,
+    "equipment_pct": 0.551963451624645,
+    "equipment_slots": [
+     {
+      "slot": "off_hand",
+      "additive": 0.04418733007868162
+     },
+     {
+      "slot": "head",
+      "additive": 0.35929082451546224
+     },
+     {
+      "slot": "gloves",
+      "additive": 0.023467478383221094
+     },
+     {
+      "slot": "acc1",
+      "additive": 0.09424413332550274
+     },
+     {
+      "slot": "acc2",
+      "additive": 0.03077368532177727
+     }
+    ],
+    "hardware": 0.5,
+    "homelab": 0.10999999999999999,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 14426.782112691255
+   },
+   "regeneration": {
+    "base": 0,
+    "level": 0,
+    "equipment_flat": 456,
+    "equipment_pct": 0,
+    "equipment_slots": [
+     {
+      "slot": "off_hand",
+      "flat": 172
+     },
+     {
+      "slot": "chest",
+      "flat": 49
+     },
+     {
+      "slot": "boots",
+      "flat": 171
+     },
+     {
+      "slot": "acc2",
+      "flat": 64
+     }
+    ],
+    "hardware": 0.905,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 868.6800000000001
+   },
+   "damage_barrier": {
+    "base": 0,
+    "level": 0,
+    "equipment_flat": 4497,
+    "equipment_pct": 0,
+    "equipment_slots": [
+     {
+      "slot": "head",
+      "flat": 269
+     },
+     {
+      "slot": "chest",
+      "flat": 809
+     },
+     {
+      "slot": "gloves",
+      "flat": 1324
+     },
+     {
+      "slot": "acc1",
+      "flat": 1628
+     },
+     {
+      "slot": "acc2",
+      "flat": 467
+     }
+    ],
+    "hardware": 0.6,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 7195.200000000001
+   },
+   "armor_penetration": {
+    "base": 0,
+    "level": 0,
+    "equipment_flat": 77,
+    "equipment_pct": 0,
+    "equipment_slots": [
+     {
+      "slot": "off_hand",
+      "flat": 77
+     }
+    ],
+    "hardware": 0.055,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 81.235
+   },
+   "thorns": {
+    "base": 0,
+    "level": 0,
+    "equipment_flat": 121,
+    "equipment_pct": 0,
+    "equipment_slots": [
+     {
+      "slot": "chest",
+      "flat": 48
+     },
+     {
+      "slot": "boots",
+      "flat": 7
+     },
+     {
+      "slot": "acc1",
+      "flat": 66
+     }
+    ],
+    "hardware": 0.135,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 137.335
+   },
+   "corruption": {
+    "base": 0,
+    "level": 0,
+    "equipment_flat": 66,
+    "equipment_pct": 0,
+    "equipment_slots": [
+     {
+      "slot": "main_hand",
+      "flat": 61
+     },
+     {
+      "slot": "acc2",
+      "flat": 5
+     }
+    ],
+    "hardware": 0.39,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 91.74000000000001
+   },
+   "post_combat_heal": {
+    "base": 0,
+    "level": 10955,
+    "equipment_flat": 0,
+    "equipment_pct": 0,
+    "hardware": 0,
+    "homelab": 0,
+    "homelab_flat": 0,
+    "syndicate": 0,
+    "total": 10955
+   }
+  },
+  "equipmentData": {
+   "acc1": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0015,
+     "effect_type": "mult_add",
+     "stat_type": "accuracy",
+     "value": 0.0942
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_resources_defense",
+      "base_rolls": {
+       "defense": 0.0051,
+       "gathering_resources_multi": 0.0473
+      },
+      "effects": [
+       {
+        "base_value": 0.0473,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.0625,
+        "value_max": 0.0654,
+        "value_min": 0.0436
+       },
+       {
+        "base_value": 0.0051,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0067,
+        "value_max": 0.0099,
+        "value_min": 0.0066
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 2131,
+      "name": "Shielded",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     },
+     {
+      "affix_id": "prefix_credits_evasion",
+      "base_rolls": {
+       "credits_multi": 0.0423,
+       "evasion": 0.0113
+      },
+      "effects": [
+       {
+        "base_value": 0.0423,
+        "resource": "credits",
+        "type": "mult_add",
+        "value": 0.0559,
+        "value_max": 0.0793,
+        "value_min": 0.0529
+       },
+       {
+        "base_value": 0.0113,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0149,
+        "value_max": 0.0198,
+        "value_min": 0.0132
+       }
+      ],
+      "group": "prefix_combat_evasion",
+      "item_level": 2131,
+      "name": "Ghosted",
+      "tier": 7,
+      "tier_promotion_chance": 0.7
+     },
+     {
+      "affix_id": "prefix_credits_maxhp",
+      "base_rolls": {
+       "credits_multi": 0.0345,
+       "max_hp": 0.0083
+      },
+      "effects": [
+       {
+        "base_value": 0.0345,
+        "resource": "credits",
+        "type": "mult_add",
+        "value": 0.0456,
+        "value_max": 0.0529,
+        "value_min": 0.0397
+       },
+       {
+        "base_value": 0.0083,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.011,
+        "value_max": 0.0132,
+        "value_min": 0.0099
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 2131,
+      "name": "Hearty",
+      "tier": 8,
+      "tier_promotion_chance": 0.8
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_damage_barrier",
+      "base_rolls": {
+       "damage_barrier": 520.2537
+      },
+      "effects": [
+       {
+        "base_value": 520.2537,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 991,
+        "value_max": 1143,
+        "value_min": 858
+       }
+      ],
+      "group": "damage_barrier",
+      "item_level": 2131,
+      "name": "of Bastion",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_failover_barrier",
+      "base_rolls": {
+       "attack_speed": 0.1105,
+       "damage_barrier": 334.1453
+      },
+      "effects": [
+       {
+        "base_value": 334.1453,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 637,
+        "value_max": 686,
+        "value_min": 515
+       },
+       {
+        "base_value": 0.1105,
+        "resource": "attack_speed",
+        "type": "mult_add",
+        "value": 0.1461,
+        "value_max": 0.1745,
+        "value_min": 0.1309
+       }
+      ],
+      "group": "failover_barrier",
+      "item_level": 2131,
+      "name": "of Bastion",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_barbed_shell",
+      "base_rolls": {
+       "max_hp": 0.0904,
+       "thorns": 34.447
+      },
+      "effects": [
+       {
+        "base_value": 0.0904,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.1195,
+        "value_max": 0.1652,
+        "value_min": 0.1157
+       },
+       {
+        "base_value": 34.447,
+        "resource": "thorns",
+        "type": "flat_add",
+        "value": 66,
+        "value_max": 67,
+        "value_min": 47
+       }
+      ],
+      "group": "barbed_shell",
+      "item_level": 2131,
+      "name": "of Vengeance",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 306495.2038776463,
+     "stability_spent": 25,
+     "stability_multiplier": 2.093777929654214,
+     "base_cost_with_stability": 641733,
+     "augment_cost": 1532477,
+     "augment_credit_cost": 6417329,
+     "annul_cost": 306496,
+     "lock_cost": 1283466,
+     "masterwork_cost": 306496,
+     "tier_promotion_primary_cost": 306496,
+     "tier_promotion_secondary_cost": 153248,
+     "bias_primary_cost": 153248,
+     "bias_credit_cost": 641733,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "42491ea9847600e0007662a2de4fa0e1",
+    "name": "Shielded Daemon of Bastion",
+    "base_type": "Daemon",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "acc1",
+    "item_level": 2131,
+    "required_hack_level": 1055,
+    "implicit": {
+     "stat_type": "accuracy",
+     "effect_type": "mult_add",
+     "base_value": 0.0015
+    },
+    "stability_max": 25,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-07-28T23:15:05.855276538Z"
+   },
+   "acc2": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.2173,
+     "effect_type": "flat_add",
+     "stat_type": "regeneration",
+     "value": 9
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_credits_attack",
+      "base_rolls": {
+       "attack_damage": 0.007575,
+       "credits_multi": 0.035552
+      },
+      "effects": [
+       {
+        "base_value": 0.035552,
+        "resource": "credits",
+        "type": "mult_add",
+        "value": 0.0403,
+        "value_max": 0.0453,
+        "value_min": 0.034
+       },
+       {
+        "base_value": 0.007575,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.0086,
+        "value_max": 0.0113,
+        "value_min": 0.0085
+       }
+      ],
+      "group": "prefix_combat_attack",
+      "item_level": 1415,
+      "name": "Assault",
+      "tier": 8,
+      "tier_promotion_chance": 0.8
+     },
+     {
+      "affix_id": "prefix_hackxp_defense",
+      "base_rolls": {
+       "defense": 0.00505,
+       "hackxp_multi": 0.023836
+      },
+      "effects": [
+       {
+        "base_value": 0.023836,
+        "resource": "xp_hack",
+        "type": "mult_add",
+        "value": 0.027,
+        "value_max": 0.0323,
+        "value_min": 0.0215
+       },
+       {
+        "base_value": 0.00505,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0057,
+        "value_max": 0.0085,
+        "value_min": 0.0057
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 1415,
+      "name": "Shielded",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     },
+     {
+      "affix_id": "prefix_globalxp_evasion",
+      "base_rolls": {
+       "evasion": 0.019089000000000002,
+       "globalxp_multi": 0.054136000000000004
+      },
+      "effects": [
+       {
+        "base_value": 0.054136000000000004,
+        "resource": "xp_global",
+        "type": "mult_add",
+        "value": 0.0613,
+        "value_max": 0.0646,
+        "value_min": 0.0484
+       },
+       {
+        "base_value": 0.019089000000000002,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0216,
+        "value_max": 0.0227,
+        "value_min": 0.017
+       }
+      ],
+      "group": "prefix_combat_evasion",
+      "item_level": 1415,
+      "name": "Phasing",
+      "tier": 6,
+      "tier_promotion_chance": 0.6000000000000001
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_infection_vector",
+      "base_rolls": {
+       "accuracy": 0.027169000000000002,
+       "corruption": 3.577925
+      },
+      "effects": [
+       {
+        "base_value": 0.027169000000000002,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.0308,
+        "value_max": 0.0357,
+        "value_min": 0.0255
+       },
+       {
+        "base_value": 3.577925,
+        "resource": "corruption",
+        "type": "flat_add",
+        "value": 5,
+        "value_max": 6,
+        "value_min": 4
+       }
+      ],
+      "group": "infection_vector",
+      "item_level": 1415,
+      "name": "of Blight",
+      "tier": 6,
+      "tier_promotion_chance": 0.6000000000000001
+     },
+     {
+      "affix_id": "suffix_adaptive_shell",
+      "base_rolls": {
+       "defense": 0.153823,
+       "regeneration": 40.976811000000005
+      },
+      "effects": [
+       {
+        "base_value": 0.153823,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.1742,
+        "value_max": 0.1784,
+        "value_min": 0.1274
+       },
+       {
+        "base_value": 40.976811000000005,
+        "resource": "regeneration",
+        "type": "flat_add",
+        "value": 55,
+        "value_max": 56,
+        "value_min": 40
+       }
+      ],
+      "group": "adaptive_shell",
+      "item_level": 1415,
+      "name": "of Perpetuity",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_fortified_barrier",
+      "base_rolls": {
+       "damage_barrier": 350.526964,
+       "defense": 0.123624
+      },
+      "effects": [
+       {
+        "base_value": 350.526964,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 467,
+        "value_max": 520,
+        "value_min": 390
+       },
+       {
+        "base_value": 0.123624,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.14,
+        "value_max": 0.1699,
+        "value_min": 0.1274
+       }
+      ],
+      "group": "fortified_barrier",
+      "item_level": 1415,
+      "name": "of Bastion",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 298684.80416653276,
+     "stability_spent": 25,
+     "stability_multiplier": 2.093777929654214,
+     "base_cost_with_stability": 625380,
+     "augment_cost": 1493425,
+     "augment_credit_cost": 6253797,
+     "annul_cost": 298685,
+     "lock_cost": 1250760,
+     "masterwork_cost": 298685,
+     "tier_promotion_primary_cost": 298685,
+     "tier_promotion_secondary_cost": 149343,
+     "bias_primary_cost": 149343,
+     "bias_credit_cost": 625380,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "effective_compiled_bonus_pct": 0.01,
+    "id": "04d698f8a997cda2c667651502c91720",
+    "name": "Assault Kernel of Blight",
+    "base_type": "Kernel",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "acc2",
+    "item_level": 1415,
+    "required_hack_level": 1037,
+    "implicit": {
+     "stat_type": "regeneration",
+     "effect_type": "flat_add",
+     "base_value": 0.2173
+    },
+    "stability_max": 25,
+    "stability": 0,
+    "compiled_bonus_pct": 0.01,
+    "decompile_locked": true,
+    "created_at": "2026-07-28T19:07:40.792304187Z"
+   },
+   "boots": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.3456,
+     "effect_type": "flat_add",
+     "stat_type": "regeneration",
+     "value": 19
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_hackxp_attack",
+      "base_rolls": {
+       "attack_damage": 0.0068,
+       "hackxp_multi": 0.0196
+      },
+      "effects": [
+       {
+        "base_value": 0.0196,
+        "resource": "xp_hack",
+        "type": "mult_add",
+        "value": 0.0293,
+        "value_max": 0.0426,
+        "value_min": 0.0284
+       },
+       {
+        "base_value": 0.0068,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.0102,
+        "value_max": 0.0112,
+        "value_min": 0.0075
+       }
+      ],
+      "group": "prefix_combat_attack",
+      "item_level": 2912,
+      "name": "Aggressive",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     },
+     {
+      "affix_id": "prefix_hackxp_defense",
+      "base_rolls": {
+       "defense": 0.0214,
+       "hackxp_multi": 0.0894
+      },
+      "effects": [
+       {
+        "base_value": 0.0894,
+        "resource": "xp_hack",
+        "type": "mult_add",
+        "value": 0.1336,
+        "value_max": 0.142,
+        "value_min": 0.1136
+       },
+       {
+        "base_value": 0.0214,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.032,
+        "value_max": 0.0374,
+        "value_min": 0.0299
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 2912,
+      "name": "Bulwarked",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     },
+     {
+      "affix_id": "prefix_resources_maxhp",
+      "base_rolls": {
+       "gathering_resources_multi": 0.27,
+       "max_hp": 0.0485
+      },
+      "effects": [
+       {
+        "base_value": 0.27,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.4035,
+        "value_max": 0.4932,
+        "value_min": 0.3946
+       },
+       {
+        "base_value": 0.0485,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.0725,
+        "value_max": 0.0747,
+        "value_min": 0.0598
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 2912,
+      "name": "Leviathan's",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_regeneration",
+      "base_rolls": {
+       "regeneration": 59.8243
+      },
+      "effects": [
+       {
+        "base_value": 59.8243,
+        "resource": "regeneration",
+        "type": "flat_add",
+        "value": 152,
+        "value_max": 178,
+        "value_min": 127
+       }
+      ],
+      "group": "regeneration",
+      "item_level": 2912,
+      "name": "of the Undying",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_defense",
+      "base_rolls": {
+       "defense": 0.1951
+      },
+      "effects": [
+       {
+        "base_value": 0.1951,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.2916,
+        "value_max": 0.3288,
+        "value_min": 0.284
+       }
+      ],
+      "group": "defense",
+      "item_level": 2912,
+      "name": "of Immortality",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     },
+     {
+      "affix_id": "suffix_reflective_mesh",
+      "base_rolls": {
+       "evasion": 0.0077,
+       "thorns": 2.5561
+      },
+      "effects": [
+       {
+        "base_value": 2.5561,
+        "resource": "thorns",
+        "type": "flat_add",
+        "value": 7,
+        "value_max": 8,
+        "value_min": 4
+       },
+       {
+        "base_value": 0.0077,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0115,
+        "value_max": 0.0149,
+        "value_min": 0.0075
+       }
+      ],
+      "group": "reflective_mesh",
+      "item_level": 2912,
+      "name": "of Barbs",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 564402.4539280458,
+     "stability_spent": 25,
+     "stability_multiplier": 2.093777929654214,
+     "base_cost_with_stability": 1181734,
+     "augment_cost": 2822013,
+     "augment_credit_cost": 11817335,
+     "annul_cost": 564403,
+     "lock_cost": 2363467,
+     "masterwork_cost": 564403,
+     "tier_promotion_primary_cost": 564403,
+     "tier_promotion_secondary_cost": 282202,
+     "bias_primary_cost": 282202,
+     "bias_credit_cost": 1181734,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "8689e7c62ac003b03d07b826026eb018",
+    "name": "Aggressive Router of the Undying",
+    "base_type": "Router",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "boots",
+    "item_level": 2912,
+    "required_hack_level": 1585,
+    "implicit": {
+     "stat_type": "regeneration",
+     "effect_type": "flat_add",
+     "base_value": 0.3456
+    },
+    "stability_max": 25,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-08-02T11:12:36.525208527Z"
+   },
+   "chest": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0012,
+     "effect_type": "mult_add",
+     "stat_type": "defense",
+     "value": 0.0726
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_hackxp_defense",
+      "base_rolls": {
+       "defense": 0.0053,
+       "hackxp_multi": 0.0211
+      },
+      "effects": [
+       {
+        "base_value": 0.0211,
+        "resource": "xp_hack",
+        "type": "mult_add",
+        "value": 0.0248,
+        "value_max": 0.0336,
+        "value_min": 0.0224
+       },
+       {
+        "base_value": 0.0053,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0062,
+        "value_max": 0.0088,
+        "value_min": 0.0059
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 1572,
+      "name": "Shielded",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     },
+     {
+      "affix_id": "prefix_resources_maxhp",
+      "base_rolls": {
+       "gathering_resources_multi": 0.1836,
+       "max_hp": 0.0302
+      },
+      "effects": [
+       {
+        "base_value": 0.1836,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.2162,
+        "value_max": 0.2526,
+        "value_min": 0.1943
+       },
+       {
+        "base_value": 0.0302,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.0356,
+        "value_max": 0.0383,
+        "value_min": 0.0294
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 1572,
+      "name": "Titanic",
+      "tier": 4,
+      "tier_promotion_chance": 0.4
+     },
+     {
+      "affix_id": "prefix_credits_evasion",
+      "base_rolls": {
+       "credits_multi": 0.0846,
+       "evasion": 0.0247
+      },
+      "effects": [
+       {
+        "base_value": 0.0846,
+        "resource": "credits",
+        "type": "mult_add",
+        "value": 0.0996,
+        "value_max": 0.1178,
+        "value_min": 0.0942
+       },
+       {
+        "base_value": 0.0247,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0291,
+        "value_max": 0.0294,
+        "value_min": 0.0236
+       }
+      ],
+      "group": "prefix_combat_evasion",
+      "item_level": 1572,
+      "name": "Spectral",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_damage_barrier",
+      "base_rolls": {
+       "damage_barrier": 554.7159
+      },
+      "effects": [
+       {
+        "base_value": 554.7159,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 809,
+        "value_max": 875,
+        "value_min": 656
+       }
+      ],
+      "group": "damage_barrier",
+      "item_level": 1572,
+      "name": "of Bastion",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_watchdog_matrix",
+      "base_rolls": {
+       "max_hp": 0.1581,
+       "regeneration": 33.2481
+      },
+      "effects": [
+       {
+        "base_value": 0.1581,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.1862,
+        "value_max": 0.2061,
+        "value_min": 0.1472
+       },
+       {
+        "base_value": 33.2481,
+        "resource": "regeneration",
+        "type": "flat_add",
+        "value": 49,
+        "value_max": 62,
+        "value_min": 44
+       }
+      ],
+      "group": "watchdog_matrix",
+      "item_level": 1572,
+      "name": "of Perpetuity",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_thorns",
+      "base_rolls": {
+       "thorns": 32.3665
+      },
+      "effects": [
+       {
+        "base_value": 32.3665,
+        "resource": "thorns",
+        "type": "flat_add",
+        "value": 48,
+        "value_max": 52,
+        "value_min": 37
+       }
+      ],
+      "group": "thorns",
+      "item_level": 1572,
+      "name": "of Backlash",
+      "tier": 3,
+      "tier_promotion_chance": 0.30000000000000004
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 346993.96375153266,
+     "stability_spent": 27,
+     "stability_multiplier": 2.2212890055701555,
+     "base_cost_with_stability": 770774,
+     "augment_cost": 1734970,
+     "augment_credit_cost": 7707739,
+     "annul_cost": 346994,
+     "lock_cost": 1541548,
+     "masterwork_cost": 346994,
+     "tier_promotion_primary_cost": 346994,
+     "tier_promotion_secondary_cost": 173497,
+     "bias_primary_cost": 173497,
+     "bias_credit_cost": 770774,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "a6f367ab1e5ecc12e29c5eb2444bcf51",
+    "name": "Shielded Shell of Bastion",
+    "base_type": "Shell",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "chest",
+    "item_level": 1572,
+    "required_hack_level": 1146,
+    "implicit": {
+     "stat_type": "defense",
+     "effect_type": "mult_add",
+     "base_value": 0.0012
+    },
+    "stability_max": 27,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-07-29T16:10:51.425436804Z"
+   },
+   "gloves": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0018,
+     "effect_type": "mult_add",
+     "stat_type": "attack_speed",
+     "value": 0.1229
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_resources_evasion",
+      "base_rolls": {
+       "evasion": 0.0095,
+       "gathering_resources_multi": 0.0651
+      },
+      "effects": [
+       {
+        "base_value": 0.0651,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.0979,
+        "value_max": 0.0993,
+        "value_min": 0.0745
+       },
+       {
+        "base_value": 0.0095,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0143,
+        "value_max": 0.015,
+        "value_min": 0.0113
+       }
+      ],
+      "group": "prefix_combat_evasion",
+      "item_level": 2960,
+      "name": "Slippery",
+      "tier": 8,
+      "tier_promotion_chance": 0.8
+     },
+     {
+      "affix_id": "prefix_resources_defense",
+      "base_rolls": {
+       "defense": 0.0104,
+       "gathering_resources_multi": 0.0915
+      },
+      "effects": [
+       {
+        "base_value": 0.0915,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.1376,
+        "value_max": 0.1489,
+        "value_min": 0.0993
+       },
+       {
+        "base_value": 0.0104,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0156,
+        "value_max": 0.0226,
+        "value_min": 0.015
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 2960,
+      "name": "Reinforced",
+      "tier": 7,
+      "tier_promotion_chance": 0.7
+     },
+     {
+      "affix_id": "prefix_globalxp_accuracy",
+      "base_rolls": {
+       "accuracy": 0.0156,
+       "globalxp_multi": 0.0429
+      },
+      "effects": [
+       {
+        "base_value": 0.0429,
+        "resource": "xp_global",
+        "type": "mult_add",
+        "value": 0.0645,
+        "value_max": 0.0857,
+        "value_min": 0.0642
+       },
+       {
+        "base_value": 0.0156,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.0235,
+        "value_max": 0.0301,
+        "value_min": 0.0226
+       }
+      ],
+      "group": "prefix_combat_accuracy",
+      "item_level": 2960,
+      "name": "Honed",
+      "tier": 6,
+      "tier_promotion_chance": 0.6000000000000001
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_attack",
+      "base_rolls": {
+       "attack_damage": 0.2134
+      },
+      "effects": [
+       {
+        "base_value": 0.2134,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.321,
+        "value_max": 0.331,
+        "value_min": 0.2858
+       }
+      ],
+      "group": "attack_damage",
+      "item_level": 2960,
+      "name": "of Armageddon",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     },
+     {
+      "affix_id": "suffix_evasive_threads",
+      "base_rolls": {
+       "attack_speed": 0.0234,
+       "evasion": 0.0273
+      },
+      "effects": [
+       {
+        "base_value": 0.0273,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.0411,
+        "value_max": 0.0481,
+        "value_min": 0.0361
+       },
+       {
+        "base_value": 0.0234,
+        "resource": "attack_speed",
+        "type": "mult_add",
+        "value": 0.0352,
+        "value_max": 0.0421,
+        "value_min": 0.0316
+       }
+      ],
+      "group": "evasive_threads",
+      "item_level": 2960,
+      "name": "of Alacrity",
+      "tier": 8,
+      "tier_promotion_chance": 0.8
+     },
+     {
+      "affix_id": "suffix_damage_barrier",
+      "base_rolls": {
+       "damage_barrier": 515.5265
+      },
+      "effects": [
+       {
+        "base_value": 515.5265,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 1324,
+        "value_max": 1541,
+        "value_min": 1156
+       }
+      ],
+      "group": "damage_barrier",
+      "item_level": 2960,
+      "name": "of Bastion",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 537381.898020393,
+     "stability_spent": 25,
+     "stability_multiplier": 2.093777929654214,
+     "base_cost_with_stability": 1125159,
+     "augment_cost": 2686910,
+     "augment_credit_cost": 11251584,
+     "annul_cost": 537382,
+     "lock_cost": 2250317,
+     "masterwork_cost": 537382,
+     "tier_promotion_primary_cost": 537382,
+     "tier_promotion_secondary_cost": 268691,
+     "bias_primary_cost": 268691,
+     "bias_credit_cost": 1125159,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "11ccd8483dcde77bd027498acc2c11ab",
+    "name": "Slippery Driver of Armageddon",
+    "base_type": "Driver",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "gloves",
+    "item_level": 2960,
+    "required_hack_level": 1534,
+    "implicit": {
+     "stat_type": "attack_speed",
+     "effect_type": "mult_add",
+     "base_value": 0.0018
+    },
+    "stability_max": 25,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-08-01T20:31:21.426239379Z"
+   },
+   "head": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0018,
+     "effect_type": "mult_add",
+     "stat_type": "crit_chance",
+     "value": 0.0854
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_resources_accuracy",
+      "base_rolls": {
+       "accuracy": 0.01196,
+       "gathering_resources_multi": 0.082264
+      },
+      "effects": [
+       {
+        "base_value": 0.082264,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.0858,
+        "value_max": 0.1032,
+        "value_min": 0.0688
+       },
+       {
+        "base_value": 0.01196,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.0125,
+        "value_max": 0.0156,
+        "value_min": 0.0104
+       }
+      ],
+      "group": "prefix_combat_accuracy",
+      "item_level": 1125,
+      "name": "Targeted",
+      "tier": 7,
+      "tier_promotion_chance": 0.7
+     },
+     {
+      "affix_id": "prefix_globalxp_maxhp",
+      "base_rolls": {
+       "globalxp_multi": 0.068328,
+       "max_hp": 0.024856000000000003
+      },
+      "effects": [
+       {
+        "base_value": 0.068328,
+        "resource": "xp_global",
+        "type": "mult_add",
+        "value": 0.0712,
+        "value_max": 0.0743,
+        "value_min": 0.0594
+       },
+       {
+        "base_value": 0.024856000000000003,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.0259,
+        "value_max": 0.0261,
+        "value_min": 0.0208
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 1125,
+      "name": "Enduring",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     },
+     {
+      "affix_id": "prefix_gatherxp_attack",
+      "base_rolls": {
+       "attack_damage": 0.01144,
+       "gatherxp_multi": 0.08538400000000002
+      },
+      "effects": [
+       {
+        "base_value": 0.08538400000000002,
+        "resource": "xp_gathering",
+        "type": "mult_add",
+        "value": 0.089,
+        "value_max": 0.0876,
+        "value_min": 0.0584
+       },
+       {
+        "base_value": 0.01144,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.0119,
+        "value_max": 0.0156,
+        "value_min": 0.0104
+       }
+      ],
+      "group": "prefix_combat_attack",
+      "item_level": 1125,
+      "name": "Ravaging",
+      "tier": 7,
+      "tier_promotion_chance": 0.7
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_evasive_threads",
+      "base_rolls": {
+       "attack_speed": 0.134264,
+       "evasion": 0.14664
+      },
+      "effects": [
+       {
+        "base_value": 0.14664,
+        "resource": "evasion",
+        "type": "mult_add",
+        "value": 0.1529,
+        "value_max": 0.1585,
+        "value_min": 0.1251
+       },
+       {
+        "base_value": 0.134264,
+        "resource": "attack_speed",
+        "type": "mult_add",
+        "value": 0.14,
+        "value_max": 0.1386,
+        "value_min": 0.1095
+       }
+      ],
+      "group": "evasive_threads",
+      "item_level": 1125,
+      "name": "of Light Speed",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     },
+     {
+      "affix_id": "suffix_handshake_barrier",
+      "base_rolls": {
+       "accuracy": 0.106808,
+       "damage_barrier": 244.173592
+      },
+      "effects": [
+       {
+        "base_value": 244.173592,
+        "resource": "damage_barrier",
+        "type": "flat_add",
+        "value": 269,
+        "value_max": 297,
+        "value_min": 225
+       },
+       {
+        "base_value": 0.106808,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.1113,
+        "value_max": 0.1173,
+        "value_min": 0.0886
+       }
+      ],
+      "group": "handshake_barrier",
+      "item_level": 1125,
+      "name": "of Containment",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     },
+     {
+      "affix_id": "suffix_accuracy",
+      "base_rolls": {
+       "accuracy": 0.225888
+      },
+      "effects": [
+       {
+        "base_value": 0.225888,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.2355,
+        "value_max": 0.2293,
+        "value_min": 0.1981
+       }
+      ],
+      "group": "accuracy",
+      "item_level": 1125,
+      "name": "of Inevitability",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 228730.76434970438,
+     "stability_spent": 28,
+     "stability_multiplier": 2.28792767573726,
+     "base_cost_with_stability": 523320,
+     "augment_cost": 1143654,
+     "augment_credit_cost": 5233195,
+     "annul_cost": 228731,
+     "lock_cost": 1046639,
+     "masterwork_cost": 228731,
+     "tier_promotion_primary_cost": 228731,
+     "tier_promotion_secondary_cost": 114366,
+     "bias_primary_cost": 114366,
+     "bias_credit_cost": 523320,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "effective_compiled_bonus_pct": 0.04,
+    "id": "116edab4753e2771b451737905508a8d",
+    "name": "Targeted Analyzer of Light Speed",
+    "base_type": "Analyzer",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "head",
+    "item_level": 1125,
+    "required_hack_level": 868,
+    "implicit": {
+     "stat_type": "crit_chance",
+     "effect_type": "mult_add",
+     "base_value": 0.0018
+    },
+    "stability_max": 28,
+    "stability": 0,
+    "compiled_bonus_pct": 0.04,
+    "decompile_locked": true,
+    "created_at": "2026-07-23T12:14:58.142813397Z"
+   },
+   "main_hand": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0012,
+     "effect_type": "mult_add",
+     "stat_type": "attack_damage",
+     "value": 0.0799
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_resources_maxhp",
+      "base_rolls": {
+       "gathering_resources_multi": 0.0331,
+       "max_hp": 0.0068
+      },
+      "effects": [
+       {
+        "base_value": 0.0331,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.0434,
+        "value_max": 0.065,
+        "value_min": 0.0433
+       },
+       {
+        "base_value": 0.0068,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.0089,
+        "value_max": 0.0098,
+        "value_min": 0.0066
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 2091,
+      "name": "Vital",
+      "tier": 9,
+      "tier_promotion_chance": 0.9000000000000001
+     },
+     {
+      "affix_id": "prefix_credits_attack",
+      "base_rolls": {
+       "attack_damage": 0.0387,
+       "credits_multi": 0.1418
+      },
+      "effects": [
+       {
+        "base_value": 0.1418,
+        "resource": "credits",
+        "type": "mult_add",
+        "value": 0.1861,
+        "value_max": 0.21,
+        "value_min": 0.1706
+       },
+       {
+        "base_value": 0.0387,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.0508,
+        "value_max": 0.0525,
+        "value_min": 0.0426
+       }
+      ],
+      "group": "prefix_combat_attack",
+      "item_level": 2091,
+      "name": "Warmongering",
+      "tier": 3,
+      "tier_promotion_chance": 0.30000000000000004
+     },
+     {
+      "affix_id": "prefix_gatherxp_defense",
+      "base_rolls": {
+       "defense": 0.0103,
+       "gatherxp_multi": 0.0804
+      },
+      "effects": [
+       {
+        "base_value": 0.0804,
+        "resource": "xp_gathering",
+        "type": "mult_add",
+        "value": 0.1055,
+        "value_max": 0.1102,
+        "value_min": 0.0735
+       },
+       {
+        "base_value": 0.0103,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0135,
+        "value_max": 0.0197,
+        "value_min": 0.0131
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 2091,
+      "name": "Reinforced",
+      "tier": 7,
+      "tier_promotion_chance": 0.7
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_attack",
+      "base_rolls": {
+       "attack_damage": 0.2209
+      },
+      "effects": [
+       {
+        "base_value": 0.2209,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.2899,
+        "value_max": 0.3281,
+        "value_min": 0.2887
+       }
+      ],
+      "group": "attack_damage",
+      "item_level": 2091,
+      "name": "of Extinction",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_critdamage",
+      "base_rolls": {
+       "crit_damage": 0.1326
+      },
+      "effects": [
+       {
+        "base_value": 0.1326,
+        "resource": "crit_damage",
+        "type": "mult_add",
+        "value": 0.174,
+        "value_max": 0.1846,
+        "value_min": 0.1361
+       }
+      ],
+      "group": "crit_damage",
+      "item_level": 2091,
+      "name": "of Execution",
+      "tier": 6,
+      "tier_promotion_chance": 0.6000000000000001
+     },
+     {
+      "affix_id": "suffix_corruption",
+      "base_rolls": {
+       "corruption": 32.5656
+      },
+      "effects": [
+       {
+        "base_value": 32.5656,
+        "resource": "corruption",
+        "type": "flat_add",
+        "value": 61,
+        "value_max": 68,
+        "value_min": 49
+       }
+      ],
+      "group": "corruption",
+      "item_level": 2091,
+      "name": "of Zero-Day",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 360708.16747060214,
+     "stability_spent": 28,
+     "stability_multiplier": 2.28792767573726,
+     "base_cost_with_stability": 825275,
+     "augment_cost": 1803541,
+     "augment_credit_cost": 8252742,
+     "annul_cost": 360709,
+     "lock_cost": 1650549,
+     "masterwork_cost": 360709,
+     "tier_promotion_primary_cost": 360709,
+     "tier_promotion_secondary_cost": 180355,
+     "bias_primary_cost": 180355,
+     "bias_credit_cost": 825275,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "167c0539d249016a3345ea0450bc5a71",
+    "name": "Vital Payload of Extinction",
+    "base_type": "Payload",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "main_hand",
+    "item_level": 2091,
+    "required_hack_level": 1176,
+    "implicit": {
+     "stat_type": "attack_damage",
+     "effect_type": "mult_add",
+     "base_value": 0.0012
+    },
+    "stability_max": 28,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-07-29T21:22:21.52595305Z"
+   },
+   "off_hand": {
+    "rarity": "epic",
+    "implicit_info": {
+     "base_value": 0.0013,
+     "effect_type": "mult_add",
+     "stat_type": "defense",
+     "value": 0.09
+    },
+    "prefixes": [
+     {
+      "affix_id": "prefix_resources_attack",
+      "base_rolls": {
+       "attack_damage": 0.0201,
+       "gathering_resources_multi": 0.1524
+      },
+      "effects": [
+       {
+        "base_value": 0.1524,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.2145,
+        "value_max": 0.2322,
+        "value_min": 0.1858
+       },
+       {
+        "base_value": 0.0201,
+        "resource": "attack_damage",
+        "type": "mult_add",
+        "value": 0.0283,
+        "value_max": 0.0352,
+        "value_min": 0.0281
+       }
+      ],
+      "group": "prefix_combat_attack",
+      "item_level": 2502,
+      "name": "Predatory",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     },
+     {
+      "affix_id": "prefix_resources_defense",
+      "base_rolls": {
+       "defense": 0.0083,
+       "gathering_resources_multi": 0.0574
+      },
+      "effects": [
+       {
+        "base_value": 0.0574,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.0808,
+        "value_max": 0.0929,
+        "value_min": 0.0697
+       },
+       {
+        "base_value": 0.0083,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.0117,
+        "value_max": 0.0141,
+        "value_min": 0.0106
+       }
+      ],
+      "group": "prefix_combat_defense",
+      "item_level": 2502,
+      "name": "Fortified",
+      "tier": 8,
+      "tier_promotion_chance": 0.8
+     },
+     {
+      "affix_id": "prefix_resources_maxhp",
+      "base_rolls": {
+       "gathering_resources_multi": 0.1591,
+       "max_hp": 0.0233
+      },
+      "effects": [
+       {
+        "base_value": 0.1591,
+        "resource": "gathering_resources_multi",
+        "type": "mult_add",
+        "value": 0.2239,
+        "value_max": 0.2322,
+        "value_min": 0.1858
+       },
+       {
+        "base_value": 0.0233,
+        "resource": "max_hp",
+        "type": "mult_add",
+        "value": 0.0328,
+        "value_max": 0.0352,
+        "value_min": 0.0281
+       }
+      ],
+      "group": "prefix_combat_maxhp",
+      "item_level": 2502,
+      "name": "Enduring",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     }
+    ],
+    "suffixes": [
+     {
+      "affix_id": "suffix_regeneration",
+      "base_rolls": {
+       "regeneration": 45.3756
+      },
+      "effects": [
+       {
+        "base_value": 45.3756,
+        "resource": "regeneration",
+        "type": "flat_add",
+        "value": 100,
+        "value_max": 111,
+        "value_min": 78
+       }
+      ],
+      "group": "regeneration",
+      "item_level": 2502,
+      "name": "of Immortality",
+      "tier": 2,
+      "tier_promotion_chance": 0.2
+     },
+     {
+      "affix_id": "suffix_adaptive_shell",
+      "base_rolls": {
+       "defense": 0.1439,
+       "regeneration": 32.3819
+      },
+      "effects": [
+       {
+        "base_value": 0.1439,
+        "resource": "defense",
+        "type": "mult_add",
+        "value": 0.2025,
+        "value_max": 0.2216,
+        "value_min": 0.1583
+       },
+       {
+        "base_value": 32.3819,
+        "resource": "regeneration",
+        "type": "flat_add",
+        "value": 72,
+        "value_max": 93,
+        "value_min": 67
+       }
+      ],
+      "group": "adaptive_shell",
+      "item_level": 2502,
+      "name": "of Perpetuity",
+      "tier": 1,
+      "tier_promotion_chance": 0
+     },
+     {
+      "affix_id": "suffix_forensic_parser",
+      "base_rolls": {
+       "accuracy": 0.0314,
+       "armor_penetration": 34.7334
+      },
+      "effects": [
+       {
+        "base_value": 0.0314,
+        "resource": "accuracy",
+        "type": "mult_add",
+        "value": 0.0442,
+        "value_max": 0.0581,
+        "value_min": 0.0418
+       },
+       {
+        "base_value": 34.7334,
+        "resource": "armor_penetration",
+        "type": "flat_add",
+        "value": 77,
+        "value_max": 100,
+        "value_min": 72
+       }
+      ],
+      "group": "forensic_parser",
+      "item_level": 2502,
+      "name": "of Sundering",
+      "tier": 5,
+      "tier_promotion_chance": 0.5
+     }
+    ],
+    "crafting_preview": {
+     "base_cost": 421658.4043986316,
+     "stability_spent": 26,
+     "stability_multiplier": 2.1565912675438406,
+     "base_cost_with_stability": 909345,
+     "augment_cost": 2108293,
+     "augment_credit_cost": 9093449,
+     "annul_cost": 421659,
+     "lock_cost": 1818690,
+     "masterwork_cost": 421659,
+     "tier_promotion_primary_cost": 421659,
+     "tier_promotion_secondary_cost": 210830,
+     "bias_primary_cost": 210830,
+     "bias_credit_cost": 909345,
+     "bias_essence_cost": 25,
+     "compile_cost": 0
+    },
+    "max_prefixes": 3,
+    "max_suffixes": 3,
+    "max_normal_affixes": 6,
+    "id": "8604a0966dfc4434c047acb53b96bcc3",
+    "name": "Predatory Firewall of Immortality",
+    "base_type": "Firewall",
+    "found_by": "the player",
+    "enhanced_by": "the player",
+    "slot": "off_hand",
+    "item_level": 2502,
+    "required_hack_level": 1305,
+    "implicit": {
+     "stat_type": "defense",
+     "effect_type": "mult_add",
+     "base_value": 0.0013
+    },
+    "stability_max": 26,
+    "stability": 0,
+    "decompile_locked": true,
+    "created_at": "2026-07-30T22:42:36.501855499Z"
+   }
+  },
+  "inventoryData": {
+   "items": [
+    {
+     "rarity": "epic",
+     "implicit_info": {
+      "base_value": 0.0017,
+      "effect_type": "mult_add",
+      "stat_type": "accuracy",
+      "value": 0.0961
+     },
+     "prefixes": [
+      {
+       "affix_id": "prefix_credits_maxhp",
+       "base_rolls": {
+        "credits_multi": 0.0514,
+        "max_hp": 0.0108
+       },
+       "effects": [
+        {
+         "base_value": 0.0514,
+         "resource": "credits",
+         "type": "mult_add",
+         "value": 0.063,
+         "value_max": 0.0736,
+         "value_min": 0.049
+        },
+        {
+         "base_value": 0.0108,
+         "resource": "max_hp",
+         "type": "mult_add",
+         "value": 0.0132,
+         "value_max": 0.0184,
+         "value_min": 0.0123
+        }
+       ],
+       "group": "prefix_combat_maxhp",
+       "item_level": 1750,
+       "name": "Resilient",
+       "tier": 7,
+       "tier_promotion_chance": 0.7
+      },
+      {
+       "affix_id": "prefix_gatherxp_attack",
+       "base_rolls": {
+        "attack_damage": 0.0094,
+        "gatherxp_multi": 0.0523
+       },
+       "effects": [
+        {
+         "base_value": 0.0523,
+         "resource": "xp_gathering",
+         "type": "mult_add",
+         "value": 0.0641,
+         "value_max": 0.0687,
+         "value_min": 0.0515
+        },
+        {
+         "base_value": 0.0094,
+         "resource": "attack_damage",
+         "type": "mult_add",
+         "value": 0.0115,
+         "value_max": 0.0123,
+         "value_min": 0.0092
+        }
+       ],
+       "group": "prefix_combat_attack",
+       "item_level": 1750,
+       "name": "Assault",
+       "tier": 8,
+       "tier_promotion_chance": 0.8
+      },
+      {
+       "affix_id": "prefix_resources_defense",
+       "base_rolls": {
+        "defense": 0.0056,
+        "gathering_resources_multi": 0.0432
+       },
+       "effects": [
+        {
+         "base_value": 0.0432,
+         "resource": "gathering_resources_multi",
+         "type": "mult_add",
+         "value": 0.053,
+         "value_max": 0.0607,
+         "value_min": 0.0405
+        },
+        {
+         "base_value": 0.0056,
+         "resource": "defense",
+         "type": "mult_add",
+         "value": 0.0069,
+         "value_max": 0.0092,
+         "value_min": 0.0061
+        }
+       ],
+       "group": "prefix_combat_defense",
+       "item_level": 1750,
+       "name": "Shielded",
+       "tier": 9,
+       "tier_promotion_chance": 0.9000000000000001
+      }
+     ],
+     "suffixes": [
+      {
+       "affix_id": "suffix_armor_penetration",
+       "base_rolls": {
+        "armor_penetration": 22.0037
+       },
+       "effects": [
+        {
+         "base_value": 22.0037,
+         "resource": "armor_penetration",
+         "type": "flat_add",
+         "value": 36,
+         "value_max": 39,
+         "value_min": 24
+        }
+       ],
+       "group": "armor_penetration",
+       "item_level": 1750,
+       "name": "of Puncturing",
+       "tier": 8,
+       "tier_promotion_chance": 0.8
+      },
+      {
+       "affix_id": "suffix_infection_vector",
+       "base_rolls": {
+        "accuracy": 0.0098,
+        "corruption": 1.6688
+       },
+       "effects": [
+        {
+         "base_value": 0.0098,
+         "resource": "accuracy",
+         "type": "mult_add",
+         "value": 0.012,
+         "value_max": 0.0166,
+         "value_min": 0.011
+        },
+        {
+         "base_value": 1.6688,
+         "resource": "corruption",
+         "type": "flat_add",
+         "value": 3,
+         "value_max": 3,
+         "value_min": 2
+        }
+       ],
+       "group": "infection_vector",
+       "item_level": 1750,
+       "name": "of Corruption",
+       "tier": 8,
+       "tier_promotion_chance": 0.8
+      },
+      {
+       "affix_id": "suffix_hp",
+       "base_rolls": {
+        "max_hp": 0.0626
+       },
+       "effects": [
+        {
+         "base_value": 0.0626,
+         "resource": "max_hp",
+         "type": "mult_add",
+         "value": 0.0767,
+         "value_max": 0.0981,
+         "value_min": 0.0736
+        }
+       ],
+       "group": "max_hp",
+       "item_level": 1750,
+       "name": "of Endurance",
+       "tier": 7,
+       "tier_promotion_chance": 0.7
+      }
+     ],
+     "crafting_preview": {
+      "base_cost": 317453.87066469993,
+      "stability_spent": 0,
+      "stability_multiplier": 1,
+      "base_cost_with_stability": 317454,
+      "augment_cost": 1587270,
+      "augment_credit_cost": 3174539,
+      "annul_cost": 317454,
+      "lock_cost": 634908,
+      "masterwork_cost": 317454,
+      "tier_promotion_primary_cost": 317454,
+      "tier_promotion_secondary_cost": 158727,
+      "bias_primary_cost": 158727,
+      "bias_credit_cost": 317454,
+      "bias_essence_cost": 25,
+      "compile_cost": 1714251
+     },
+     "max_prefixes": 3,
+     "max_suffixes": 3,
+     "max_normal_affixes": 6,
+     "id": "0f97d97161d16c9ea6110c307db6f2af",
+     "name": "Resilient Analyzer of Puncturing",
+     "base_type": "Analyzer",
+     "found_by": "the player",
+     "slot": "head",
+     "item_level": 1750,
+     "required_hack_level": 1080,
+     "implicit": {
+      "stat_type": "accuracy",
+      "effect_type": "mult_add",
+      "base_value": 0.0017
+     },
+     "stability_max": 30,
+     "stability": 30,
+     "decompile_locked": true,
+     "created_at": "2026-07-29T03:52:41.416414041Z"
+    },
+    {
+     "rarity": "epic",
+     "implicit_info": {
+      "base_value": 0.001,
+      "effect_type": "mult_add",
+      "stat_type": "crit_chance",
+      "value": 0.0697
+     },
+     "prefixes": [
+      {
+       "affix_id": "prefix_globalxp_attack",
+       "base_rolls": {
+        "attack_damage": 0.0164,
+        "globalxp_multi": 0.0497
+       },
+       "effects": [
+        {
+         "base_value": 0.0497,
+         "resource": "xp_global",
+         "type": "mult_add",
+         "value": 0.064,
+         "value_max": 0.0734,
+         "value_min": 0.055
+        },
+        {
+         "base_value": 0.0164,
+         "resource": "attack_damage",
+         "type": "mult_add",
+         "value": 0.0211,
+         "value_max": 0.0258,
+         "value_min": 0.0193
+        }
+       ],
+       "group": "prefix_combat_attack",
+       "item_level": 1994,
+       "name": "Overclocked",
+       "tier": 6,
+       "tier_promotion_chance": 0.6000000000000001
+      },
+      {
+       "affix_id": "prefix_hackxp_maxhp",
+       "base_rolls": {
+        "hackxp_multi": 0.0215,
+        "max_hp": 0.0055
+       },
+       "effects": [
+        {
+         "base_value": 0.0215,
+         "resource": "xp_hack",
+         "type": "mult_add",
+         "value": 0.0277,
+         "value_max": 0.0367,
+         "value_min": 0.0245
+        },
+        {
+         "base_value": 0.0055,
+         "resource": "max_hp",
+         "type": "mult_add",
+         "value": 0.0071,
+         "value_max": 0.0097,
+         "value_min": 0.0064
+        }
+       ],
+       "group": "prefix_combat_maxhp",
+       "item_level": 1994,
+       "name": "Vital",
+       "tier": 9,
+       "tier_promotion_chance": 0.9000000000000001
+      },
+      {
+       "affix_id": "prefix_gatherxp_evasion",
+       "base_rolls": {
+        "evasion": 0.0072,
+        "gatherxp_multi": 0.0296
+       },
+       "effects": [
+        {
+         "base_value": 0.0296,
+         "resource": "xp_gathering",
+         "type": "mult_add",
+         "value": 0.0381,
+         "value_max": 0.0541,
+         "value_min": 0.0361
+        },
+        {
+         "base_value": 0.0072,
+         "resource": "evasion",
+         "type": "mult_add",
+         "value": 0.0093,
+         "value_max": 0.0097,
+         "value_min": 0.0064
+        }
+       ],
+       "group": "prefix_combat_evasion",
+       "item_level": 1994,
+       "name": "Elusive",
+       "tier": 9,
+       "tier_promotion_chance": 0.9000000000000001
+      }
+     ],
+     "suffixes": [
+      {
+       "affix_id": "suffix_defense",
+       "base_rolls": {
+        "defense": 0.0579
+       },
+       "effects": [
+        {
+         "base_value": 0.0579,
+         "resource": "defense",
+         "type": "mult_add",
+         "value": 0.0746,
+         "value_max": 0.0773,
+         "value_min": 0.0515
+        }
+       ],
+       "group": "defense",
+       "item_level": 1994,
+       "name": "of Guarding",
+       "tier": 8,
+       "tier_promotion_chance": 0.8
+      },
+      {
+       "affix_id": "suffix_evasion",
+       "base_rolls": {
+        "evasion": 0.0869
+       },
+       "effects": [
+        {
+         "base_value": 0.0869,
+         "resource": "evasion",
+         "type": "mult_add",
+         "value": 0.112,
+         "value_max": 0.1288,
+         "value_min": 0.1031
+        }
+       ],
+       "group": "evasion",
+       "item_level": 1994,
+       "name": "of the Shadow",
+       "tier": 6,
+       "tier_promotion_chance": 0.6000000000000001
+      },
+      {
+       "affix_id": "suffix_armor_penetration",
+       "base_rolls": {
+        "armor_penetration": 51.1899
+       },
+       "effects": [
+        {
+         "base_value": 51.1899,
+         "resource": "armor_penetration",
+         "type": "flat_add",
+         "value": 92,
+         "value_max": 97,
+         "value_min": 65
+        }
+       ],
+       "group": "armor_penetration",
+       "item_level": 1994,
+       "name": "of Breaching",
+       "tier": 6,
+       "tier_promotion_chance": 0.6000000000000001
+      }
+     ],
+     "crafting_preview": {
+      "base_cost": 335252.5018549452,
+      "stability_spent": 0,
+      "stability_multiplier": 1,
+      "base_cost_with_stability": 335253,
+      "augment_cost": 1676263,
+      "augment_credit_cost": 3352526,
+      "annul_cost": 335253,
+      "lock_cost": 670506,
+      "masterwork_cost": 335253,
+      "tier_promotion_primary_cost": 335253,
+      "tier_promotion_secondary_cost": 167627,
+      "bias_primary_cost": 167627,
+      "bias_credit_cost": 335253,
+      "bias_essence_cost": 25,
+      "compile_cost": 1750019
+     },
+     "max_prefixes": 3,
+     "max_suffixes": 3,
+     "max_normal_affixes": 6,
+     "id": "76c7d8a96357e902e2a554d35980a497",
+     "name": "Overclocked Analyzer of Guarding",
+     "base_type": "Analyzer",
+     "found_by": "the player",
+     "slot": "head",
+     "item_level": 1994,
+     "required_hack_level": 1120,
+     "implicit": {
+      "stat_type": "crit_chance",
+      "effect_type": "mult_add",
+      "base_value": 0.001
+     },
+     "stability_max": 29,
+     "stability": 29,
+     "decompile_locked": true,
+     "created_at": "2026-07-29T11:26:31.418981447Z"
+    }
+   ]
+  },
+  "currentPlayer": {
+   "username": "fixture-player",
+   "hack_level": 2191,
+   "credits": 1000000000,
+   "chips": 10000,
+   "hackcoin": 10
+  }
+ }
+}

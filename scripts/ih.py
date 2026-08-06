@@ -30,7 +30,13 @@ Commands:
                            (asserted/inherited = never tested; those are
                            the ones that have been wrong every time)
   cadence                  measured seconds per fight from the death clock
-                           (fixed ~4.87s tick; attack speed is NOT income)
+                           (a fixed real-time tick that era-steps — quote
+                           FIGHT_CADENCE_S; attack speed is NOT income)
+  sims [--mode M]          Hacking Simulator runs banked by the userscript
+                           (software_profiler | cicd_pipeline; CI/CD arm
+                           summaries are grouped per UTC day-block)
+  brief                    one-process advisory digest of everything above
+                           (triage layer — drill into anything flagged)
 
 Output is deliberately compact; prefer this over ad-hoc capture parsing.
 """
@@ -105,7 +111,7 @@ def cmd_item(args):
         print(f"  implicit: {label} {text}")
     for line in ihlib.affix_lines(item):
         print(line)
-    print("  totals:", ihlib.fmt_totals(ihlib.stat_totals(item), combat_only=False))
+    print("  totals:", ihlib.fmt_totals(ihlib.item_stat_totals(item), combat_only=False))
     preview = item.get("crafting_preview")
     if preview:
         # UI button names differ from the payload keys (decoded 27 Jul 2026
@@ -141,7 +147,7 @@ def cmd_candidates(args):
         print(f"{slot:9s} {item.get('name'):44s} {item.get('rarity', '?'):5s} "
               f"ilvl {item.get('item_level'):>4} "
               f"stab {item.get('stability'):>2}/{item.get('stability_max'):>2}  "
-              f"{ihlib.fmt_totals(ihlib.stat_totals(item))}")
+              f"{ihlib.fmt_totals(ihlib.item_stat_totals(item))}")
     print(f"({len(rows)} items)")
 
 
@@ -152,8 +158,9 @@ def cmd_compare(args):
     print(f"# {path.name}")
     print("A:", ihlib.item_header(a, slot_a, where_a))
     print("B:", ihlib.item_header(b, slot_b, where_b))
-    ta, tb = ihlib.stat_totals(a), ihlib.stat_totals(b)
-    labels = [l for l in ihlib.COMBAT_ORDER if l in ta or l in tb]
+    ta, tb = ihlib.item_stat_totals(a), ihlib.item_stat_totals(b)
+    labels = [label for label in ihlib.COMBAT_ORDER
+              if label in ta or label in tb]
     labels += sorted(set(list(ta) + list(tb)) - set(labels))
     print(f"{'stat':12s} {'A':>14s} {'B':>14s} {'B-A':>14s}")
     for label in labels:
@@ -283,9 +290,9 @@ def cmd_potential(args):
         equipped = next((i for w, s, i in items if w == "equipped" and s == slot), None)
         print(f"\n== {slot} ==")
         if equipped:
-            base = ihlib.weighted_score(ihlib.stat_totals(equipped))
+            base = ihlib.weighted_score(ihlib.item_stat_totals(equipped))
             print(f"  equipped  {equipped.get('name'):<44} score {base:6.1f}  "
-                  f"{ihlib.fmt_totals(ihlib.stat_totals(equipped))}")
+                  f"{ihlib.fmt_totals(ihlib.item_stat_totals(equipped))}")
         else:
             base = 0.0
             print("  (slot empty)")
@@ -298,7 +305,7 @@ def cmd_potential(args):
                                     deep_step=deep_step)
             rows.append((plan["score"], item, plan))
         rows.sort(key=lambda r: -r[0])
-        eq_totals = ihlib.stat_totals(equipped) if equipped else {}
+        eq_totals = ihlib.item_stat_totals(equipped) if equipped else {}
         for score, item, plan in rows[: args.top]:
             delta = score - base
             verdict = ("UPGRADE" if delta > ihlib.UPGRADE_BAND
@@ -342,7 +349,8 @@ def cmd_potential(args):
                     print(f"            !!    {abs(bad):.1f} of that is "
                           f"{'/'.join(labels)} — Δ ex-suspect "
                           f"{delta - bad:+.1f}. "
-                          + "; ".join(ihlib.SUSPECT_WEIGHTS[l] for l in labels))
+                          + "; ".join(ihlib.SUSPECT_WEIGHTS[label]
+                                      for label in labels))
             econ = []
             for label in sorted(set(plan["totals"]) | set(eq_totals)):
                 if ihlib.is_combat_stat(label):
@@ -395,7 +403,7 @@ def cmd_homelab(args):
                 else f"     {eta} once started"
             print(f"    {names.get(job.get('target'), job.get('target')):28s} "
                   f"-> L{job.get('target_level')}  {when}  +{pts}pts  "
-                  f"[{ihlib.fmt_cost(job.get('cost_snapshot'))}]")
+                  f"[{ihlib.format_cost(job.get('cost_snapshot'))}]")
     if in_flight_points:
         free = (info.get("max_build_slots") or 0) - len(jobs)
         room = (info.get("max_queue_jobs") or 0) - len(pending)
@@ -422,7 +430,7 @@ def cmd_homelab(args):
             print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
                   f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
                   f"{p['hours']:.1f}h  "
-                  f"{ihlib.fmt_cost(p['cost'])}")
+                  f"{ihlib.format_cost(p['cost'])}")
             print(f"        under [{p['section']}]  {p['description'][:70]}")
         if not picks:
             print("    nothing affordable left un-queued")
@@ -447,7 +455,7 @@ def cmd_homelab(args):
         print(f"    {d.get('name'):26s} L{u['level']}{maxed:<5} "
               f"+{nxt.get('progress_points', 0):>3}pts "
               f"{est}{hours:4.1f}h  {pts_hr:5.0f}pts/h  "
-              f"{est}{ihlib.fmt_cost(nxt.get('cost'))}{queued}")
+              f"{est}{ihlib.format_cost(nxt.get('cost'))}{queued}")
         print(f"        [{section}]  {(d.get('description') or '')[:80]}")
     upcoming = sorted({u["def"].get("unlock_level", 0)
                        for u in ihlib.iter_homelab_upgrades(homelab, definitions)
@@ -464,7 +472,7 @@ def cmd_homelab(args):
         for d in sorted(pending, key=lambda d: d.get("unlock_level", 0)):
             gate = d.get("unlock_level", 0)
             state = "available NOW" if gate <= level else f"gated: homelab {gate}"
-            print(f"    {d.get('name'):28s} {ihlib.fmt_cost(d.get('cost')):<24} ({state})")
+            print(f"    {d.get('name'):28s} {ihlib.format_cost(d.get('cost')):<24} ({state})")
 
 
 def cmd_hardware(args):
@@ -487,7 +495,7 @@ def cmd_hardware(args):
                        if o.get("section") == "all"), None)
         print(f"  RESET AVAILABLE ({hw.get('reset_preview_mode')}, "
               f"{hw.get('reset_cooldown_mode')}): all-hardware refund "
-              f"{ihlib.fmt_cost(refund)}")
+              f"{ihlib.format_cost(refund)}")
     print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
     print("  current build; additive pooling confirmed — mechanics.md §13):")
     combat_rows, economy_rows = [], []
@@ -504,11 +512,11 @@ def cmd_hardware(args):
         afford = "" if d.get("can_afford") else "  [CAN'T AFFORD]"
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
               f"value/lvl {value:5.2f}  per-1K-chips {per_1k:6.2f}  "
-              f"next {ihlib.fmt_cost(cost)}{afford}")
+              f"next {ihlib.format_cost(cost)}{afford}")
     print("\n  economy/farming tracks (not scored):")
     for d in sorted(economy_rows, key=lambda d: d.get("name") or ""):
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
-              f"next {ihlib.fmt_cost(d.get('next_cost'))}  "
+              f"next {ihlib.format_cost(d.get('next_cost'))}  "
               f"{(d.get('description') or '')[:60]}")
 
 
@@ -528,7 +536,7 @@ def cmd_contract(args):
     equipped = (cap["state"].get("equipmentData") or {}).get(slot)
     if equipped is None:
         sys.exit(f"nothing equipped in {slot} to compare against")
-    baseline = ihlib.weighted_score(ihlib.stat_totals(equipped))
+    baseline = ihlib.weighted_score(ihlib.item_stat_totals(equipped))
     preserve = ihlib.stability_preserve_chance(cap)
     print(f"# {path.name}")
     print(f"  base     {base_item.get('name')}  Stability "
@@ -547,7 +555,7 @@ def cmd_contract(args):
         plan = ihlib.plan_craft(base_item, ladders, floor=args.floor,
                                 preserve=preserve)
         phases = [(name, to) for name, _frm, to, _c, _e in plan["steps"]]
-        print(f"  phases taken from plan_craft (pass --phase to override)")
+        print("  phases taken from plan_craft (pass --phase to override)")
     if not phases:
         sys.exit("no phases to run")
 
@@ -558,8 +566,8 @@ def cmd_contract(args):
                     if a.get("name") == name), None)
         if cur is None:
             sys.exit(f"{base_item.get('name')} has no affix {name!r}")
-        att = sum(ihlib.vu_expected_attempts(x) for x in range(tier + 1, cur + 1))
-        stab = sum(ihlib.vu_expected_stability(x, preserve)
+        att = sum(ihlib.version_upgrade_expected_attempts(x) for x in range(tier + 1, cur + 1))
+        stab = sum(ihlib.version_upgrade_expected_stability(x, preserve)
                    for x in range(tier + 1, cur + 1))
         print(f"    {name:22s} T{cur} -> T{tier}   exp {att:4.1f} attempts / "
               f"{stab:4.1f} Stability")
@@ -637,7 +645,9 @@ def cmd_sims(args):
     print(f"{'when':>8}  {'zone':<18} {'gear':<10} {'lvl':>6} "
           f"{'n':>4} {'win%':>6}  {'hit%':>6} {'rounds':>7}  loss-type")
     for row in rows:
-        when = (datetime.fromtimestamp(row["seen_ms"] / 1000).strftime("%H:%M:%S")
+        # UTC, matching the day-block grouping below (was local time)
+        when = (datetime.fromtimestamp(row["seen_ms"] / 1000,
+                                       timezone.utc).strftime("%H:%M:%S")
                 if row.get("seen_ms") else "-")
         rate = row.get("win_rate")
         # unbiased per-attack hit rate: 2-attack rounds only (ihlib.unbiased_hit_rate)
@@ -673,7 +683,8 @@ def cmd_sims(args):
         print(f"{'when':>8}  {'zone':<18} {'set':<10} {'sims':>4} "
               f"{'streak':>7} {'min-max':>9}  final-enemy")
         for r in crows:
-            when = (datetime.fromtimestamp(r["seen_ms"] / 1000).strftime("%H:%M:%S")
+            when = (datetime.fromtimestamp(r["seen_ms"] / 1000,
+                                           timezone.utc).strftime("%H:%M:%S")
                     if r.get("seen_ms") else "-")
             print(f"{when:>8}  {str(r['zone'] or '-'):<18} "
                   f"{str(r['gear_set']):<10} {r['sims'] or 0:>4} "
@@ -703,7 +714,7 @@ def cmd_sims(args):
             print(f"\n  {day} block — arms by stat vector (mean of "
                   f"run-averages ± SE; labels shown are display only):")
             named = []
-            for fp, group in sorted(arms.items(),
+            for _fp, group in sorted(arms.items(),
                                     key=lambda kv: kv[1][0]["seen_ms"]):
                 labels = sorted({str(g["gear_set"]) for g in group})
                 means = [g["streak_avg"] for g in group]
@@ -725,7 +736,7 @@ def cmd_sims(args):
                   f"/{last['daily_limit']} used")
 
 
-def _hc_per_hour(contract, fights_per_hour):
+def _hackcoin_per_hour(contract, fights_per_hour):
     """Hackcoin per hour of COMBAT for a contract, 0 if not combat-driven.
 
     `kills` advances once per won fight. `drops` advances on a contract-item
@@ -748,171 +759,226 @@ def _hc_per_hour(contract, fights_per_hour):
     return 0.0
 
 
-def cmd_audit(args):
-    """Anomaly sweep: things that are silently costing progress right now.
+# ---- Audit checks -----------------------------------------------------------
+# Each check is an independent function `(cap, ctx) -> [(KIND, message)]` so it
+# can be unit-tested against a synthetic capture without running the CLI —
+# extracted from a single ~330-line cmd_audit in the public-release audit,
+# which also converted CLAUDE.md's "if you find an anomaly the audit missed,
+# add the check" rule into a testable contract: add a function, register it in
+# AUDIT_CHECKS, test it. `ctx` carries the little cross-check state that
+# exists (the stream-drift field deltas, consumed by the chips check). Order
+# matters and is deliberate: known-wrong constants outrank staleness outranks
+# everything else.
 
-    Every check here exists because a real one was missed. 27 Jul 2026: four
-    homelab build slots idle for 3.5 days; 81K chips on two hardware tracks
-    whose multiplicand was zero; a finished craft sitting unequipped; a
-    homelabInfo panel 1,348s stale. Run before optimizing anything.
-    """
-    cap, path = ihlib.load_capture(args.file)
-    print(f"# {path.name}")
-    flags = []
+
+def _audit_pending_refits(cap, ctx):
     # Known-wrong constants outrank every other finding: they mean the verdicts
     # this tool is about to print are already known to be false. Listed first,
     # by design -- an unfixed constant is progress being lost silently, which is
     # exactly what this sweep exists to catch.
-    for _r in ihlib.pending_refits():
-        flags.append(("KNOWN-WRONG", f"{_r['name']} applied as {_r['applied']} "
-                                     f"since {_r['opened']}. Blocked on: "
-                                     f"{_r['blocked_on']} UNBLOCK: "
-                                     f"{_r['unblock']}"))
+    return [("KNOWN-WRONG", f"{r['name']} applied as {r['applied']} "
+                            f"since {r['opened']}. Blocked on: "
+                            f"{r['blocked_on']} UNBLOCK: {r['unblock']}")
+            for r in ihlib.pending_refits()]
 
+
+def _audit_stream_drift(cap, ctx):
     # the whole capture can be stale, not just a panel inside it: the
     # auto-stream keeps running after the last capture click, so its newest
     # `stats` record outranks everything in the file (27 Jul 2026: a capture
     # showing 44,582 unspent chips against a streamed 4,140 — already spent)
     lag, changed = ihlib.capture_stream_drift(cap)
-    if lag is not None and lag > 300:
-        detail = ("; ".join(f"{f} {was:,.0f} -> {now:,.0f}"
-                            if isinstance(was, (int, float)) else
-                            f"{f} {was} -> {now}"
-                            for f, was, now in changed)
-                  or "no streamed field changed, but homelab job progress and "
-                     "hardware levels are not streamed — assume both moved")
-        flags.append(("OUTDATED", f"capture is {lag / 60:,.0f} min behind the "
-                                  f"combat stream ({detail}) — recapture before "
-                                  f"spending anything"))
+    ctx["stream_changed"] = changed
+    if lag is None or lag <= 300:
+        return []
+    detail = ("; ".join(f"{f} {was:,.0f} -> {now:,.0f}"
+                        if isinstance(was, (int, float)) else
+                        f"{f} {was} -> {now}"
+                        for f, was, now in changed)
+              or "no streamed field changed, but homelab job progress and "
+                 "hardware levels are not streamed — assume both moved")
+    return [("OUTDATED", f"capture is {lag / 60:,.0f} min behind the "
+                         f"combat stream ({detail}) — recapture before "
+                         f"spending anything")]
 
-    for section, reason in ihlib.stale_panels(cap):
-        flags.append(("STALE", f"{section}: {reason} — reopen that game tab "
-                               f"and recapture before trusting it"))
 
+def _audit_stale_panels(cap, ctx):
+    return [("STALE", f"{section}: {reason} — reopen that game tab "
+                      f"and recapture before trusting it")
+            for section, reason in ihlib.stale_panels(cap)]
+
+
+def _audit_capture_integrity(cap, ctx):
+    # A truncated capture silently thins the archive-wide tier ladders every
+    # craft verdict rests on (`ihlib.LADDER_FIT_SKIPPED` counts skips when a
+    # fit runs; `potential`/`contract` print them). This is the cheap standing
+    # proxy: a JSON capture that does not end in '}' is truncated — caught
+    # without parsing 350MB of archive on every sweep.
+    bad = []
+    for path in ihlib.capture_paths():
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(0, 2)
+                size = fh.tell()
+                if size == 0:
+                    bad.append((path.name, "empty file"))
+                    continue
+                fh.seek(-1, 2)
+                if fh.read(1) != b"}":
+                    bad.append((path.name, "does not end in '}' — truncated"))
+        except OSError as error:
+            bad.append((path.name, f"unreadable ({error.__class__.__name__})"))
+    return [("CORRUPT", f"{name}: {why} — it silently thins the archive tier "
+                        f"ladders; repair or remove it")
+            for name, why in bad]
+
+
+def _audit_sim_ledger(cap, ctx):
     # hub-regression sentinel: a duplicate sim row written after the 5 Aug
     # 2026 cross-day dedup fix means the hub is double-ingesting the
     # profiler panel's replayed results again (pre-fix rows are grandfathered
     # and filtered by ihlib.sim_records)
     sim_dupes = ihlib.sim_ledger_duplicates(after="2026-08-05")
-    if sim_dupes:
-        flags.append(("LEDGER", f"{sim_dupes} duplicate sim run(s) written "
-                                f"after the 5 Aug 2026 hub dedup fix — "
-                                f"capture-hub.py's seen-set has regressed; "
-                                f"fix it before trusting sim counts"))
+    if not sim_dupes:
+        return []
+    return [("LEDGER", f"{sim_dupes} duplicate sim run(s) written "
+                       f"after the 5 Aug 2026 hub dedup fix — "
+                       f"capture-hub.py's seen-set has regressed; "
+                       f"fix it before trusting sim counts")]
 
-    # model self-check against the game's own numbers: if stat_total cannot
+
+def _audit_stat_model(cap, ctx):
+    # model self-check against the game's own numbers: if composed_stat_total cannot
     # reproduce a stat, every swap projection touching it is unsound
-    for stat, reported, modelled in ihlib.validate_stat_totals(cap):
-        flags.append(("MODEL", f"stat_total({stat}) = {modelled:,.4f} but the "
-                               f"game reports {reported:,.4f} — fix its family "
-                               f"in ihlib before trusting any projection using it"))
+    return [("MODEL", f"composed_stat_total({stat}) = {modelled:,.4f} but the "
+                      f"game reports {reported:,.4f} — fix its family "
+                      f"in ihlib before trusting any projection using it")
+            for stat, reported, modelled in ihlib.validate_stat_totals(cap)]
 
+
+def _audit_hardware(cap, ctx):
     hw = ihlib.hardware_state(cap)
-    if hw:
-        sb = hw.get("stats_breakdown") or {}
-        locked = hw.get("locked_resources") or {}
-        spendable, free_chips, locked_chips = ihlib.chip_budget(cap)
-        # a "spend these chips" flag off an outdated capture is how a balance
-        # that is already spent gets re-recommended -- say so on the same line
-        streamed = dict((f, now) for f, _, now in changed).get("chips")
-        if spendable > 20000:
-            correction = (f"; the stream says {streamed:,.0f} — already spent, "
-                          f"recapture" if streamed is not None else "")
-            flags.append(("IDLE", f"{spendable:,.0f} chips unspent "
-                                  f"({locked_chips:,.0f} shop-locked)"
-                                  f"{correction}"))
-        if locked.get("hackcoin"):
-            flags.append(("IDLE", f"{locked['hackcoin']} shop-locked hackcoin — "
-                                  f"unusable outside Hardware; spend or lose it"))
-        for d in hw.get("definitions") or []:
-            level = d.get("current_level") or 0
-            value = ihlib.hardware_track_value(d, sb)
-            if level and value == 0:
-                flags.append(("DEAD", f"{d.get('name')} L{level} scores 0 — its "
-                                      f"multiplicand is zero; those chips do nothing"))
+    if not hw:
+        return []
+    flags = []
+    sb = hw.get("stats_breakdown") or {}
+    locked = hw.get("locked_resources") or {}
+    spendable, free_chips, locked_chips = ihlib.chip_budget(cap)
+    # a "spend these chips" flag off an outdated capture is how a balance
+    # that is already spent gets re-recommended -- say so on the same line
+    changed = ctx.get("stream_changed") or []
+    streamed = dict((f, now) for f, _, now in changed).get("chips")
+    if spendable > 20000:
+        correction = (f"; the stream says {streamed:,.0f} — already spent, "
+                      f"recapture" if streamed is not None else "")
+        flags.append(("IDLE", f"{spendable:,.0f} chips unspent "
+                              f"({locked_chips:,.0f} shop-locked)"
+                              f"{correction}"))
+    if locked.get("hackcoin"):
+        flags.append(("IDLE", f"{locked['hackcoin']} shop-locked hackcoin — "
+                              f"unusable outside Hardware; spend or lose it"))
+    for d in hw.get("definitions") or []:
+        level = d.get("current_level") or 0
+        value = ihlib.hardware_track_value(d, sb)
+        if level and value == 0:
+            flags.append(("DEAD", f"{d.get('name')} L{level} scores 0 — its "
+                                  f"multiplicand is zero; those chips do nothing"))
+    return flags
 
+
+def _audit_homelab(cap, ctx):
     homelab, definitions, info = ihlib.homelab_state(cap)
-    if homelab:
-        active = len(homelab.get("active_jobs") or [])
-        pend = len(homelab.get("pending_jobs") or [])
-        free = (info.get("max_build_slots") or 0) - active
-        room = (info.get("max_queue_jobs") or 0) - pend
-        # CORRECTED 29 Jul 2026. This used to flag every free slot as lost
-        # progress. It is not: homelab tick throughput is a FIXED pool split
-        # evenly across active jobs (mechanics.md §15), so one job running
-        # alone earns exactly what four running together earn. Free slots cost
-        # nothing while at least one job is going -- they only buffer work.
-        # The real loss is throughput reaching ZERO, i.e. nothing active AND
-        # nothing queued. Flag that hard; mention free slots only as coverage.
-        if not active and not pend:
-            picks = ihlib.homelab_fill_suggestions(cap, limit=3)
-            named = "; ".join(
-                f"{p['name']} [{p['section']}] -> L{p['target_level']} "
-                f"({p['pts_per_hour']:.0f}pts/h, +{p['points']}pts, "
-                f"{p['hours']:.1f}h, {ihlib.fmt_cost(p['cost'])})"
-                for p in picks) or "nothing affordable is available"
-            flags.append(("IDLE", f"homelab is making NO progress — 0 active "
-                                  f"jobs and 0 queued. Start: {named}"))
-        elif free or room:
-            hours_buffered = sum(
-                ((j.get("duration_ticks") or 0) - (j.get("progress_ticks") or 0))
-                for j in (homelab.get("active_jobs") or [])
-                + (homelab.get("pending_jobs") or [])) * \
-                (info.get("tick_seconds") or 5) / 3600.0 / \
-                max(ihlib.homelab_build_speed(info), 1e-9)
-            flags.append(("COVERAGE", f"homelab has {free} slot(s) and {room} "
-                                      f"queue place(s) free — this does NOT "
-                                      f"slow the running jobs (throughput is "
-                                      f"split, not added), but only "
-                                      f"~{hours_buffered:.1f}h of work is "
-                                      f"buffered before progress stops"))
-        gates = [(d.get("name"), (d.get("cost") or {}).get("hackcoin") or 0)
-                 for d in (definitions.get("installs") or [])
-                 if not (homelab.get("installed") or {}).get(d.get("type"))]
-        need = sum(hc for _, hc in gates)
-        # locked hackcoin cannot fund installs (mechanics.md §14) -- free only
-        if need and (info.get("hackcoin") or 0) < need:
-            flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
-                                     f"{need} needed for pending installs"))
+    if not homelab:
+        return []
+    flags = []
+    active = len(homelab.get("active_jobs") or [])
+    pend = len(homelab.get("pending_jobs") or [])
+    free = (info.get("max_build_slots") or 0) - active
+    room = (info.get("max_queue_jobs") or 0) - pend
+    # CORRECTED 29 Jul 2026. This used to flag every free slot as lost
+    # progress. It is not: homelab tick throughput is a FIXED pool split
+    # evenly across active jobs (mechanics.md §15), so one job running
+    # alone earns exactly what four running together earn. Free slots cost
+    # nothing while at least one job is going -- they only buffer work.
+    # The real loss is throughput reaching ZERO, i.e. nothing active AND
+    # nothing queued. Flag that hard; mention free slots only as coverage.
+    if not active and not pend:
+        picks = ihlib.homelab_fill_suggestions(cap, limit=3)
+        named = "; ".join(
+            f"{p['name']} [{p['section']}] -> L{p['target_level']} "
+            f"({p['pts_per_hour']:.0f}pts/h, +{p['points']}pts, "
+            f"{p['hours']:.1f}h, {ihlib.format_cost(p['cost'])})"
+            for p in picks) or "nothing affordable is available"
+        flags.append(("IDLE", f"homelab is making NO progress — 0 active "
+                              f"jobs and 0 queued. Start: {named}"))
+    elif free or room:
+        hours_buffered = sum(
+            ((j.get("duration_ticks") or 0) - (j.get("progress_ticks") or 0))
+            for j in (homelab.get("active_jobs") or [])
+            + (homelab.get("pending_jobs") or [])) * \
+            (info.get("tick_seconds") or 5) / 3600.0 / \
+            max(ihlib.homelab_build_speed(info), 1e-9)
+        flags.append(("COVERAGE", f"homelab has {free} slot(s) and {room} "
+                                  f"queue place(s) free — this does NOT "
+                                  f"slow the running jobs (throughput is "
+                                  f"split, not added), but only "
+                                  f"~{hours_buffered:.1f}h of work is "
+                                  f"buffered before progress stops"))
+    gates = [(d.get("name"), (d.get("cost") or {}).get("hackcoin") or 0)
+             for d in (definitions.get("installs") or [])
+             if not (homelab.get("installed") or {}).get(d.get("type"))]
+    need = sum(hc for _, hc in gates)
+    # locked hackcoin cannot fund installs (mechanics.md §14) -- free only
+    if need and (info.get("hackcoin") or 0) < need:
+        flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
+                                 f"{need} needed for pending installs"))
+    flags.extend(_audit_cicd_budget(cap, homelab, definitions))
+    return flags
 
-        # Free measurement capacity that expires daily. Added 6 Aug 2026: the
-        # first fresh CI/CD budget after first light went unflagged by this
-        # sweep. Runs do not bank across days (checked over the 3-5 Aug gap),
-        # and the register's remaining asserted constants all name the
-        # pipeline as their unblock -- budget expiring while those fits are
-        # pending is progress lost silently: the held Corrupt crafts and the
-        # hardware reset re-cut stay blocked on numbers an idle instrument
-        # could be measuring.
-        if definitions:
-            cicd_level = next((u["level"] for u in
-                               ihlib.iter_homelab_upgrades(homelab, definitions)
-                               if u["def"].get("name") == "CI/CD Pipeline"), 0)
-            pending_fits = [n.rsplit("[", 1)[-1].rstrip("]")
-                            for n, _v, prov, basis, _when, _chk
-                            in ihlib.assumptions()
-                            if prov == "asserted" and "CI/CD" in (basis or "")]
-            if cicd_level and pending_fits:
-                cicd_budget = 5 * cicd_level
-                today_utc = datetime.now(timezone.utc).date()
-                used = sum(1 for r in ihlib.cicd_rows()
-                           if r.get("seen_ms") and datetime.fromtimestamp(
-                               r["seen_ms"] / 1000, timezone.utc).date()
-                           == today_utc)
-                if used < cicd_budget:
-                    flags.append(("MEASURE",
-                                  f"{cicd_budget - used}/{cicd_budget} CI/CD "
-                                  f"runs unused today (they expire at the UTC "
-                                  f"day reset and do not bank) — "
-                                  f"{', '.join(pending_fits)} still asserted "
-                                  f"with the pipeline as named unblock; the "
-                                  f"held Corrupt crafts and the hardware "
-                                  f"reset re-cut wait on those fits"))
 
+def _audit_cicd_budget(cap, homelab, definitions):
+    # Free measurement capacity that expires daily. Added 6 Aug 2026: the
+    # first fresh CI/CD budget after first light went unflagged by this
+    # sweep. Runs do not bank across days (checked over the 3-5 Aug gap),
+    # and the register's remaining asserted constants all name the
+    # pipeline as their unblock -- budget expiring while those fits are
+    # pending is progress lost silently: the held Corrupt crafts and the
+    # hardware reset re-cut stay blocked on numbers an idle instrument
+    # could be measuring.
+    if not definitions:
+        return []
+    cicd_level = next((u["level"] for u in
+                       ihlib.iter_homelab_upgrades(homelab, definitions)
+                       if u["def"].get("name") == "CI/CD Pipeline"), 0)
+    pending_fits = [n.rsplit("[", 1)[-1].rstrip("]")
+                    for n, _v, prov, basis, _when, _chk
+                    in ihlib.assumptions()
+                    if prov == "asserted" and "CI/CD" in (basis or "")]
+    if not (cicd_level and pending_fits):
+        return []
+    cicd_budget = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
+    today_utc = datetime.now(timezone.utc).date()
+    used = sum(1 for r in ihlib.cicd_rows()
+               if r.get("seen_ms") and datetime.fromtimestamp(
+                   r["seen_ms"] / 1000, timezone.utc).date() == today_utc)
+    if used >= cicd_budget:
+        return []
+    return [("MEASURE", f"{cicd_budget - used}/{cicd_budget} CI/CD "
+                        f"runs unused today (they expire at the UTC "
+                        f"day reset and do not bank) — "
+                        f"{', '.join(pending_fits)} still asserted "
+                        f"with the pipeline as named unblock; the "
+                        f"held Corrupt crafts and the hardware "
+                        f"reset re-cut wait on those fits")]
+
+
+def _audit_contracts(cap, ctx):
     # The board resets daily (UTC): pending contracts are replaced, the ACTIVE
     # one carries through and runs to completion (mechanics.md §20, corrected
     # 6 Aug 2026). Contracts are the only repeatable hackcoin source observed,
     # and hackcoin gates every install. Added 28 Jul 2026 -- the sweep had no
     # contract check at all; an Extended Elimination sat at 658/1424 with 2.4h.
+    flags = []
     board = ihlib.contract_board(cap)
     left = board["hours_left"]
     active = board["active"]
@@ -981,7 +1047,8 @@ def cmd_audit(args):
                             f"~{need_h - left:.1f}h after reset, occupying "
                             f"the slot while the NEW board idles; weigh "
                             f"its remaining hc/h against the new board's "
-                            f"best (~3 hc/combat-h)")
+                            f"best (~{ihlib.BOARD_TYPICAL_BEST_HC_PER_H:.0f} "
+                            f"hc/combat-h)")
                 flags.append(("CONTRACT", f"  -> {verdict}: {target - done:,} "
                                           f"left = ~{need_h:.1f}h of {mode} "
                                           f"at ~{rate:.0f}/h progress, "
@@ -1002,9 +1069,9 @@ def cmd_audit(args):
                                   f"contracts are REPLACED at reset (only the "
                                   f"active one carries — start the largest "
                                   f"keeper just before reset)."))
-        for c in sorted(pending, key=lambda c: -_hc_per_hour(c, rate)):
+        for c in sorted(pending, key=lambda c: -_hackcoin_per_hour(c, rate)):
             rew = (c.get("rewards") or {}).get("hackcoin") or 0
-            per = _hc_per_hour(c, rate)
+            per = _hackcoin_per_hour(c, rate)
             if per:
                 eff = f"{per:.2f} hc/combat-h"
             elif c.get("type") == "harvest" and rew:
@@ -1029,9 +1096,13 @@ def cmd_audit(args):
         flags.append(("CONTRACT", f"board-clear bonus of {board['clear_bonus']} "
                                   f"unclaimed (only if every contract clears "
                                   f"before reset)"))
+    return flags
 
+
+def _audit_install_budget(cap, ctx):
     # Install gates, priced against the hackcoin-backed budget rather than the
     # credit balance alone (ihlib.HACKCOIN_CREDIT_RATE).
+    flags = []
     balance, hours, pending = ihlib.credit_runway(cap)
     if hours > 0:
         names = "; ".join(f"{n} ({c / 1e9:.1f}B cr + {hc} hc)"
@@ -1050,29 +1121,73 @@ def cmd_audit(args):
         flags.append(("RESERVE", f"{free_hc} hackcoin vs {need_hc} needed for "
                                  f"the remaining installs — hackcoin is the "
                                  f"binding currency, not credits"))
+    return flags
 
+
+def _audit_zones(cap, ctx):
     # Death streaks are only comparable within one zone: a zone's level_offset
     # shifts enemy level at equal streak (mechanics.md 15), so a baseline that
     # spans a zone change is measuring the move, not the gear.
     deaths = cap["state"].get("recentLossStreaks") or []
     zones = {d.get("zone_name") for d in deaths if d.get("zone_name")}
-    if len(zones) > 1:
-        flags.append(("ZONES", f"the recent death window spans {len(zones)} zones "
-                               f"({', '.join(sorted(zones))}) — segment any "
-                               f"baseline at the zone change before comparing"))
+    if len(zones) <= 1:
+        return []
+    return [("ZONES", f"the recent death window spans {len(zones)} zones "
+                      f"({', '.join(sorted(zones))}) — segment any "
+                      f"baseline at the zone change before comparing")]
 
+
+def _audit_unequipped(cap, ctx):
+    flags = []
     equipped = {slot: item for where, slot, item in ihlib.iter_items(cap)
                 if where == "equipped"}
     for where, slot, item in ihlib.iter_items(cap):
         if where != "inventory" or slot not in equipped:
             continue
-        mine = ihlib.weighted_score(ihlib.stat_totals(item))
-        theirs = ihlib.weighted_score(ihlib.stat_totals(equipped[slot]))
+        mine = ihlib.weighted_score(ihlib.item_stat_totals(item))
+        theirs = ihlib.weighted_score(ihlib.item_stat_totals(equipped[slot]))
         if mine > theirs + ihlib.UPGRADE_BAND and not item.get("stability"):
             flags.append(("UNEQUIPPED", f"{slot}: {item.get('name')} scores "
                                         f"{mine:.1f} vs equipped {theirs:.1f} and "
                                         f"has 0 Stability (finished) — equip it"))
+    return flags
 
+
+AUDIT_CHECKS = [
+    _audit_pending_refits,
+    _audit_stream_drift,
+    _audit_stale_panels,
+    _audit_capture_integrity,
+    _audit_sim_ledger,
+    _audit_stat_model,
+    _audit_hardware,
+    _audit_homelab,
+    _audit_contracts,
+    _audit_install_budget,
+    _audit_zones,
+    _audit_unequipped,
+]
+
+
+def run_audit(cap):
+    """Run every registered check; returns [(KIND, message)] in display order."""
+    flags, ctx = [], {}
+    for check in AUDIT_CHECKS:
+        flags.extend(check(cap, ctx))
+    return flags
+
+
+def cmd_audit(args):
+    """Anomaly sweep: things that are silently costing progress right now.
+
+    Every check here exists because a real one was missed. 27 Jul 2026: four
+    homelab build slots idle for 3.5 days; 81K chips on two hardware tracks
+    whose multiplicand was zero; a finished craft sitting unequipped; a
+    homelabInfo panel 1,348s stale. Run before optimizing anything.
+    """
+    cap, path = ihlib.load_capture(args.file)
+    print(f"# {path.name}")
+    flags = run_audit(cap)
     if not flags:
         print("  no anomalies")
         return
@@ -1272,7 +1387,8 @@ def _section_output(argv):
     try:
         with contextlib.redirect_stdout(buf):
             args.fn(args)
-    except SystemExit as e:          # a missing panel must not kill the digest
+    except (SystemExit, FileNotFoundError, ValueError) as e:
+        # a missing panel or empty ledger must not kill the digest
         buf.write(f"  [unavailable: {e}]\n")
     return buf.getvalue()
 
@@ -1615,7 +1731,12 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except (FileNotFoundError, ValueError) as error:
+        # The library raises real exceptions (never SystemExit — that poisoned
+        # importers and pytest); the CLI translates them here, once.
+        sys.exit(str(error))
 
 
 if __name__ == "__main__":
