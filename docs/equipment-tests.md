@@ -298,7 +298,28 @@ gross intake fell ~30–75% shallow-to-deep, rounds −0.9% to −2.9%, own hit 
 flat (77.0%), realized regen/round 263.0 → 255.4, attrition onset shape
 unchanged (~124–153).
 
-## driver-ab-2026-08-03 — OPEN (Slippery Driver of Armageddon, equipped 5 Aug 22:01:05Z)
+## driver-ab-2026-08-03 — CLOSED KEEP 6 Aug 2026 (Slippery Driver of Armageddon)
+
+**Outcome: KEEP. Mean death streak 189.2 over 47 post-equip deaths** (pre-declared n=24; closed late at n=47 — every death past target was confirmatory) **vs gate ≥ 172.2**. Delta +12.6 vs the 103-death same-loadout pre window (176.5), +15.0 vs the frozen 74-death baseline (174.2). Contamination checks pass: trailing cadence 4.649 vs era 4.65, no zone change. The whole post window sits after the VLAN → L15 +1% Def boundary and inside the declared bundle (5 Aug 290K-chip package, Snapshot Rollback), so **+12.6 prices the bundle, not the craft** — see the sim decomposition below. New standing baseline: **189.2** (retire 174.2/176.5).
+
+**First sim-vs-live agreement pair (the §9.4 calibration record opens at n=1, agreeing):**
+
+- Decision: sim said "comfortable KEEP, no gain" → live KEEP. **Agree.**
+- Sub-prediction **(b) fired**: live post 189.2 landed in the "~185+" branch, so the ~+10 sim-vs-live offset was **mostly the 5 Aug hardware package being real**, not instrument bias — the sim's absolute scale is usable when hardware is era-matched. Sub-prediction (a)'s 174.5–178.5 window missed for exactly that reason: it compared against a pre mean pooled mostly from pre-package deaths.
+- Craft's own live share: live post 189.2 − sim old-loadout-under-current-hardware 187.3 ≈ **+1.9 (± ~2)**, consistent with the paired sim readout −0.58 ± 1.03. The +44.0-score craft moved depth ~0; the bundle's +12.6 was hardware + procs + VLAN.
+- Snapshot Rollback: **41 procs in 6,561 post fights** (0.63%/fight) vs 3 in the whole pre window — a real bundled depth contributor, share not separable at this n.
+
+**Pre-registered treatment prediction grades** (declared before the craft ran):
+
+1. **Barrier pool — mechanism LANDED, level overshot upward.** Start pool 4,672 → 7,195 vs predicted ~6,050–6,500. Both gaps are identified: the roll realized +1,324 vs the ~+990 median assumed, and Packet Shield executed to L120 vs the ~L110 priced. The pool = gear × Packet Shield multiplier law held.
+2. **Rounds/fight UP — landed at depth, overshot shallow.** +13.5% at streak 106–130 (inside the +8–15% priced), but +16–22% at shallower bands.
+3. **Enemy hit rate DOWN — landed at the deep bands** (fourth out-of-sample hit-law test): −1.0pp at 106–130 and −2.3pp at 131–175 vs −1.5 ± 0.5 predicted; shallower bands overshot (−2.2 to −3.8pp).
+4. **Player damage per landed hit — MISSED, wrong sign.** Predicted −8–12% (CritDmg 50.9 → 17.4pp); realized **+9.6% to +15.3%** across bands. The of-Armageddon AtkDmg +32.1% outweighed the crit loss — the pre-registration under-priced the AtkDmg side of the executed (deeper-than-median) plan.
+- WATCH item (corruption stack exposure): **no signal** — damage taken per round *fell* ~12% at 106–130 despite +13.5% rounds; the stack-exposure hypothesis gains nothing.
+
+**Aegisbound Driver of Cataclysm released** (last live decompile lock; its tier observations persist in the capture archive).
+
+### (as declared — OPEN, equipped 5 Aug 22:01:05Z)
 
 Declaration and pre-registered predictions live in `ihlib.DRIVER_AB_2026_08_03`
 (gate: KEEP ≥ 172.2 / REVERT ≤ 169.2 over 24 post-equip deaths vs the frozen
@@ -318,3 +339,41 @@ absolute level for the *old* loadout under current hardware is 187.3 — if the
 live post mean instead rises toward ~185+, the +10 sim-vs-live offset was
 mostly the 5 Aug hardware package being real (and the sim's absolute scale is
 usable too, not just its differences). First post death: 183 (n=1/24).
+
+## router-ab-2026-08-06 — OPEN (Aggressive Router of the Undying, crafted 6 Aug ~19:45Z, NOT yet equipped)
+
+Declaration and gate live in `ihlib.ROUTER_AB_2026_08_06` (KEEP ≥ 187.2 /
+REVERT ≤ 184.2 over 24 post-equip deaths vs the frozen 47-death baseline
+189.2; equip_ms is the far-future sentinel until capture-pair proof at equip).
+Equip decision is SIM-FIRST (§9.4): a 15-run paired CI/CD block (new Router
+vs Titanic arms, alternating) decides the equip; this live gate is
+confirmation and the second sim-vs-live agreement pair.
+
+**Post-craft addendum, recorded BEFORE the sim block and before equip** (the
+craft realized above plan, so the pre-registered Regen forward test updates
+from its median-roll assumption to the now-known stats — this amends a
+diagnostic's input, not the gate): realized swap deltas vs Titanic are
+**Regen +63 listed** (171 vs 108; the declaration assumed +45.6 at median
+roll), Def +31.5pp affix, MaxHP +4.0pp, Thorns +1, AtkSpd −17.47pp,
+Eva −0.8pp. **Updated prediction (1): +7.5 ± ~1.5 streaks from the Regen term
+alone** (+63 × 0.119). Predictions (2)–(5) unchanged in form; (5)'s realized
+prg/round target scales to ~+120 loadout listed (~290 → ~410 if fully
+realized). Sim-block expectation: new-router arm − Titanic arm clearly
+positive; equip on that readout.
+
+**Equipped 6 Aug 19:49:24Z — the gate is HOT.** Boundary from capture-pair
+proof: last unequipped capture 19:47:38.601Z, first equipped 19:49:24.621Z
+(≤2 ambiguous minutes fall pre). The player equipped ahead of the sim block —
+the exhausted daily CI/CD budget was the binding constraint, which prompted
+the §9.2 tranche amendment (`simulator-protocol.md`). The new-vs-old paired
+block runs post-hoc at the 00:00 UTC budget reset as the **second sim-vs-live
+agreement pair**; its prediction stands as pre-registered above (+7.5 ± ~1.5
+from Regen alone). Titanic Router of the Undying is the live revert lock.
+
+**2-run absolute forecast, 6 Aug 20:34Z (pre-declared design, read in full):
+mean 200.5** (201.3 / 199.7; arm = the equipped loadout, verified
+stat-for-stat). Pre-declared read: ≥192 forecasts comfortable KEEP →
+**forecast gain ≈ +10.7 vs the 189.8 pre window**, at the top of the
+195–199 expected band. Era-offset pre-registration: live post mean maturing
+at ~198–203 validates the sim absolute at n=2 gear eras. Both runs died to
+Stealth Worm (corruption class) — watch the death-class mix at 200+.

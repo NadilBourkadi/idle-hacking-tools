@@ -705,6 +705,18 @@ Corollaries worth acting on:
   Working model; it also predicts that the long-standing "damage_taken − Σprg −
   Σpbs = HP drop does not close" residual is an off-by-one-round artefact.
 
+**Update 6 Aug 2026 — the magnitude is measured (CI/CD Regen pair).** The
+gear-set A/B the first corollary called for ran on the pipeline: +31 item-flat
+Regen (+59 at loadout, composition ×1.905) bought **+3.69 ± 0.72 streaks** at
+the ~176-arm faces — **~0.119 streaks per item-flat point**, 5σ, confounds
+net-negative (so mildly conservative). It reproduces the Shell live close
+exactly (+49 × 0.119 = +5.8). Regime-local to the deep-attrition era per the
+overheal cap above. The Regen:Barrier half of the question sharpened the same
+day: the driver A/B close + sim decomposition put a Barrier-carried +44-score
+craft at ~+1.9 ± 2 live streaks, so at these faces measured Regen converts
+**~5× more depth per score point than Barrier** (`open-questions.md` §15 — the
+Barrier side still needs its own isolating pair).
+
 **Method note.** This was found in the first two Software Profiler runs ever
 taken, from `enemy_stats` + full round logs, in about ten minutes. The same
 question had been open for a day against 381 live fights, because live logs

@@ -298,6 +298,23 @@ across the 3–5 Aug gap — treat them as expiring daily.
 - **Read only the full planned block.** The 5 Aug half-block read +1.00;
   the full block read −0.58. Half-block peeking on a ±1 SE instrument
   manufactures effects.
+- **Tranche the day's budget when a second question may arrive (adopted
+  6 Aug 2026, player-initiated).** On 6 Aug the Regen pair consumed 13/15
+  runs hours before the Router equip decision needed a block, and the equip
+  went ahead un-simmed. Rule: if a same-day follow-up is plausible (a craft
+  in flight, an equip pending), **pre-declare a primary tranche of 8–9 runs
+  and hold the remainder in reserve**; spend the reserve on the follow-up,
+  or — if none arrives by ~2h before the UTC reset — on extending the
+  primary (runs don't bank). Power math from the 6 Aug block: an 8-run
+  (4/4) tranche gives SE ≈ 0.9–1.3, which resolves any decision-grade
+  effect (predicted |Δ| ≥ 3 streaks) at ≥3σ. **Near-zero-effect fits
+  (Barrier-at-depth, MaxHP) still get the FULL block** — the 5 Aug driver
+  pair needed all 15 runs to bound ~0 at ±1. This does not weaken the
+  no-peeking rule: the sin is reading a fraction of a planned block, and a
+  pre-declared 8-run tranche read in full is a complete block. Budget grows
+  with pipeline level (L4 = 20/day, building as of 6 Aug), which makes the
+  reserve pattern cheaper; whether a mid-day level-up raises that day's
+  budget is unobserved — note it when L4 completes.
 - Sets are built from **owned items as-is** — the pipeline can test a
   *finished* item pre-equip, but cannot test a craft *ceiling*. Craft
   approval stays with the §10.1 contract simulator; the pipeline's job is
@@ -308,9 +325,9 @@ across the 3–5 Aug gap — treat them as expiring daily.
 | property | status |
 |---|---|
 | variance realism | **GOOD** — per-streak sd ~6–7 vs live 6.92 |
-| absolute level | **+~10 vs live, CONFOUNDED** (open question §14) — use differences only |
-| mechanics | final-streak arithmetic exact; final-enemy archetypes match live death profile (Trojan Wall/Rootkit) |
-| decision agreement with live | **n=0 pairs** — first pair closes with `driver-ab-2026-08-03` (prediction pre-registered in `equipment-tests.md`) |
+| absolute level | **USABLE when hardware is era-matched** (§14 resolved 6 Aug: the +10 offset was mostly the 5 Aug hardware package being real; residual ≈ −2 at matched hardware). Re-measure once per gear era (§9.4) |
+| mechanics | final-streak arithmetic exact; final-enemy archetypes match live death profile (Trojan Wall/Rootkit); Snapshot Rollback simulation status unknown (§14 residual) |
+| decision agreement with live | **n=1 pairs, agreeing** — `driver-ab-2026-08-03` closed KEEP 6 Aug; sim said comfortable-KEEP/no-gain, live craft share ~+1.9 ± 2 vs sim −0.58 ± 1.03 (`equipment-tests.md`) |
 
 ### 9.4 Role vs live A/B testing — the policy (5 Aug 2026)
 

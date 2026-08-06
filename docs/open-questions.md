@@ -156,22 +156,20 @@ Every A/B in this workspace has been read as if hack-level growth inside the win
 
 Not confirmed: n is 5–7 per bucket, the day also contains a zone change and the Analyzer/hardware/Router bundle, and enemy level at death ranged 1,673–1,843 without an obvious trend. Needs: peak death streak regressed on hack level within one zone and one gear configuration, over a window with no equipment change. Until then keep segmenting baselines at gear boundaries, but stop treating a multi-hour window as automatically spoiled by levelling.
 
-### 14. CI/CD Pipeline — what is the ~+10 absolute offset made of?
+### 14. CI/CD Pipeline — what is the ~+10 absolute offset made of? — **RESOLVED 6 Aug 2026 (evening): mostly the hardware package, real**
 
-First light 5 Aug 2026: the pipeline's old-loadout arm simulated a mean final
-streak of 187.3 while the live same-gear baseline is 176.5 (103 deaths).
-Variance realism is right (per-streak sd ~6–7 vs live 6.92) but the level is
-~+10 high. Confounded candidates: (a) the sim ran under the 5 Aug 290K-chip
-hardware package (ECC L171 / Packet Shield L120 / Malware Injector L74) while
-most of the live baseline predates it — some of the offset is *real*; (b) the
-sim may model no zone transitions, no mid-streak drift, or (c) proc systems
-differently — is Snapshot Rollback (25% HP on lethal, 1/10 fights) simulated
-at all? (`PostCombatHeal` does appear in the sim's stat vector; Rollback is a
-proc, not a stat.) **Resolves free of charge when `driver-ab-2026-08-03`
-closes**: live post mean ≈ 176–178 ⇒ offset is mostly instrument bias, use
-paired differences only; live post mean → ~185+ ⇒ the hardware package was
-real and the sim's absolute scale is usable. Until then, CI/CD readouts are
-differences, never levels.
+The pre-registered discriminator fired on the (b) branch: `driver-ab-2026-08-03`
+closed at a live post mean of **189.2** — in the "~185+" region, not the
+"176–178" region — so the +10 offset was **mostly the 5 Aug 290K-chip hardware
+package being real**, not instrument bias. Residual sim-vs-live gap at matched
+hardware ≈ −2 (sim old-arm 187.3 vs live 189.2 carrying the craft's ~+1.9),
+inside noise, with some share owed to Snapshot Rollback procs (41 in 6,561
+post fights) whose simulation status is still unknown. Recorded as an
+instrument property in `simulator-protocol.md` §9.3: **the sim's absolute
+scale is usable when its hardware matches the live era**; re-measure the
+offset once per gear era per §9.4. Residual sub-question kept: whether the
+sim models Rollback (run a with/without-Rollback pair if it ever becomes
+uninstallable, or compare sim best/worst logs for a 25%-HP revive signature).
 
 ### 15. Does the Barrier weight over-price death-streak depth?
 
@@ -182,11 +180,16 @@ once-per-fight 1.00×-stat drawdown law; archive tier ladders), so the suspect
 is the *conversion*: at the 180+ streak faces the enemy alpha may consume the
 whole pool in ~1–2 rounds, making Barrier's marginal depth value shrink with
 depth even though the drawdown law holds at every depth. Prior Barrier-carried
-verdicts (Analyzer 27 Jul, Daemon 29 Jul) landed in shallower eras. Resolves:
-the live A/B close (does the live effect match the sim's ~0?), then a
-dedicated CI/CD pair isolating Barrier at matched depth. Until resolved, treat
-Barrier-carried score deltas at deep streaks as optimistic on depth — they may
-still be real on economy (shorter drawdown ⇒ fewer near-death fights).
+verdicts (Analyzer 27 Jul, Daemon 29 Jul) landed in shallower eras. **The live
+close corroborates the sim (6 Aug): decomposing `driver-ab-2026-08-03`'s
++12.6 bundle against the sim's matched-hardware absolute leaves the craft's
+own depth share at ~+1.9 ± 2 — a +44.0-score, Barrier-carried craft again
+reading ~0 depth, now in live data.** Still open on mechanism (alpha-consumes-
+the-pool is the suspect); next step is a dedicated CI/CD pair isolating
+Barrier at matched depth. Until resolved, treat Barrier-carried score deltas
+at deep streaks as optimistic on depth — they may still be real on economy
+(shorter drawdown ⇒ fewer near-death fights; note the driver window's
+damage-taken/fight at streak 24–42 *fell* 306 → 181 behind the bigger pool).
 
 ### 16. Contract carry-through — residual unknowns (mechanic in `mechanics.md` §20)
 
@@ -414,3 +417,21 @@ homelab/hardware side effects, player level. The economic law is unchanged
 check reads a trailing 50-death window so the next step fires DRIFT. If a step
 ever aligns with a single change-point, that change identifies the mover — the
 daily-median table is one `fight_cadence()` group-by away.
+
+### 17. Events — a player-reported income system nothing in the workspace models (added 6 Aug 2026)
+
+The ~136K-chip inflow of 5–6 Aug came from an **Event**: mass-player
+collaborative, limited-time, contributions via gathering or hacking, manual
+queueing required (the player queued gathering). Nothing in any capture,
+doc or audit check models these. Unknown: (a) payout structure — this one
+paid chips; do events pay hackcoin or credits, and is pay proportional to
+contribution or bracketed? (b) frequency/schedule — is there a calendar the
+client exposes? (c) **is event state visible in the capture?** If a binding
+exists, `audit` should price an open event exactly like the contract board
+(it is the same shape: attention-gated, expiring income). (d) does event
+gathering conflict with harvest-contract gathering (one active gather?).
+One capture taken while an event is open and queueable settles (c) and
+likely (a); the player noticing the next event's announcement settles (b).
+
+
+**Lead, 6 Aug 2026 (found during the public-repo audit):** `currentPlayer` carries `game_tick_ms = 5000` / `tick_seconds = 5` — a server tick constant sitting 7% above the measured 4.65 s/fight cadence era. If fight cadence is derived from this tick minus some processing offset, the era-steps may be server-version steps (`server_version` is also in the capture and changes on deploys — check whether cadence era boundaries coincide with `server_version` changes across the capture archive).

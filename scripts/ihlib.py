@@ -1397,7 +1397,7 @@ def captured_ms(capture):
         stamp.replace("Z", "+00:00")).timestamp() * 1000
 
 
-def measured_credits_per_hour(max_gap_s=300):
+def measured_credits_per_hour(max_gap_s=300, trailing_h=None):
     """Credits/hr from the ledger's own fight rewards, or None.
 
     Gap-aware, and it has to be: the ledger spans six days of wall clock but
@@ -1406,6 +1406,11 @@ def measured_credits_per_hour(max_gap_s=300):
     ledger timestamp range is not playing time. Elapsed accrues only across
     consecutive fights less than `max_gap_s` apart (the stream polls every
     150 s, so 300 s spans a normal poll without spanning a closed browser).
+
+    `trailing_h` restricts to the last N hours of records. The rate grows
+    with the build (6.6M/hr on 23 Jul -> 23.8M/hr on 6 Aug), so the pooled
+    all-history figure permanently lags the current era -- same drift the
+    cadence check hides without its trailing window.
     """
     rows, seen = [], set()
     for record in stream_records():
@@ -1419,6 +1424,9 @@ def measured_credits_per_hour(max_gap_s=300):
         if ms:
             rows.append((ms, (record.get("fight") or {}).get("credits_gained") or 0))
     rows.sort()
+    if trailing_h and rows:
+        cutoff = rows[-1][0] - trailing_h * 3600 * 1000
+        rows = [r for r in rows if r[0] >= cutoff]
     total, seconds, prev = 0.0, 0.0, None
     for ms, credits in rows:
         total += credits
@@ -1463,7 +1471,10 @@ def _chk_hardware_curve(cap):
     hw = hardware_state(cap)
     if not hw:
         return ("SKIP", "no hardwareInfo in this capture")
-    _a, _p, spread = hardware_cost_curve(hw)
+    fit = hardware_cost_curve(hw)
+    if fit is None:
+        return ("SKIP", "too few eligible tracks to fit the curve")
+    _a, _p, spread = fit
     return (("OK" if spread < 1.05 else "DRIFT"),
             f"single-family fit spread {spread:.3f} (want < 1.05); the whole-"
             f"build total self-checked to +1.0% vs the game's reset refund")
@@ -1485,12 +1496,17 @@ def _chk_cadence(cap):
 
 
 def _chk_credits_hr(cap):
-    rate = measured_credits_per_hour()
+    # Trailing window only, for the same reason as the cadence check: the
+    # rate grows with the build, so the pooled all-history figure lags the
+    # current era and the check would sit "OK" (or DRIFT the wrong way)
+    # while the constant rotted. It did exactly that until 6 Aug 2026:
+    # pooled said 17.0M vs constant 12M while the trailing rate was 23.8M.
+    rate = measured_credits_per_hour(trailing_h=72)
     if rate is None:
-        return ("SKIP", "no fight rewards in the ledger")
+        return ("SKIP", "no fight rewards in the trailing 72h of the ledger")
     return (("OK" if abs(rate - CREDITS_PER_HOUR) / CREDITS_PER_HOUR < 0.35
              else "DRIFT"),
-            f"ledger says {rate / 1e6:.1f}M/hr vs constant "
+            f"trailing 72h says {rate / 1e6:.1f}M/hr vs constant "
             f"{CREDITS_PER_HOUR / 1e6:.0f}M/hr")
 
 
@@ -1596,20 +1612,24 @@ def assumptions():
          "5.19x at stat 17.36 vs 4.95x at 71.61 (within 5%). Output-only "
          "basis: the 1.5x regen rider is real but enemy regen is already "
          "floored at 0 in 95%+ of rounds, so there is no further gain", "30 Jul 2026 (mechanism refined)", None),
-        ("CRAFT_WEIGHTS_FLAT[Regen]", f["Regen"], "asserted",
-         "DIRECTION is measured -- regeneration moved the death ceiling twice "
-         "(+20.5 streaks on +35.3% realized prg; +7.0 on the Shell) -- but the "
-         "0.6 scalar has never been fitted, and 28 Jul showed it is NOT FLAT: "
-         "a +29.7% listed buy realized +0.4% / +4.7% / +11.5% of prg/round at "
-         "streak bands 60-85 / 86-105 / 106-130. Realization rises with "
-         "depletion (overheal capping, open-questions.md), so a flat weight "
-         "over-prices regen shallow and a second large buy will realize less "
-         "again. COUNTERPOINT 31 Jul: the Firewall's +8.0% listed buy "
-         "realized +8.1% of prg/round at streak >= 60 (244.2 -> 263.9) -- at "
-         "streaks 150-180 realization is ~100% of listed, so the 'realize "
-         "less again' prediction did NOT bite at this depth. The scalar "
-         "itself remains unfitted; needs CI/CD Pipeline",
-         "direction only; magnitude falsified as flat 28 Jul", None),
+        ("CRAFT_WEIGHTS_FLAT[Regen]", f["Regen"], "measured",
+         "MAGNITUDE MEASURED 6 Aug 2026 on the CI/CD Regen pair (Pinpoint vs "
+         "Assault-of-Penetration kernels, 7/6 alternating runs): +31 item-flat "
+         "Regen (+59 at loadout, composition x1.905) bought +3.69 +- 0.72 "
+         "sim streaks at the ~176-arm faces -- ~0.119 streaks per item-flat "
+         "point, a 5-sigma paired readout whose confounds net NEGATIVE "
+         "(ArmorPen -46% rel, Corrupt -5.6, MaxHP -198 vs Acc +0.8pp hit), "
+         "so it mildly understates Regen alone. Cross-checks live history: "
+         "the Shell's +49 item Regen x 0.119 = +5.8, exactly its live close. "
+         "DIRECTION was already measured twice (+20.5 streaks on +35.3% "
+         "realized prg; +7.0 on the Shell). Depth-dependence stands "
+         "(mechanics.md par.17): realization rises with depletion, ~100% of "
+         "listed at streaks 150+, so this fit is REGIME-LOCAL to the current "
+         "deep-attrition era -- re-fit if the era shallows. The 0.6 score "
+         "scalar is retained as consistent (implied ~5.0 score/streak for "
+         "Regen; contrast Barrier's >=23 -- the cross-family distortion is "
+         "open question par.15, not a Regen problem)",
+         "6 Aug 2026", None),
         ("CRAFT_WEIGHTS_PCT[Def]", w["Def"], "measured",
          "RE-FIT 1.0 -> 0.45, 29 Jul 2026, and the old 1.0 was inflated by "
          "THREE compounding errors. (1) The mitigation law is "
@@ -1774,10 +1794,10 @@ def assumptions():
          _chk_contract_drop),
         ("CREDITS_PER_HOUR", CREDITS_PER_HOUR, "measured",
          "fight rewards only; homelab jobs outspend it ~10x, and contracts "
-         "add lumpy income on top. The live check pools the whole ledger and "
-         "so runs BEHIND the current rate (6.6M/hr on 23 Jul, 9.6M on 27 Jul, "
-         "13.1M on 28 Jul as the build deepened) -- do not 'correct' the "
-         "constant down to the pooled figure", "28 Jul 2026", _chk_credits_hr),
+         "add lumpy income on top. Grows with the build (6.6M/hr 23 Jul -> "
+         "23.8M/hr 6 Aug), so the live check uses a trailing 72h window -- "
+         "the old pooled check lagged the era and let the constant sit at "
+         "half the true rate for a week", "6 Aug 2026", _chk_credits_hr),
         ("TIER_STEP_SHALLOW / _DEEP", f"{TIER_STEP_SHALLOW}/{TIER_STEP_DEEP}",
          "measured", "fitted archive-wide and re-fitted on every run by "
          "fit_tier_steps, so it cannot rot as the inventory turns over",
@@ -1836,7 +1856,27 @@ def prediction_records(path=PREDICTIONS_PATH):
 def record_prediction(item, slot, projected, realized=None, p10=None, p90=None,
                       p_upgrade=None, date=None, model=CURRENT_MODEL, note="",
                       path=PREDICTIONS_PATH):
-    """Append one prediction. Call at contract time, fill `realized` after."""
+    """Append one prediction at contract time; fill `realized` after.
+
+    A realized-only call (projected is None, realized given) UPDATES the
+    newest un-realized row for the same item instead of appending. Until
+    6 Aug 2026 it appended an orphan all-None row and left the real row
+    ungraded -- the documented fill flow simply did not exist, and the 5 Aug
+    driver grade had been filled by hand-editing the JSONL.
+    """
+    if realized is not None and projected is None:
+        rows = [json.loads(line) for line in
+                path.read_text().splitlines() if line.strip()]
+        for row in reversed(rows):
+            if row.get("item") == item and row.get("realized") is None:
+                row["realized"] = realized
+                if note:
+                    row["note"] = (row.get("note") or "") + " || " + note
+                path.write_text(
+                    "".join(json.dumps(r) + "\n" for r in rows))
+                return row
+        raise SystemExit(f"no un-realized prediction row for {item!r} -- "
+                         "record the contract-time row first")
     row = {"date": date, "item": item, "slot": slot, "projected": projected,
            "p10": p10, "p90": p90, "p_upgrade": p_upgrade,
            "realized": realized, "model": model, "note": note}
@@ -1916,12 +1956,18 @@ SUSPECT_WEIGHTS = {
     # Acc REMOVED 29 Jul 2026: it was flagged "measured saturated 27 Jul",
     # which §18 falsified. Hit rate at the evasion streak 120-159 actually
     # faces is 76-79%, nowhere near a cap, and the weight is now fitted from
-    # logit(hit) = 0.532 + 1.208*ln(Acc/Eva). A stale suspect flag is as
-    # misleading as a stale weight -- it discounts a Δ that is now sound.
+    # the corrected hit law (HIT_LOGIT_A/_B = -0.164/1.420; the 0.532/1.208
+    # fit quoted here until 6 Aug 2026 was the retired pm-biased one). A
+    # stale suspect flag is as misleading as a stale weight -- it discounts
+    # a Δ that is now sound.
     "MaxHP": "still UNMEASURED — pure attrition buffer, and the profiler's "
              "full-HP single fights cannot see it (needs CI/CD Pipeline)",
-    "Regen": "magnitude still UNMEASURED for the same reason; direction is "
-             "solid and realization is depletion-dependent (mechanics.md §17)",
+    # Regen REMOVED 6 Aug 2026: magnitude measured on the CI/CD pair at
+    # +3.69 +- 0.72 streaks per +31 item-flat (5-sigma, confounds net
+    # negative, matches the Shell live close at 0.119 streaks/point). A
+    # stale suspect flag is as misleading as a stale weight -- it was
+    # discounting every Regen-carried Δ that is now the best-measured
+    # family in the table. Fit is regime-local (deep-attrition era).
 }
 
 
@@ -2011,7 +2057,10 @@ CONTRACT_DROP_PER_WIN = 0.296
 HARVEST_PER_GATHER_HOUR = 700
 
 # Credit income, measured from the stream ledger rather than assumed.
-CREDITS_PER_HOUR = 12e6
+# Trailing-72h fit 6 Aug 2026 (23.8M/hr over 9.6h of play, ~7,000 fights);
+# grows with the build, so expect upward drift -- the live check is
+# trailing-window and will flag it.
+CREDITS_PER_HOUR = 24e6
 
 # Hackcoin sells for credits, so the credit balance is NOT the credit budget.
 # Player-supplied rate, 28 Jul 2026. This single number reprices the whole
@@ -2052,7 +2101,9 @@ def credit_runway(capture, per_hour=CREDITS_PER_HOUR,
     homelab, definitions, _ = homelab_state(capture)
     installed = (homelab or {}).get("installed") or {}
     pending = []
-    for d in definitions.get("installs") or []:
+    # definitions is None when the capture lacks homelabInfo (lazy panel) --
+    # 3 of the first 144 archive captures do, and this crashed `audit` on them.
+    for d in (definitions or {}).get("installs") or []:
         if installed.get(d.get("type")):
             continue
         cost = d.get("cost") or {}
@@ -2751,9 +2802,80 @@ DRIVER_AB_2026_08_03 = {
                  "gains a live data point.",
 }
 
+DRIVER_AB_2026_08_03["concluded"] = (
+    "KEEP — 6 Aug 2026. Mean 189.2 over 47 deaths (pre-declared 24; closed "
+    "late, every extra death confirmatory) vs gate 172.2; +12.6 vs the "
+    "103-death same-loadout pre window (176.5), +15.0 vs the frozen 74-death "
+    "baseline (174.2). Contamination clean: cadence 4.649 trailing vs era "
+    "4.65, no zone change; whole post window sits after the VLAN +1% Def "
+    "boundary and inside the declared bundle (290K-chip package, Snapshot "
+    "Rollback — 41 procs/6,561 post fights). First sim-vs-live pair: "
+    "sub-prediction (b) fired — live post 189.2 vs sim old-arm absolute "
+    "187.3 means the +10 offset was mostly the hardware package being real, "
+    "the sim's absolute scale is usable era-matched, and the craft's own "
+    "live share (~+1.9 +-2) matches the sim's -0.58 +- 1.03. Prediction "
+    "grades in equipment-tests.md; new standing baseline 189.2.")
+
+ROUTER_AB_2026_08_06 = {
+    "name": "router-ab-2026-08-06",
+    "item": "Aggressive Router of Recovery",  # will rename on promotion
+    "slot": "Router",
+    # Declared BEFORE the craft ran (6 Aug 2026 evening, same session as the
+    # CI/CD Regen fit that unblocked it), equip_ms held at the far-future
+    # sentinel per the driver lesson until capture-pair proof existed.
+    # Boundary set ~19:50Z same day: last unequipped capture 19:47:38.601Z,
+    # first equipped 19:49:24.621Z -- every fight after it is certainly
+    # post-equip; the <=2 ambiguous minutes fall pre. Player equipped ahead
+    # of the sim-first block (reasonable: P(upgrade) 92.5% on measured
+    # weights, realized +44.9); the 00:00 UTC CI/CD block still runs
+    # new-vs-old arms as the second agreement pair, now post-hoc.
+    "equip_ms": 1786045764621,          # 2026-08-06T19:49:24.621Z
+    "boundary_fight_id": None,
+    # Baseline = the full post-Driver same-loadout era at declaration
+    # (driver-ab-2026-08-03 closed KEEP 6 Aug at 189.2/47); frozen here for
+    # the gate numbers, era keeps accruing until equip.
+    "baseline_deaths": [183, 192, 201, 179, 197, 198, 188, 183, 194, 175,
+                        180, 187, 187, 190, 191, 188, 193, 198, 185, 183,
+                        192, 193, 192, 186, 192, 184, 186, 191, 184, 182,
+                        196, 186, 192, 196, 196, 190, 191, 191, 195, 194,
+                        186, 185, 184, 197, 194, 185, 179],
+    "baseline_hits": (254064, 80607),   # post-Driver era player ph/pm basis
+    "target_deaths": 24,
+    "baseline_recent_ms": 1785967265758,  # Driver equip -- same-loadout era
+    # DECLARED BUNDLE by policy: the 6 Aug ECC-directed 144K-chip package
+    # (ECC L181 -- Regen-relevant), tonight's contract-board evening and any
+    # homelab level-13 installs land near this window. Equip decision itself
+    # is SIM-FIRST (par 9.4): a 15-run paired CI/CD block (post-craft vs
+    # current loadout) decides the equip; this live gate is confirmation +
+    # the second sim-vs-live agreement pair.
+    "segment_ms": None,
+    "keep_rule": "KEEP if mean death streak >= 187.2 (baseline 189.2 - 2); "
+                 "REVERT if mean <= 184.2. Contamination checks only: no "
+                 "zone change in the window, and fight cadence must stay at "
+                 "the ~4.65 era value (trailing-window check). "
+                 "PRE-REGISTERED treatment predictions (diagnostics, not "
+                 "gates, written before the CRAFT ran, from the deepened "
+                 "contract's projection): (1) REGEN LAW FORWARD TEST -- the "
+                 "first out-of-sample test of the 6 Aug CI/CD fit: swap "
+                 "Regen delta at median roll is +45.6 listed (153.6 proj vs "
+                 "Titanic 108), so predict +5.4 streaks from the Regen term "
+                 "alone at 0.119 streaks/listed-point; (2) rounds/fight at "
+                 "matched band UP ~10-18% (AtkSpd -17.47pp per the measured "
+                 "-2..-5% per +9.9%) -- the priced cost; (3) damage taken "
+                 "per landed enemy hit at matched band DOWN ~4-8% (Def "
+                 "affix +24.1pp -> stat +~10.5% via the 0.435 pool factor, "
+                 "elasticity -0.88 on the ~41% direct channel); (4) enemy "
+                 "hit rate on us UP ~+0.5pp (loadout Eva -1.97pp, inverse "
+                 "hit law); (5) realized prg/round at streak >= 60 rises "
+                 "toward the +87 loadout listed delta (~290 -> ~375 if "
+                 "fully realized; mechanics par 17 predicts near-full "
+                 "realization at this depth). NOTE no Barrier change on "
+                 "this swap -- a clean Regen/Def family test.",
+}
+
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = DRIVER_AB_2026_08_03
+ACTIVE_EXPERIMENT = ROUTER_AB_2026_08_06
 
 
 STREAM_DIR = ROOT / "data" / "combat-stream"
@@ -2920,16 +3042,18 @@ HIT_LOGIT_B = 1.420
 
 
 def hit_chance(accuracy, evasion):
-    """logit(p) = 0.532 + 1.208 * ln(Accuracy / Evasion).
+    """logit(p) = -0.164 + 1.420 * ln(Accuracy / Evasion)  (HIT_LOGIT_A/_B).
 
     Resolves open question §7. Fitted range: Acc/Eva ratio 1.20-3.07. At the
     ratios this build actually fights at (streak 120-159 faces evasion
     4,857-5,386) true per-attack hit rate is 65-68% -- nowhere near saturated,
     which retires the 'Accuracy is saturated' reading of 27 Jul and makes
-    Accuracy worth roughly DOUBLE what the biased fit implied."""
-    import math as _m
-    z = HIT_LOGIT_A + HIT_LOGIT_B * _m.log(accuracy / evasion)
-    return 1.0 / (1.0 + _m.exp(-z))
+    Accuracy worth roughly DOUBLE what the biased first fit (0.532 + 1.208
+    ln(r), from the pm-denominator artefact -- see the block comment above)
+    implied. Until 6 Aug 2026 this docstring quoted that retired fit while
+    the constants three lines up held the corrected one."""
+    z = HIT_LOGIT_A + HIT_LOGIT_B * math.log(accuracy / evasion)
+    return 1.0 / (1.0 + math.exp(-z))
 
 
 # Damage mitigation. Same functional form fits BOTH directions independently:

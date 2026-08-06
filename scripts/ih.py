@@ -43,7 +43,7 @@ import statistics
 import sys
 import textwrap
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import ihlib
 
@@ -680,20 +680,40 @@ def cmd_sims(args):
                   f"{r['streak_avg'] or 0:>7.1f} "
                   f"{r['streak_min'] or 0:>4}-{r['streak_max'] or 0:<4}  "
                   f"{r['loss_archetype'] or '-'}")
-        by_set = {}
+        # Arm summaries are PER UTC DAY-BLOCK, and arms are identified by
+        # their player_combat_stats vector, never the label. Until 6 Aug 2026
+        # this pooled every day's rows by gear_set label — mixing the 5 Aug
+        # driver pair with the 6 Aug kernel pair under the same "A"/"B" and
+        # printing a cross-experiment difference that meant nothing.
+        by_day = {}
         for r in crows:
-            if r.get("streak_avg") is not None:
-                by_set.setdefault(r["gear_set"], []).append(r["streak_avg"])
-        if len(by_set) > 1:
-            print("\n  arms (mean of run-averages ± SE; identify arms from "
-                  "player_combat_stats, NOT the label):")
-            for name, means in sorted(by_set.items()):
+            if r.get("streak_avg") is None or not r.get("seen_ms"):
+                continue
+            day = datetime.fromtimestamp(
+                r["seen_ms"] / 1000, timezone.utc).date().isoformat()
+            by_day.setdefault(day, []).append(r)
+        for day, rs in sorted(by_day.items()):
+            arms = {}
+            for r in rs:
+                fp = tuple(sorted((r.get("player_combat_stats") or {}).items())) \
+                    or r["gear_set"]
+                arms.setdefault(fp, []).append(r)
+            if len(arms) < 2:
+                continue
+            print(f"\n  {day} block — arms by stat vector (mean of "
+                  f"run-averages ± SE; labels shown are display only):")
+            named = []
+            for fp, group in sorted(arms.items(),
+                                    key=lambda kv: kv[1][0]["seen_ms"]):
+                labels = sorted({str(g["gear_set"]) for g in group})
+                means = [g["streak_avg"] for g in group]
                 se = (statistics.stdev(means) / len(means) ** 0.5
                       if len(means) > 1 else float("nan"))
-                print(f"    {str(name):<10} runs={len(means)}  "
+                named.append(("/".join(labels), means))
+                print(f"    {'/'.join(labels):<10} runs={len(means)}  "
                       f"{statistics.mean(means):7.2f} ± {se:.2f}")
-            if len(by_set) == 2:
-                (na, ma), (nb, mb) = sorted(by_set.items())
+            if len(named) == 2:
+                (na, ma), (nb, mb) = named
                 diff = statistics.mean(ma) - statistics.mean(mb)
                 se = ((statistics.variance(ma) / len(ma) +
                        statistics.variance(mb) / len(mb)) ** 0.5
@@ -855,10 +875,44 @@ def cmd_audit(args):
             flags.append(("RESERVE", f"{info.get('hackcoin')} free hackcoin vs "
                                      f"{need} needed for pending installs"))
 
-    # Contracts expire on a daily UTC reset and unfinished progress is lost.
-    # They are also the only repeatable hackcoin source observed, and hackcoin
-    # gates every install. Added 28 Jul 2026 -- the sweep had no contract check
-    # at all, and an Extended Elimination sat at 658/1424 with 2.4h to run.
+        # Free measurement capacity that expires daily. Added 6 Aug 2026: the
+        # first fresh CI/CD budget after first light went unflagged by this
+        # sweep. Runs do not bank across days (checked over the 3-5 Aug gap),
+        # and the register's remaining asserted constants all name the
+        # pipeline as their unblock -- budget expiring while those fits are
+        # pending is progress lost silently: the held Corrupt crafts and the
+        # hardware reset re-cut stay blocked on numbers an idle instrument
+        # could be measuring.
+        if definitions:
+            cicd_level = next((u["level"] for u in
+                               ihlib.iter_homelab_upgrades(homelab, definitions)
+                               if u["def"].get("name") == "CI/CD Pipeline"), 0)
+            pending_fits = [n.rsplit("[", 1)[-1].rstrip("]")
+                            for n, _v, prov, basis, _when, _chk
+                            in ihlib.assumptions()
+                            if prov == "asserted" and "CI/CD" in (basis or "")]
+            if cicd_level and pending_fits:
+                cicd_budget = 5 * cicd_level
+                today_utc = datetime.now(timezone.utc).date()
+                used = sum(1 for r in ihlib.cicd_rows()
+                           if r.get("seen_ms") and datetime.fromtimestamp(
+                               r["seen_ms"] / 1000, timezone.utc).date()
+                           == today_utc)
+                if used < cicd_budget:
+                    flags.append(("MEASURE",
+                                  f"{cicd_budget - used}/{cicd_budget} CI/CD "
+                                  f"runs unused today (they expire at the UTC "
+                                  f"day reset and do not bank) — "
+                                  f"{', '.join(pending_fits)} still asserted "
+                                  f"with the pipeline as named unblock; the "
+                                  f"held Corrupt crafts and the hardware "
+                                  f"reset re-cut wait on those fits"))
+
+    # The board resets daily (UTC): pending contracts are replaced, the ACTIVE
+    # one carries through and runs to completion (mechanics.md §20, corrected
+    # 6 Aug 2026). Contracts are the only repeatable hackcoin source observed,
+    # and hackcoin gates every install. Added 28 Jul 2026 -- the sweep had no
+    # contract check at all; an Extended Elimination sat at 658/1424 with 2.4h.
     board = ihlib.contract_board(cap)
     left = board["hours_left"]
     active = board["active"]
@@ -984,8 +1038,10 @@ def cmd_audit(args):
                           for n, c, hc in pending if c)
         flags.append(("CREDITS", f"{balance / 1e9:.1f}B of credit-equivalent "
                                  f"budget does not cover the remaining "
-                                 f"installs — {names}. At ~12M/hr fight income "
-                                 f"that is {hours:,.0f}h of banking"))
+                                 f"installs — {names}. At "
+                                 f"~{ihlib.CREDITS_PER_HOUR / 1e6:.0f}M/hr "
+                                 f"fight income that is {hours:,.0f}h of "
+                                 f"banking"))
     # The hackcoin half of an install dwarfs its credit half at the current
     # exchange rate, so the gate to watch is hackcoin, not the credit balance.
     free_hc = (cap["state"].get("currentPlayer") or {}).get("hackcoin") or 0
@@ -1394,7 +1450,14 @@ def cmd_brief(args):
     close, or surprising gets the full command — never conclude from a
     thing's absence in this output.
     """
-    latest = ihlib.capture_paths()[-1] if ihlib.capture_paths() else None
+    # Pin the capture ONCE and pass it to every section that reads one. The
+    # hub routes captures asynchronously: on 6 Aug 2026 a capture landed
+    # mid-digest and the audit section ran on the previous file while stats
+    # ran on the new one — a torn read that printed already-resolved STALE
+    # flags with no indication the sections disagreed.
+    paths = ihlib.capture_paths()
+    latest = paths[-1] if paths else None
+    prev = paths[-2] if len(paths) > 1 else None
     print("# ih.py brief — triage digest. Full commands remain canonical; "
           "drill into anything flagged or close.")
     if latest:
@@ -1407,20 +1470,22 @@ def cmd_brief(args):
             stale = "  ** capture is stale — ask for a fresh one **" \
                 if age_h > 12 else ""
             print(f"# latest capture is {age_h:.1f}h old{stale}")
+    pin = ["--file", str(latest)] if latest else []
     sections = [
-        ("audit — outranks everything below", ["audit"], None),
+        ("audit — outranks everything below", ["audit"] + pin, None),
         ("freshness", ["captures"],
          lambda t: "\n".join(t.splitlines()[-1:])),
-        ("stats", ["stats"], None),
-        ("assumptions (asserted/supplied/drifting only)", ["assumptions"],
-         _brief_assumptions),
+        ("stats", ["stats"] + pin, None),
+        ("assumptions (asserted/supplied/drifting only)",
+         ["assumptions"] + pin, _brief_assumptions),
         ("calibration (current era)", ["calibration"], _brief_calibration),
-        ("potential (band-clearing candidates only)", ["potential"],
+        ("potential (band-clearing candidates only)", ["potential"] + pin,
          _brief_potential),
-        ("homelab", ["homelab"], _brief_homelab),
-        ("hardware (top tracks)", ["hardware"], _brief_hardware),
+        ("homelab", ["homelab"] + pin, _brief_homelab),
+        ("hardware (top tracks)", ["hardware"] + pin, _brief_hardware),
         ("ab", ["ab"], _brief_ab),
-        ("diff vs previous capture", ["diff"], _brief_diff),
+        ("diff vs previous capture",
+         ["diff"] + ([str(prev), str(latest)] if prev else []), _brief_diff),
     ]
     for title, argv, filt in sections:
         text = _section_output(argv)
