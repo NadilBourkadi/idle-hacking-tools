@@ -387,7 +387,6 @@ def cmd_homelab(args):
     # as in-flight points just like running ones.
     jobs = homelab.get("active_jobs") or []
     pending = homelab.get("pending_jobs") or []
-    tick_s = info.get("tick_seconds") or 5
     in_flight_points = 0
     # ETAs share a DECLINING split: as each active job finishes the rest speed
     # up, so a fixed divisor over-states all but the longest.
@@ -426,7 +425,6 @@ def cmd_homelab(args):
     install_names = {d.get("type"): d.get("name")
                      for d in (installs if isinstance(installs, list)
                                else installs.values())}
-    tick_s = info.get("tick_seconds") or 5
     free = (info.get("max_build_slots") or 0) - len(jobs)
     room = (info.get("max_queue_jobs") or 0) - len(pending)
     if free or room:

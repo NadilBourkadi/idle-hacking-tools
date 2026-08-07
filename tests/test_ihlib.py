@@ -226,15 +226,39 @@ class LockActionsTest(unittest.TestCase):
         self.assertIn("what sinks it", text)
         self.assertNotIn("needs the suspect weight to look good", text)
 
-    def test_live_capture_lock_actions_are_disjoint(self):
-        cap, _path = ihlib.load_capture(None)
-        a = ihlib.lock_actions(cap)
-        names = lambda k: {r["name"] for r in (a.get(k) or [])}
+    def test_lock_actions_outcomes_are_disjoint(self):
+        """No item may appear in two outcome buckets, and nothing protected
+        may ever be proposed for unlock.
+
+        Built on a SYNTHETIC capture, not `load_capture`: the suite is
+        zero-dependency and CI runs with an empty `data/` tree, so a test
+        that reads a live capture passes locally and fails in CI (it did —
+        hidden behind a lint failure on the same run, 7 Aug 2026).
+        """
+        def item(name, slot, locked):
+            return {"name": name, "slot": slot, "decompile_locked": locked,
+                    "item_level": 1000, "stability": 25,
+                    "prefixes": [], "suffixes": [], "max_normal_affixes": 6,
+                    "max_prefixes": 3, "max_suffixes": 3}
+        cap = {"state": {
+            "equipmentData": {},
+            "inventoryData": {"max_slots": 100, "items": [
+                item("Old Shell", "shell", True),
+                item("Junk Driver", "gloves", True),
+                item("Spare Router", "boots", False)]},
+            "homelabInfo": {}}}
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT",
+                               {"name": "t-ab", "revert_item": "Old Shell"}):
+            a = ihlib.lock_actions(cap)
+
+        def names(key):
+            return {r["name"] for r in (a.get(key) or [])}
+
         self.assertFalse(names("lock") & names("unlock"))
         self.assertFalse(names("unlock") & names("contested"))
-        # nothing protected may ever be proposed for unlock
-        self.assertFalse({n.lower() for n in a["protected"]}
-                         & {n.lower() for n in names("unlock")})
+        self.assertFalse(names("lock") & names("contested"))
+        self.assertNotIn("Old Shell", names("unlock"))
+        self.assertEqual(a["protected"], ["Old Shell"])
 
 
 class HomelabEtaScheduleTest(unittest.TestCase):

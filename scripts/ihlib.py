@@ -1299,7 +1299,7 @@ def protected_revert_items():
     value-based lock advice must exempt it by name or it recommends deleting
     the only way back out of a live experiment.
     """
-    active = ACTIVE_EXPERIMENT or {}
+    active = ACTIVE_EXPERIMENT or {}  # noqa: F405 -- star-import, see below
     if not active or active.get("concluded"):
         return set()
     name = (active.get("revert_item") or "").strip()
@@ -1507,7 +1507,6 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     if not homelab:
         return []
     level = homelab.get("level", 0)
-    tick_s = info.get("tick_seconds") or 5
     busy = {j.get("target") for j in (homelab.get("active_jobs") or [])
             + (homelab.get("pending_jobs") or [])}
     # Every purchasable carries the install (UI section) it lives under -- an
