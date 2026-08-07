@@ -920,3 +920,25 @@ states what is known about the game.
 - **Do not assume listed Regeneration equals realised combat-log `prg`.**
 - **Firewall/Router/Kernel replacements must preserve the function of the
   current sustain anchors**, not merely improve item level.
+
+## 22. Zone reward taper: `reward_streak_soft_cap` is a gradual taper keyed to the fraction of the cap (measured 7 Aug 2026)
+
+Every zone carries a `reward_streak_soft_cap`. It does **not** stop rewards and it has no cliff at the cap. Median credits per enemy level are **flat at 100% of peak up to ~0.75–0.8 of the cap**, then taper to **~84% of peak** by ~0.9 of the cap and stay there past it.
+
+| fraction of cap | Small Business (cap 126) | Corporate Network (cap 210) |
+|---|---|---|
+| 0.0–0.75 | 100% | 100% |
+| ~0.80 | 100% | 97.8% |
+| ~0.90 | — | 83.9% |
+| ~0.95 | 88.9% | 83.9% |
+| 1.05 | — | 83.5% |
+
+**The onset tracks the fraction of the cap, not any absolute streak** — the discriminant that identifies this as cap-driven rather than as some other depth effect. It holds across a zone change that moved the cap 126 → 210, i.e. across a 1.67× rescaling, which is why the two columns line up on the left-hand key and not on streak number.
+
+**Consequence for zone choice.** Depth bought with crafts is taxed ~16% once a run passes ~0.8 of the cap. At a mean death streak of 222 against Corporate's 210, roughly the last quarter of every run is in the tapered region. Moving to a zone whose cap is comfortably above the achievable depth restores full value to every subsequent depth gain — which makes the cap ratio, not the raw `credit_multiplier`, the number that should drive a zone decision.
+
+**Method note — use the median.** A mean-per-band read of the same data shows erosion beginning around 0.67 of the cap and decaying smoothly, which would falsify the fraction-of-cap hypothesis. That is credit-drop skew, not signal; the median shows a flat plateau and a clean step. This is the `docs/data-dictionary.md` convention for any per-fight reward quantity.
+
+**Not modelled:** the capture's cap values run exactly 5% above those recorded on 27 July 2026 (126 vs 120, 210 vs 200) in both zones. Something grants a streak-cap bonus and nothing in the workspace accounts for it. All figures above are computed against the capture's own values, so the taper result does not depend on it.
+
+**Combat drops no hackcoin.** Checked over 57,119 banked fights: `hackcoin_drop` is zero in every one. Hackcoin comes from contracts only, so **a zone change cannot move the scarce currency** — zone choice is a question about drop rarity, chips and credits, never about hackcoin income.

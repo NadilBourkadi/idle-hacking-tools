@@ -311,13 +311,32 @@ Corrected model (`version_upgrade_expected_stability` = `1 + ((1-p)/p) × (1-pre
 
 Method note worth keeping: this was found because the player knew a game system the capture-derived model had silently outgrown. Any hard-coded "current level: N" in these docs is a decaying assertion — read levels from the capture.
 
-### 17. What `reward_streak_soft_cap` actually caps (added 27 July 2026)
+### 17. What `reward_streak_soft_cap` actually caps — **RESOLVED 7 August 2026** (`mechanics.md` §22)
 
 Every zone carries one (Small Business Server 120, Corporate Network 200). The community new-player guide advises moving zone once you can exceed the current cap by ~10%, which presupposes rewards stop scaling past it.
 
 **Not visible in credits.** Across 5,325 winning fights, credits per enemy level are flat at 8.25 → 8.45 through every streak band 60–129, including the 120–129 band that sits past the cap. Either the cap applies to a different reward axis (drop chance, drop rarity, chips, contract progress — `rarity_multiplier` being a separate zone field points this way), or it softens gradually, or 34 fights past the cap is simply too few to see it.
 
 **PARKED 27 July 2026 — the measurement window closed.** Resolving this needed fights above the cap, and the move to Corporate Network raises the cap to 200 while costing ~4 streaks of depth. Streaks will sit near 129 against a 200 cap, so no data above a cap will accrue again until depth roughly doubles. That is the right trade — the question is low-value and the transition case never depended on it (`mechanics.md` §15) — but it is the reason the ~34 fights banked above 120 on 27 July are the only such sample that will exist for a long time. If the question ever matters, those fights plus the 90–119 bands are the sample; compare drop rate, `drop_rarity` distribution and `chips_drop` per fight, normalised by enemy level.
+
+**RESOLVED 7 August 2026 — it is a gradual reward taper keyed to the fraction of the cap.** The window reopened exactly as this entry predicted it would: depth roughly doubled (mean death streak 222.0 after the 7 Aug Kernel craft) and Corporate Network's cap is 210, so the deep end of every run now sits past it.
+
+Measuring **median** credits per enemy level by streak band, in both zone eras:
+
+| fraction of cap | Small Business (cap 126) | Corporate (cap 210) |
+|---|---|---|
+| 0.0–0.75 | 100% of peak | 100% of peak |
+| ~0.8 | 100% | 97.8% |
+| ~0.9 | — | 83.9% |
+| ~0.95 | 88.9% | 83.9% |
+| 1.05 | — | 83.5% |
+
+The taper onset tracks the **fraction of the cap**, not any absolute streak — which is the discriminant this entry asked for, and it holds across a zone change that moved the cap 126 → 210. Rewards are flat to ~0.75–0.8 of the cap, then decay to ~84% of peak. It is a soft taper, not a cliff, and it does not zero out.
+
+Two method notes, both of which bit during this analysis:
+
+- **Use the median, not the mean.** The mean-per-band read showed erosion beginning around streak 140 (0.67 of cap) and decaying smoothly, which would have falsified the fraction-of-cap hypothesis. That was credit-drop skew, not signal. The median shows a flat plateau to 0.76 and a clean step down.
+- The capture's cap values are **5% above** the ones recorded here on 27 July (126 vs 120, 210 vs 200) — exactly +5% in both zones. Something grants a streak-cap bonus; nothing in the workspace models it. Not resolved, and not load-bearing for the taper result, which is computed against the capture's own values.
 
 General lesson worth more than the question: **a progression step can close a measurement window.** When a move changes the regime being measured, bank the observation first or accept losing it — and say which, rather than discovering it later.
 
