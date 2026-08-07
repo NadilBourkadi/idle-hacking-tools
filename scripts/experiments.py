@@ -603,6 +603,33 @@ SHELL_AB_2026_08_07 = {
                  "stays unbounded by this window.",
 }
 
+SHELL_AB_2026_08_07["concluded"] = (
+    "KEEP -- 7 Aug 2026. Mean 222.0 over 29 deaths (pre-declared 24) vs gate "
+    "197.8; +22.2 vs the frozen 25-death same-loadout baseline (199.8). "
+    "Contamination clean: cadence 4.601 on a trailing n=50 vs the 4.65 era "
+    "value, no zone change (corporate_network throughout), and NO mid-window "
+    "segment was declared -- the one declared bundle is the ECC Memory "
+    "L181->L193 buy ~35 min after equip. THIRD sim-vs-live agreement pair, "
+    "and the first with a provably unbundled sim block (both arms ran "
+    "08:59:32-08:59:46, before the chips were spent). Predictions (1)-(4) "
+    "held: absolute scale landed 222.0 inside the predicted 218-224; the "
+    "Regen law's second out-of-sample forward test gave +18.2 of the +22.2 "
+    "from the Regen term alone; the Barrier bound corroborates par.15 "
+    "without unblocking it (Barrier did not move alone); realized prg/round "
+    "at streak >=60 reached 445.2 against a predicted ~430. Predictions (5) "
+    "and (6) MISSED and are recorded, not dropped -- rounds/fight rose in "
+    "all four bands with no AtkSpd change (open-questions par.19; not a "
+    "victory-selection artefact, win rate is 100% in both arms in every "
+    "band), and hit rate rose in all four bands where the law predicted "
+    "-0.4pp, which is composition-shaped and promotes par.18 candidate (a). "
+    "Revert path Shielded Shell of Bastion RELEASED."
+)
+
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = SHELL_AB_2026_08_07
+#
+# None while nothing is declared. The next gate is owed by the approved
+# Bastioned Kernel of Mending craft, and cannot be written until the craft
+# resolves and its realized stat line is known -- declaring a baseline from
+# the treatment side is the error SHELL_AB_2026_08_07 documents avoiding.
+ACTIVE_EXPERIMENT = None
