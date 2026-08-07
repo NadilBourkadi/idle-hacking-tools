@@ -47,7 +47,7 @@ class ContractSimulationTest(unittest.TestCase):
         self.item = FIXTURE["state"]["inventoryData"]["items"][0]
         self.ladders = ihlib.tier_ladders(FIXTURE)
         plan = ihlib.plan_craft(self.item, self.ladders)
-        self.phases = [(name, to) for name, _from, to, _att, _meas
+        self.phases = [(uid, to) for uid, _label, _from, to, _att, _meas
                        in plan["steps"]]
 
     def test_baseline_shifts_not_rescales(self):
@@ -73,6 +73,135 @@ class ContractSimulationTest(unittest.TestCase):
         self.assertEqual(a["mean"], b["mean"])
 
 
+class DuplicateAffixNameTest(unittest.TestCase):
+    """Guards the affix-name collision (7 Aug 2026): affix DISPLAY NAMES are
+    not unique on an item, and `score_tiers`/`simulate_contract` keyed their
+    tier maps by name. On the Assault Shell of the Shadow — two distinct
+    affixes both shown "of Mending" — one phase's Stability promoted BOTH to
+    T1, pricing the contract at mean +98.5 against a plan ceiling of +52.3.
+    A contract mean can never exceed the optimal-plan ceiling."""
+
+    LADDER_KEY_A = ("suffix_regen_a", "regeneration", "flat_add")
+    LADDER_KEY_B = ("suffix_regen_b", "regeneration", "flat_add")
+
+    def _item(self):
+        return {
+            "name": "Twin Shell of Mending", "slot": "shell",
+            "item_level": 3667, "stability": 27,
+            "max_normal_affixes": 6, "max_prefixes": 3, "max_suffixes": 3,
+            "prefixes": [],
+            "suffixes": [
+                {"name": "of Mending", "tier": 9, "affix_id": "suffix_regen_a",
+                 "effects": [{"resource": "regeneration", "type": "flat_add",
+                              "value": 8}]},
+                {"name": "of Mending", "tier": 9, "affix_id": "suffix_regen_b",
+                 "effects": [{"resource": "regeneration", "type": "flat_add",
+                              "value": 5}]},
+            ],
+        }
+
+    LADDERS = {LADDER_KEY_A: {9: 1.0, 1: 8.0}, LADDER_KEY_B: {9: 1.0, 1: 8.0}}
+
+    def test_uids_are_distinct(self):
+        uids = [uid for uid, _side, _a in ihlib.affix_entries(self._item())]
+        self.assertEqual(len(uids), len(set(uids)))
+
+    def test_label_disambiguates_only_on_collision(self):
+        item = self._item()
+        self.assertEqual(ihlib.affix_label(item, "suffix#0"),
+                         "of Mending [suffix_regen_a]")
+        item["suffixes"][1]["name"] = "of Warding"
+        self.assertEqual(ihlib.affix_label(item, "suffix#0"), "of Mending")
+
+    def test_ambiguous_phase_reference_is_rejected(self):
+        with self.assertRaises(ValueError):
+            ihlib.resolve_affix_uid(self._item(), "of Mending")
+        # ...but the uid and the affix_id both resolve cleanly
+        self.assertEqual(
+            ihlib.resolve_affix_uid(self._item(), "suffix#1"), "suffix#1")
+        self.assertEqual(
+            ihlib.resolve_affix_uid(self._item(), "suffix_regen_b"), "suffix#1")
+
+    def test_one_phase_promotes_exactly_one_affix(self):
+        item = self._item()
+        both = ihlib.score_tiers(item, self.LADDERS,
+                                 {"suffix#0": 1, "suffix#1": 1}, 10.0)
+        one = ihlib.score_tiers(item, self.LADDERS, {"suffix#0": 1}, 10.0)
+        neither = ihlib.score_tiers(item, self.LADDERS, {}, 10.0)
+        self.assertGreater(both, one)
+        self.assertGreater(one, neither)
+
+    def test_contract_mean_never_exceeds_plan_ceiling(self):
+        item = self._item()
+        plan = ihlib.plan_craft(item, self.LADDERS, floor=2)
+        phases = [(uid, to) for uid, _l, _f, to, _c, _e in plan["steps"]]
+        if not phases:
+            self.skipTest("no plannable phases")
+        sim = ihlib.simulate_contract(item, self.LADDERS, phases, floor=2,
+                                      trials=2000, seed=5)
+        self.assertLessEqual(sim["mean"], plan["score"] + 1e-6)
+
+
+class HomelabJobHoursTest(unittest.TestCase):
+    """Guards the two-panel ETA disagreement (7 Aug 2026): `ih.py homelab`
+    printed raw tick-hours ("~229min") while `ih.py audit` divided by the
+    build-speed multiplier ("1.2h") for the same job. Ticks are WORK; real
+    time is `ticks * tick_s * n / o` (client `homelabJobEstimates`)."""
+
+    INFO = {"tick_seconds": 5, "global_build_speed_bonus": 0,
+            "global_build_speed_multiplier": 3.125}
+
+    def test_divides_by_build_speed(self):
+        # 3600 ticks * 5s = 5h of work; at o=3.125 running alone that is 1.6h
+        self.assertAlmostEqual(
+            ihlib.homelab_job_hours(self.INFO, 3600), 1.6, places=6)
+
+    def test_scales_with_concurrent_jobs(self):
+        alone = ihlib.homelab_job_hours(self.INFO, 3600, 1)
+        shared = ihlib.homelab_job_hours(self.INFO, 3600, 4)
+        self.assertAlmostEqual(shared, alone * 4, places=6)
+
+    def test_never_negative_and_floors_job_count(self):
+        self.assertEqual(ihlib.homelab_job_hours(self.INFO, -100), 0.0)
+        self.assertEqual(ihlib.homelab_job_hours(self.INFO, 3600, 0),
+                         ihlib.homelab_job_hours(self.INFO, 3600, 1))
+
+
+
+
+
+
+class HomelabEtaScheduleTest(unittest.TestCase):
+    """The throughput split DECLINES as jobs finish; a fixed divisor
+    over-states every ETA except the longest job's (7 Aug review finding)."""
+
+    INFO = {"tick_seconds": 5, "global_build_speed_bonus": 0,
+            "global_build_speed_multiplier": 1.0}
+
+    def test_single_job_matches_the_simple_helper(self):
+        jobs = [{"duration_ticks": 720, "progress_ticks": 0}]
+        eta = ihlib.homelab_job_eta_hours(self.INFO, jobs)
+        self.assertAlmostEqual(eta[0],
+                               ihlib.homelab_job_hours(self.INFO, 720, 1),
+                               places=6)
+
+    def test_shorter_job_finishes_first_and_speeds_up_the_rest(self):
+        jobs = [{"duration_ticks": 720, "progress_ticks": 0},
+                {"duration_ticks": 360, "progress_ticks": 0}]
+        eta = ihlib.homelab_job_eta_hours(self.INFO, jobs)
+        self.assertLess(eta[1], eta[0])
+        # job 1: 360 ticks at rate/2 -> 3600s. job 0 then has 360 left at full
+        # rate -> another 1800s. Total 5400s = 1.5h, NOT the 2h a fixed
+        # divisor would predict.
+        self.assertAlmostEqual(eta[1], 1.0, places=6)
+        self.assertAlmostEqual(eta[0], 1.5, places=6)
+
+    def test_empty_job_list(self):
+        self.assertEqual(ihlib.homelab_job_eta_hours(self.INFO, []), {})
+
+
+
+
 class PlanCraftTest(unittest.TestCase):
     def test_budget_and_cap_respected(self):
         item = FIXTURE["state"]["inventoryData"]["items"][0]
@@ -83,10 +212,10 @@ class PlanCraftTest(unittest.TestCase):
         # expectation, never by more (plan_craft stops when the NEXT step
         # does not fit) — so total spend stays under the full Stability pool
         self.assertLessEqual(plan["expected_spend"], stability)
-        for _name, _from, target, _attempts, _measured in plan["steps"]:
+        for _uid, _label, _from, target, _attempts, _measured in plan["steps"]:
             self.assertGreaterEqual(target, 1)
         capped = ihlib.plan_craft(item, ladders, tier_cap=3)
-        for _name, _from, target, _attempts, _measured in capped["steps"]:
+        for _uid, _label, _from, target, _attempts, _measured in capped["steps"]:
             self.assertGreaterEqual(target, 3)
 
 

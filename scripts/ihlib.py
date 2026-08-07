@@ -334,7 +334,30 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 # archive whose projection described the executed plan (Vital Payload of
 # Striking, realized +64.7 vs projected +80.6) -- and both bands were
 # re-derived to +/-16 the same session. See the bands' own provenance rows.
-PENDING_REFITS = []
+PENDING_REFITS = [
+    # The weights are per-stat SCORE. Turning score into DEATH-STREAK DEPTH
+    # needs a per-family conversion, and the two families measured so far
+    # differ by ~4.6x: Regen ~5.0 score/streak (CI/CD pair, 6 Aug 2026) vs
+    # Barrier >=23 score/streak (open-questions.md par.15 — a +44.0-score,
+    # Barrier-carried Driver craft read -0.58 +- 1.03 simulated streaks AND
+    # ~+1.9 +- 2 live). Any ranking that sums score ACROSS families therefore
+    # over-weights Barrier-carried options, and `hardware_plan` does exactly
+    # that: at the 7 Aug 2026 161K-chip balance it put 154K (96%) into Packet
+    # Shield, the Barrier track, over ECC Memory (Regen) — a ranking that
+    # inverts once score is converted to depth.
+    {
+        "name": "score -> death-streak depth conversion (per stat family)",
+        "applied": "1.0 for every family (raw score summed across families)",
+        "opened": "2026-08-07",
+        "blocked_on": "no paired measurement isolating Barrier's marginal "
+                      "depth at the 180+ faces; only Regen has a fitted "
+                      "score/streak figure",
+        "unblock": "the dedicated CI/CD Barrier pair named as the next step "
+                   "in open-questions.md par.15 — two arms differing ONLY in "
+                   "Barrier at matched depth, full 15-run block (a near-zero "
+                   "effect fit, so it does not qualify for an 8-run tranche)",
+    },
+]
 
 
 def cohort_summary(rows, label="cohort", ms_key="seen_ms", item=None):
@@ -671,6 +694,69 @@ def ladder_value(ladder, tier, deep_step=TIER_STEP_DEEP):
     return math.exp(la + slope * (tier - a)), False
 
 
+def affix_entries(item):
+    """[(uid, side, affix)] — a STABLE per-affix identity for an item.
+
+    Affix DISPLAY NAMES are not unique on an item. The 7 Aug 2026 Assault
+    Shell of the Shadow carried two distinct affixes both shown as
+    "of Mending": `suffix_regeneration` (Regen flat) and
+    `suffix_watchdog_matrix` (MaxHP% + Regen flat). `score_tiers` and
+    `simulate_contract` keyed their tier maps by display name, so ONE phase's
+    Stability promoted BOTH to T1 — pricing that contract at mean +98.5
+    against a plan_craft ceiling of +52.3. A contract mean can never exceed
+    the optimal-plan ceiling; that impossibility is what exposed it.
+
+    5 of 88 items in the 7 Aug capture carry a duplicated affix name (3 of
+    them craftable), so this is not a one-off. Anything that maps affix ->
+    tier MUST key on the uid, never on `affix["name"]`.
+    """
+    return [(f"{'prefix' if side == 'prefixes' else 'suffix'}#{i}", side, affix)
+            for side in ("prefixes", "suffixes")
+            for i, affix in enumerate(item.get(side) or [])]
+
+
+def affix_label(item, uid):
+    """Display name for `uid`, disambiguated only when the name repeats.
+
+    Keeps output identical for the common (unique-name) case and appends the
+    `affix_id` when it would otherwise be impossible to tell two phases apart.
+    """
+    entries = affix_entries(item)
+    match = next((a for u, _s, a in entries if u == uid), None)
+    if match is None:
+        return uid
+    name = match.get("name") or uid
+    if sum(1 for _u, _s, a in entries if a.get("name") == name) > 1:
+        return f"{name} [{match.get('affix_id')}]"
+    return name
+
+
+def resolve_affix_uid(item, query):
+    """uid for a `--phase` affix reference; raises ValueError if ambiguous.
+
+    Accepts a uid ("suffix#1"), an exact//case-insensitive display name, or an
+    `affix_id`. A bare display name that matches two affixes is REJECTED
+    rather than silently resolved to the first — picking one arbitrarily is
+    how the name-collision defect would come back through the CLI door.
+    """
+    entries = affix_entries(item)
+    q = query.strip()
+    for uid, _side, _affix in entries:
+        if uid == q:
+            return uid
+    hits = [uid for uid, _s, a in entries if (a.get("name") or "").lower() == q.lower()]
+    if not hits:
+        hits = [uid for uid, _s, a in entries if (a.get("affix_id") or "") == q]
+    if not hits:
+        raise ValueError(f"{item.get('name')} has no affix {query!r}")
+    if len(hits) > 1:
+        options = ", ".join(f"{u} ({affix_label(item, u)})" for u in hits)
+        raise ValueError(
+            f"{query!r} is ambiguous on {item.get('name')} — it names "
+            f"{len(hits)} affixes. Use one of: {options}")
+    return hits[0]
+
+
 def augment_state(item):
     """(slot_open?, forced_side) per docs/crafting.md §2."""
     n_pre = len(item.get("prefixes") or [])
@@ -736,11 +822,10 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
     reserve = 1 if (open_slot and stability > floor) else 0
     budget = stability - floor - reserve
 
-    # mutable affix state: [side, affix, current_tier, upgraded?]
-    state = []
-    for side in ("prefixes", "suffixes"):
-        for affix in item.get(side) or []:
-            state.append({"affix": affix, "tier": affix.get("tier"), "up": False})
+    # mutable affix state: [uid, affix, current_tier, upgraded?]. Keyed by uid,
+    # never by display name -- see `affix_entries`.
+    state = [{"uid": uid, "affix": affix, "tier": affix.get("tier"), "up": False}
+             for uid, _side, affix in affix_entries(item)]
 
     def step_gain(entry):
         """Weighted gain of upgrading this affix one tier from its planned tier."""
@@ -786,7 +871,7 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
             attempts += version_upgrade_expected_attempts(entry["tier"])
             entry["tier"] -= 1
             entry["up"] = True
-            steps.append((entry["affix"].get("name"), entry["affix"].get("tier"),
+            steps.append((entry["uid"], entry["affix"].get("tier"),
                           entry["tier"], cost, estimated))
 
     compile_left = max(0.0, stability - reserve - spend)
@@ -838,14 +923,17 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
             add(label, e.get("type"), value * (1 + compile_pct),
                 None if value_low is None else value_low * (1 + compile_pct))
 
-    # merge upgraded steps per affix for compact display
+    # merge upgraded steps per affix for compact display -- by uid, so two
+    # same-named affixes stay two lines with two costs instead of collapsing
+    # into one that under-reports the spend
     merged = {}
-    for name, t_from, t_to, cost, estimated in steps:
-        cur = merged.setdefault(name, [t_from, t_to, 0.0, False])
+    for uid, t_from, t_to, cost, estimated in steps:
+        cur = merged.setdefault(uid, [t_from, t_to, 0.0, False])
         cur[1] = min(cur[1], t_to)
         cur[2] += cost
         cur[3] = cur[3] or estimated
-    plan_steps = [(name, f, t, c, est) for name, (f, t, c, est) in merged.items()]
+    plan_steps = [(uid, affix_label(item, uid), f, t, c, est)
+                  for uid, (f, t, c, est) in merged.items()]
 
     return {
         "steps": plan_steps,
@@ -877,9 +965,11 @@ RESOURCE_SHORT = {
 def score_tiers(item, ladders, tiers, stability_left, deep_step=TIER_STEP_DEEP):
     """Weighted score of `item` with affixes forced to `tiers` and a Compile.
 
-    `tiers` maps affix display name -> target tier; affixes absent from it keep
-    their current tier and roll. Promoted affixes are valued at the target
-    tier MIDPOINT (roll is lost on promotion, crafting.md §12.2). Compile adds
+    `tiers` maps affix UID (see `affix_entries`) -> target tier; affixes absent
+    from it keep their current tier and roll. It was keyed by DISPLAY NAME
+    until 7 Aug 2026, which silently promoted every same-named affix together
+    for one affix's Stability. Promoted affixes are valued at the target tier
+    MIDPOINT (roll is lost on promotion, crafting.md §12.2). Compile adds
     0.5% per remaining Stability to every explicit affix.
 
     Companion to `plan_craft`: that one CHOOSES a plan greedily, this one
@@ -902,26 +992,24 @@ def score_tiers(item, ladders, tiers, stability_left, deep_step=TIER_STEP_DEEP):
     if implicit:                      # implicit is NOT compiled (22 Jul)
         add_effect(stat_label(implicit.get("stat_type") or "?"),
                    implicit.get("effect_type"), implicit.get("value", 0))
-    for side in ("prefixes", "suffixes"):
-        for affix in item.get(side) or []:
-            target = tiers.get(affix.get("name"))
-            promoted = target is not None and target != affix.get("tier")
-            for e in affix.get("effects") or []:
-                label = stat_label(e.get("resource") or "?")
-                if promoted:
-                    key = (affix.get("affix_id"), e.get("resource"),
-                           e.get("type"))
-                    ladder = ladders.get(key)
-                    if ladder:
-                        norm, _ = ladder_value(ladder, target, deep_step)
-                        scale = (scale_flat_value(ilvl) if e.get("type") == "flat_add"
-                                 else scale_percent_value(ilvl))
-                        value = norm * scale
-                    else:
-                        value = e.get("value", 0)
+    for uid, _side, affix in affix_entries(item):
+        target = tiers.get(uid)
+        promoted = target is not None and target != affix.get("tier")
+        for e in affix.get("effects") or []:
+            label = stat_label(e.get("resource") or "?")
+            if promoted:
+                key = (affix.get("affix_id"), e.get("resource"), e.get("type"))
+                ladder = ladders.get(key)
+                if ladder:
+                    norm, _ = ladder_value(ladder, target, deep_step)
+                    scale = (scale_flat_value(ilvl) if e.get("type") == "flat_add"
+                             else scale_percent_value(ilvl))
+                    value = norm * scale
                 else:
                     value = e.get("value", 0)
-                add_effect(label, e.get("type"), value * (1 + compile_pct))
+            else:
+                value = e.get("value", 0)
+            add_effect(label, e.get("type"), value * (1 + compile_pct))
     return weighted_score(totals)
 
 
@@ -929,7 +1017,8 @@ def simulate_contract(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
                       trials=20000, seed=1, baseline=None):
     """Monte-Carlo a §10.1 craft contract. Returns the OUTCOME DISTRIBUTION.
 
-    `phases` is [(affix display name, target tier), ...] IN EXECUTION ORDER.
+    `phases` is [(affix UID, target tier), ...] IN EXECUTION ORDER — uid per
+    `affix_entries`, NOT the display name, which is not unique on an item.
     Each promotion succeeds with chance tier/10; a failure costs 1 Stability
     unless Snapshot Backups preserves it. The run stops when the next attempt
     would break the Compile `floor`, so partial contracts are priced the way
@@ -951,17 +1040,15 @@ def simulate_contract(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
     are expressed as deltas against it.
     """
     rng = random.Random(seed)
-    start = {a.get("name"): a.get("tier")
-             for side in ("prefixes", "suffixes")
-             for a in item.get(side) or []}
+    start = {uid: a.get("tier") for uid, _side, a in affix_entries(item)}
     stability = item.get("stability") or 0
     budget = stability - floor
     results, completed = [], 0
     for _ in range(trials):
         spent, tiers = 0.0, dict(start)
         finished = True
-        for name, target in phases:
-            tier = start.get(name)
+        for uid, target in phases:
+            tier = start.get(uid)
             if tier is None:
                 continue
             while tier > target:
@@ -977,7 +1064,7 @@ def simulate_contract(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
                     finished = False
                     break
                 tier -= 1
-                tiers[name] = tier
+                tiers[uid] = tier
             if not finished:
                 break
         completed += finished
@@ -1087,6 +1174,89 @@ def homelab_build_speed(info):
     return max(1.0, min(20.0, (1.0 + upgrades + bonus) * mult))
 
 
+# Stat families whose SCORE has been shown not to convert to death-streak
+# depth at the same rate as the rest (open-questions.md par.15; the matching
+# PENDING_REFITS row). A ranking that sums raw score across families silently
+# over-weights these, so every panel that ranks by score must mark them.
+DEPTH_SUSPECT_STATS = {
+    "damage_barrier": "Barrier: >=23 score/streak vs Regen's ~5.0 — a "
+                      "+44.0-score Barrier-carried craft read ~0 depth twice "
+                      "(sim -0.58+-1.03, live ~+1.9+-2). par.15",
+}
+
+
+def hardware_track_depth_note(definition):
+    """Warning for a hardware track whose score does not convert to depth."""
+    for effect in definition.get("effects") or []:
+        note = DEPTH_SUSPECT_STATS.get(effect.get("combat_stat"))
+        if note:
+            return note
+    return None
+
+
+
+
+
+
+def homelab_job_eta_hours(info, jobs):
+    """{job index: real hours until it finishes}, sharing declining throughput.
+
+    Throughput `o` is split across ACTIVE jobs, so the split CHANGES as jobs
+    complete: with 3 running each gets o/3 until the first finishes, then o/2,
+    then o. Pricing every job at the initial job count (the 7 Aug first
+    version) over-states every ETA except the longest one's.
+
+    Simulated in phases between completions — exact, and cheap at <= 4 jobs.
+    """
+    speed = homelab_build_speed(info)
+    tick_s = info.get("tick_seconds") or 5
+    remaining = {i: max((j.get("duration_ticks") or 0)
+                        - (j.get("progress_ticks") or 0), 0.0)
+                 for i, j in enumerate(jobs)}
+    eta, elapsed_s = {}, 0.0
+    while remaining:
+        n = len(remaining)
+        rate = speed / tick_s / n              # ticks per second, per job
+        first = min(remaining, key=lambda i: remaining[i])
+        phase_s = remaining[first] / rate if rate else 0.0
+        elapsed_s += phase_s
+        eta[first] = elapsed_s / 3600.0
+        done_work = phase_s * rate
+        del remaining[first]
+        for i in list(remaining):
+            remaining[i] = max(remaining[i] - done_work, 0.0)
+    return eta
+
+
+
+
+
+
+
+
+
+
+def homelab_job_hours(info, ticks, active_jobs=1):
+    """REAL hours for `ticks` of build work, at the current build speed.
+
+    The client advances a job by `l*o*t/n` (`homelabJobEstimates`): `o` is the
+    whole-lab build-speed multiplier and `n` the number of ACTIVE jobs sharing
+    it. So raw `duration_ticks * tick_seconds` is work, NOT time, and over-
+    states the wait by `o/n` — 3.125x at the 7 Aug 2026 build.
+
+    Found 7 Aug 2026: `ih.py homelab` printed the CI/CD Pipeline -> L4 job at
+    "~229min" when it had ~73 min left, while `ih.py audit` (which divided
+    correctly) said 1.2h of work was buffered. The two panels disagreed by
+    exactly `o`. Every duration this workspace prints goes through here.
+
+    `active_jobs` defaults to 1 — the "run it alone" convention used when
+    ranking candidate jobs, which is also the fastest-to-finish case.
+    """
+    speed = homelab_build_speed(info)
+    tick_s = info.get("tick_seconds") or 5
+    return max(ticks, 0) * tick_s * max(active_jobs, 1) / speed / 3600.0
+
+
 def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     """Concrete jobs to put in free build slots / queue places, best first.
 
@@ -1137,7 +1307,7 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             "section": section_names.get(u["install"], u["install"]),
             "level": u["level"], "target_level": u["level"] + 1,
             "points": nxt.get("progress_points", 0),
-            "hours": (nxt.get("duration_ticks") or 0) * tick_s / 3600,
+            "hours": homelab_job_hours(info, nxt.get("duration_ticks") or 0),
             "cost": cost, "description": d.get("description") or "",
         })
     for r in out:

@@ -313,8 +313,8 @@ def cmd_potential(args):
                        else "sidegrade")
             marker = "~" if plan["estimated"] else " "
             steps = ", ".join(
-                f"{name} T{f}->T{t}{'~' if est else ''}"
-                for name, f, t, c, est in plan["steps"])
+                f"{label} T{f}->T{t}{'~' if est else ''}"
+                for _uid, label, f, t, c, est in plan["steps"])
             aug = (f"Augment[{plan['augment_side']}]" if plan["augment_open"] else "full")
             print(f" {marker}ceiling   {item.get('name'):<44} score {score:6.1f} "
                   f"({delta:+6.1f} {verdict:<9})  ilvl {item.get('item_level'):>4} "
@@ -389,6 +389,9 @@ def cmd_homelab(args):
     pending = homelab.get("pending_jobs") or []
     tick_s = info.get("tick_seconds") or 5
     in_flight_points = 0
+    # ETAs share a DECLINING split: as each active job finishes the rest speed
+    # up, so a fixed divisor over-states all but the longest.
+    active_eta = ihlib.homelab_job_eta_hours(info, jobs)
     for label, group in (("active jobs", jobs), ("queued jobs", pending)):
         if not group:
             continue
@@ -398,9 +401,16 @@ def cmd_homelab(args):
             total = job.get("duration_ticks") or 1
             pts = job.get("progress_points") or 0
             in_flight_points += pts
-            eta = f"{(total - done) * tick_s / 60:.0f}min"
-            when = f"{done / total * 100:3.0f}%  ~{eta}" if group is jobs \
-                else f"     {eta} once started"
+            # real time, not raw ticks: the lab advances o/n ticks per tick
+            # (ihlib.homelab_job_hours). A queued job is priced as if it ran
+            # alone, which is what it does once the actives drain.
+            if group is jobs:
+                idx = jobs.index(job)
+                when = (f"{done / total * 100:3.0f}%  "
+                        f"~{active_eta.get(idx, 0.0) * 60:.0f}min")
+            else:
+                when = (f"     {ihlib.homelab_job_hours(info, total - done) * 60:.0f}min"
+                        " once started, alone")
             print(f"    {names.get(job.get('target'), job.get('target')):28s} "
                   f"-> L{job.get('target_level')}  {when}  +{pts}pts  "
                   f"[{ihlib.format_cost(job.get('cost_snapshot'))}]")
@@ -443,7 +453,7 @@ def cmd_homelab(args):
         gate = u["def"].get("unlock_level", 0)
         if gate > level or not u["install_present"] or not u["next"]:
             continue
-        hours = (u["next"].get("duration_ticks") or 0) * tick_s / 3600
+        hours = ihlib.homelab_job_hours(info, u["next"].get("duration_ticks") or 0)
         pts = u["next"].get("progress_points", 0)
         rows.append((pts / hours if hours else 0, hours, u))
     for pts_hr, hours, u in sorted(rows, key=lambda r: -r[0]):
@@ -496,8 +506,13 @@ def cmd_hardware(args):
         print(f"  RESET AVAILABLE ({hw.get('reset_preview_mode')}, "
               f"{hw.get('reset_cooldown_mode')}): all-hardware refund "
               f"{ihlib.format_cost(refund)}")
+    for _line in ihlib.pending_refit_banner():
+        print("  " + _line)
     print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
-    print("  current build; additive pooling confirmed — mechanics.md §13):")
+    print("  current build; additive pooling confirmed — mechanics.md §13).")
+    print("  This ranks raw SCORE, which is NOT comparable across stat")
+    print("  families — rows marked !! are score that has twice failed to")
+    print("  convert into death-streak depth:")
     combat_rows, economy_rows = [], []
     for d in hw.get("definitions") or []:
         value = ihlib.hardware_track_value(d, stats_breakdown)
@@ -510,9 +525,12 @@ def cmd_hardware(args):
     for per_1k, value, d in sorted(combat_rows, key=lambda r: -r[0]):
         cost = d.get("next_cost") or {}
         afford = "" if d.get("can_afford") else "  [CAN'T AFFORD]"
+        depth_note = ihlib.hardware_track_depth_note(d)
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
               f"value/lvl {value:5.2f}  per-1K-chips {per_1k:6.2f}  "
               f"next {ihlib.format_cost(cost)}{afford}")
+        if depth_note:
+            print(f"        !! {depth_note}")
     print("\n  economy/farming tracks (not scored):")
     for d in sorted(economy_rows, key=lambda d: d.get("name") or ""):
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
@@ -545,32 +563,38 @@ def cmd_contract(args):
     print(f"  vs equipped {equipped.get('name')}  score {baseline:.1f}"
           f"   (Snapshot Backups preserve {preserve:.0%})")
 
+    # Phases are carried as affix UIDs, never display names -- two affixes on
+    # one item can share a name (ihlib.affix_entries).
     phases = []
     for spec in args.phase:
         name, _, tier = spec.rpartition(":")
         if not name or not tier.strip().lstrip("T").isdigit():
             sys.exit(f"bad --phase {spec!r}; use \"of Haste:4\"")
-        phases.append((name.strip(), int(tier.strip().lstrip("T"))))
+        try:
+            uid = ihlib.resolve_affix_uid(base_item, name.strip())
+        except ValueError as exc:
+            sys.exit(str(exc))
+        phases.append((uid, int(tier.strip().lstrip("T"))))
     if not phases:                       # default to plan_craft's own plan
         plan = ihlib.plan_craft(base_item, ladders, floor=args.floor,
                                 preserve=preserve)
-        phases = [(name, to) for name, _frm, to, _c, _e in plan["steps"]]
+        phases = [(uid, to) for uid, _label, _frm, to, _c, _e in plan["steps"]]
         print("  phases taken from plan_craft (pass --phase to override)")
     if not phases:
         sys.exit("no phases to run")
 
+    tiers_now = {uid: a.get("tier")
+                 for uid, _side, a in ihlib.affix_entries(base_item)}
     print("\n  contract (execution order matters -- see best_contract_order):")
-    for name, tier in phases:
-        cur = next((a.get("tier") for side in ("prefixes", "suffixes")
-                    for a in base_item.get(side) or []
-                    if a.get("name") == name), None)
+    for uid, tier in phases:
+        cur = tiers_now.get(uid)
         if cur is None:
-            sys.exit(f"{base_item.get('name')} has no affix {name!r}")
+            sys.exit(f"{base_item.get('name')} has no affix {uid!r}")
         att = sum(ihlib.version_upgrade_expected_attempts(x) for x in range(tier + 1, cur + 1))
         stab = sum(ihlib.version_upgrade_expected_stability(x, preserve)
                    for x in range(tier + 1, cur + 1))
-        print(f"    {name:22s} T{cur} -> T{tier}   exp {att:4.1f} attempts / "
-              f"{stab:4.1f} Stability")
+        print(f"    {ihlib.affix_label(base_item, uid):34s} T{cur} -> T{tier}"
+              f"   exp {att:4.1f} attempts / {stab:4.1f} Stability")
 
     sim = ihlib.simulate_contract(base_item, ladders, phases,
                                   floor=args.floor, preserve=preserve,
@@ -594,7 +618,7 @@ def cmd_contract(args):
                 base_item, ladders, phases, floor=args.floor,
                 preserve=preserve, trials=max(args.trials // 5, 2000),
                 baseline=baseline):
-            label = " -> ".join(n for n, _ in order)
+            label = " -> ".join(ihlib.affix_label(base_item, u) for u, _ in order)
             print(f"    {label:52s} P(>+{ihlib.UPGRADE_BAND:.0f}) "
                   f"{s['p_upgrade']:5.1%}  "
                   f"mean {s['mean']:+5.2f}  p10 {s['p10']:+5.2f}")
@@ -605,7 +629,8 @@ def cmd_contract(args):
                                              floor=args.floor,
                                              preserve=preserve,
                                              baseline=baseline)[:6]:
-            label = ", ".join(f"{n}->T{t}" for n, t in cand)
+            label = ", ".join(f"{ihlib.affix_label(base_item, u)}->T{t}"
+                              for u, t in cand)
             print(f"    {label:52s} mean {sim['mean']:+7.2f}  p10 {sim['p10']:+6.2f}"
                   f"  p90 {sim['p90']:+7.2f}  P(>+{ihlib.UPGRADE_BAND:.0f}) "
                   f"{sim['p_upgrade']*100:5.1f}%")
@@ -912,12 +937,10 @@ def _audit_homelab(cap, ctx):
         flags.append(("IDLE", f"homelab is making NO progress — 0 active "
                               f"jobs and 0 queued. Start: {named}"))
     elif free or room:
-        hours_buffered = sum(
+        hours_buffered = ihlib.homelab_job_hours(info, sum(
             ((j.get("duration_ticks") or 0) - (j.get("progress_ticks") or 0))
             for j in (homelab.get("active_jobs") or [])
-            + (homelab.get("pending_jobs") or [])) * \
-            (info.get("tick_seconds") or 5) / 3600.0 / \
-            max(ihlib.homelab_build_speed(info), 1e-9)
+            + (homelab.get("pending_jobs") or [])))
         flags.append(("COVERAGE", f"homelab has {free} slot(s) and {room} "
                                   f"queue place(s) free — this does NOT "
                                   f"slow the running jobs (throughput is "
@@ -1153,6 +1176,12 @@ def _audit_unequipped(cap, ctx):
     return flags
 
 
+
+
+
+
+
+
 AUDIT_CHECKS = [
     _audit_pending_refits,
     _audit_stream_drift,
@@ -1170,10 +1199,24 @@ AUDIT_CHECKS = [
 
 
 def run_audit(cap):
-    """Run every registered check; returns [(KIND, message)] in display order."""
+    """Run every registered check; returns [(KIND, message)] in display order.
+
+    A check that raises is REPORTED, not propagated: on 7 Aug 2026
+    `_audit_inventory_capacity` died on a bad call and took the entire sweep
+    with it -- losing the KNOWN-WRONG banner, the staleness flags and every
+    unrelated check -- and `_audit_decompile_locks` could do the same whenever
+    an experiment omits `revert_item`. The sweep exists to surface problems,
+    so it must degrade to "this check is broken" rather than to silence.
+    """
     flags, ctx = [], {}
     for check in AUDIT_CHECKS:
-        flags.extend(check(cap, ctx))
+        try:
+            flags.extend(check(cap, ctx))
+        except Exception as exc:            # noqa: BLE001 - reported, not raised
+            flags.append(("CHECK-BROKEN",
+                          f"audit check {check.__name__} failed: "
+                          f"{type(exc).__name__}: {exc} — the other checks "
+                          f"still ran, but this one is blind until fixed"))
     return flags
 
 
@@ -1393,6 +1436,21 @@ def _section_output(argv):
     return buf.getvalue()
 
 
+def _is_refit_banner(line):
+    """True for any line of the PENDING_REFITS warning block.
+
+    The banner is multi-line (header, one row per refit, blocked_on, unblock)
+    and every line must survive digest filtering — a half-printed warning is
+    worse than none, because it looks like a formatting artefact.
+    """
+    probe = line.lstrip("# ").strip().lower()
+    return (probe.startswith("!!")
+            or probe.startswith("blocked on:")
+            or probe.startswith("unblock by:")
+            or "known-wrong" in probe
+            or "applied " in probe and "since " in probe)
+
+
 def _brief_potential(text):
     """Best band-clearing candidate per slot, verdict-bearing lines only.
 
@@ -1425,7 +1483,11 @@ def _brief_potential(text):
             slot, keep, kept_one = line.strip("= ").strip(), True, False
             out.append(line)
         elif line.startswith("# "):
-            if "idle-hacking" in line:   # capture name; drop static boilerplate
+            # capture name and the KNOWN-WRONG banner survive; static
+            # boilerplate does not. The banner was being stripped here, which
+            # let craft ceilings computed from a known-wrong constant render
+            # clean in the digest that drives the advisory.
+            if "idle-hacking" in line or _is_refit_banner(line):
                 out.append(line)
         elif stripped.startswith(("ceiling", "~ceiling")):
             if "UPGRADE" in line and not kept_one:
@@ -1518,6 +1580,12 @@ def _brief_hardware(text):
             out.append(f"  ({dropped} lower-value combat track(s) and the "
                        f"economy tracks suppressed — ih.py hardware)")
             break
+        elif in_tracks and line.strip().startswith("!!"):
+            # a track's depth-suspect note belongs to the row ABOVE it and is
+            # not a track of its own -- counting it as one silently dropped a
+            # real track and skewed the suppressed count
+            if kept and kept <= 3:
+                out.append(line)
         elif in_tracks and line.startswith("    ") and line.strip():
             if kept < 3:
                 out.append(line)
@@ -1661,6 +1729,7 @@ def build_parser():
     p = sub.add_parser("audit")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_audit)
+
 
     p = sub.add_parser("ab")
     p.add_argument("--brief", action="store_true")
