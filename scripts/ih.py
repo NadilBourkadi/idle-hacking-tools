@@ -1308,10 +1308,10 @@ def _audit_decompile_locks(cap, ctx):
     flags = []
     if actions["unlock"]:
         rows = actions["unlock"]
-        flags.append(("LOCKS", f"{len(rows)} decompile-locked item(s) are NOT "
-                               f"worth holding (value = the weaker of raw and "
-                               f"ex-suspect Δ, so no verdict rests on a "
-                               f"suspect weight) — unlock and decompile: "
+        flags.append(("LOCKS", f"{len(rows)} decompile-locked item(s) are safe "
+                               f"to discard (NEITHER reading defends them, or "
+                               f"they are out-ranked in slot) — unlock and "
+                               f"decompile: "
                       + "; ".join(f"{r['name']} [{r['slot']}] {r['worth']:+.1f}"
                                   for r in rows[:6])
                       + (f"; +{len(rows) - 6} more — ih.py locks"
@@ -1324,6 +1324,23 @@ def _audit_decompile_locks(cap, ctx):
                                   for r in rows[:6])
                       + (f"; +{len(rows) - 6} more — ih.py locks"
                          if len(rows) > 6 else "")))
+    # Contested items are a THIRD outcome and must be reported, not silently
+    # omitted. A sweep listing only actionable rows reads as "everything else
+    # is fine", when in fact these hold inventory indefinitely while a flagged
+    # weight goes unresolved -- which makes the holding cost attributable to a
+    # specific missing measurement rather than looking like clutter.
+    if actions.get("contested"):
+        rows = actions["contested"]
+        flags.append(("LOCKS", f"{len(rows)} item(s) are CONTESTED — raw and "
+                               f"ex-suspect disagree, so they stay locked and "
+                               f"no decompile is advised. They hold inventory "
+                               f"until the flagged weight resolves (see "
+                               f"PENDING_REFITS): "
+                      + "; ".join(f"{r['name']} [{r['slot']}] raw "
+                                  f"{r['raw']:+.1f} / ex {r['ex_suspect']:+.1f}"
+                                  for r in rows[:4])
+                      + (f"; +{len(rows) - 4} more — ih.py locks"
+                         if len(rows) > 4 else "")))
     return flags
 
 
