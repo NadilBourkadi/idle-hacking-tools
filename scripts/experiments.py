@@ -107,8 +107,12 @@ DRIVER_AB_2026_07_27 = {
     # VLAN Rules L11 +1% Def, Traffic Mirror L8 +1% Eva, IDS Signatures L7).
     # Each is ~+0.5% of a realized stat -- inside the noise, but the window
     # measures a BUNDLE and is not a clean single-item read. Stated, not fixed.
-    "segment_ms": 1785189000000,        # = equip; no mid-test segment declared
-    "segment_label": "the equip (no mid-test)",
+    # None, NOT equip_ms. Declaring the boundary AT the equip made the
+    # `ended_at_ms >= segment_ms` test true for every post-equip death, so
+    # the readout told the reader to analyse the whole window separately --
+    # the same false-contamination bug fixed in code on 7 Aug 2026, written
+    # in data. "No mid-test segment" is spelled None.
+    "segment_ms": None,
     # Amended 27 Jul 22:0xZ, BEFORE any post-equip death was scored: the
     # original clause read "fights/hour up >= +5%", which is unsatisfiable --
     # fight cadence is a fixed 4.872 s/fight (n=29, sd 0.053, invariant across

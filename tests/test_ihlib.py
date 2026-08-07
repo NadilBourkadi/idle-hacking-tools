@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -322,6 +323,50 @@ class AuditSmokeTest(unittest.TestCase):
     def test_run_audit_returns_flags(self):
         import ih
         self.assertIsInstance(ih.run_audit(FIXTURE), list)
+
+
+class CicdBudgetMessageTest(unittest.TestCase):
+    """The free-runs line the advisory acts on. Every case here is a review
+    finding from 7 Aug 2026: the check reported a budget from a model where
+    the game reports its own, then over-advertised it three further ways."""
+
+    def _run(self, rows, cicd_level):
+        import ih
+        with mock.patch.object(ihlib, "cicd_rows", return_value=rows):
+            return ih._audit_cicd_budget_note(cicd_level)
+
+    @staticmethod
+    def _row(used, limit):
+        now = datetime.now(timezone.utc)
+        return {"seen_ms": now.timestamp() * 1000,
+                "daily_used": used, "daily_limit": limit}
+
+    def test_uses_game_reported_used_not_the_row_count(self):
+        """Both halves of the fraction must come from one producer. Counting
+        ledger rows under-counts any run made while the hub wasn't
+        streaming, which overstates the free budget."""
+        note = self._run([self._row(9, 15)], cicd_level=3)
+        self.assertIn("6/15", note)
+
+    def test_level_up_narrative_only_when_a_level_up_explains_the_gap(self):
+        # observed 15 == 5 * L3 while the pipeline reads L4: supported.
+        self.assertIn("L3->L4", self._run([self._row(8, 15)], cicd_level=4))
+        # observed 13 matches no level: must NOT assert a level-up.
+        other = self._run([self._row(8, 13)], cicd_level=4)
+        self.assertNotIn("level-up raised", other)
+        self.assertIn("no level-up explains", other)
+
+    def test_counts_never_go_negative(self):
+        """`observed - used` and `modelled - used` were printed unclamped, so
+        a game cap above the model (or a missing newest limit) could print
+        '-2 free runs'."""
+        for used, limit, level in [(12, 15, 2), (16, 15, 4), (14, 15, 3)]:
+            with self.subTest(used=used, limit=limit, level=level):
+                note = self._run([self._row(used, limit)], cicd_level=level)
+                for token in note.replace("/", " ").replace("(", " ").split():
+                    self.assertFalse(
+                        token.lstrip("-").isdigit() and token.startswith("-"),
+                        f"negative count in: {note}")
 
 
 class LockActionsTest(unittest.TestCase):

@@ -977,11 +977,35 @@ def _audit_cicd_budget(cap, homelab, definitions):
                     if prov == "asserted" and "CI/CD" in (basis or "")]
     if not (cicd_level and pending_fits):
         return []
+    note = _audit_cicd_budget_note(cicd_level)
+    if note is None:
+        return []
+    return [("MEASURE", f"CI/CD runs unused today: {note}. They expire at "
+                        f"the UTC day reset and do not bank — "
+                        f"{', '.join(pending_fits)} still asserted "
+                        f"with the pipeline as named unblock; the "
+                        f"held Corrupt crafts and the hardware "
+                        f"reset re-cut wait on those fits")]
+
+
+def _audit_cicd_budget_note(cicd_level):
+    """How many free simulator runs remain today, and how sure we are.
+
+    Split out from `_audit_cicd_budget` so the branching is directly
+    testable: every branch below is a 7 Aug 2026 review finding about this
+    line over-advertising free capacity. Returns None when nothing is free.
+    """
     today_utc = datetime.now(timezone.utc).date()
     today_rows = [r for r in ihlib.cicd_rows()
                   if r.get("seen_ms") and datetime.fromtimestamp(
                       r["seen_ms"] / 1000, timezone.utc).date() == today_utc]
-    used = len(today_rows)
+    # The game reports `daily_used` alongside `daily_limit`, so take BOTH
+    # halves of the fraction from the same producer. Counting ledger rows
+    # instead under-counts whenever a run happened while the capture hub was
+    # not streaming, which overstates the free budget -- the same
+    # over-advertising this check was fixed to stop, moved into the numerator.
+    used = next((r["daily_used"] for r in reversed(today_rows)
+                 if r.get("daily_used") is not None), len(today_rows))
     # The game REPORTS its own daily cap on every run. Prefer that to
     # CICD_RUNS_PER_LEVEL * level, and where the two disagree say so rather
     # than picking the optimistic one: whether a mid-day level-up raises the
@@ -996,24 +1020,39 @@ def _audit_cicd_budget(cap, homelab, definitions):
                      if r.get("daily_limit")), None)
     modelled = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
     cicd_budget = observed or modelled
-    if used >= cicd_budget and used >= modelled:
-        return []
-    if observed and observed != modelled:
-        note = (f"{observed - used} certain, up to {modelled - used} if the "
-                f"L{cicd_level} level-up raised today's cap — the last "
-                f"game-reported limit is {observed} but predates the "
-                f"level-up, and whether a mid-day level-up lifts the same "
-                f"day's budget is UNOBSERVED (simulator-protocol.md par "
-                f"9.2). The next run reports the live cap and settles it")
+    certain = max(0, cicd_budget - used)
+    upper = max(certain, modelled - used)
+    if not certain and not upper:
+        return None
+    if observed is None:
+        note = f"{certain}/{modelled} (modelled from pipeline level)"
+    elif observed == modelled:
+        note = f"{certain}/{observed} (game-reported)"
     else:
-        basis = "game-reported" if observed else "modelled from level"
-        note = f"{cicd_budget - used}/{cicd_budget} ({basis})"
-    return [("MEASURE", f"CI/CD runs unused today: {note}. They expire at "
-                        f"the UTC day reset and do not bank — "
-                        f"{', '.join(pending_fits)} still asserted "
-                        f"with the pipeline as named unblock; the "
-                        f"held Corrupt crafts and the hardware "
-                        f"reset re-cut wait on those fits")]
+        # Only claim a level-up when the observed cap is consistent with an
+        # EARLIER level. Firing this narrative on mere disagreement would
+        # assert a mid-day level-up that never happened -- and cite par 9.2
+        # in support of it -- whenever CICD_RUNS_PER_LEVEL is simply wrong
+        # for this level, or the game changes the cap.
+        per = ihlib.CICD_RUNS_PER_LEVEL
+        implied = observed / per if per else None
+        levelled_up = (implied is not None and implied == int(implied)
+                       and int(implied) < cicd_level)
+        if levelled_up:
+            note = (f"{certain} certain, up to {upper} if the "
+                    f"L{int(implied)}->L{cicd_level} level-up raised today's "
+                    f"cap — the last game-reported limit is {observed}, "
+                    f"consistent with L{int(implied)}, and whether a mid-day "
+                    f"level-up lifts the same day's budget is UNOBSERVED "
+                    f"(simulator-protocol.md par 9.2). The next run reports "
+                    f"the live cap and settles it")
+        else:
+            note = (f"{certain} (game-reported cap {observed}). NOTE the "
+                    f"model says {modelled} ({per}/level x L{cicd_level}) "
+                    f"and the game says {observed}, a gap no level-up "
+                    f"explains — CICD_RUNS_PER_LEVEL may be wrong at this "
+                    f"level. Trusting the game's figure")
+    return note
 
 
 def _audit_contracts(cap, ctx):
@@ -1551,8 +1590,13 @@ def cmd_ab(args):
                   " fights have round detail")
         print(f"A/B {exp['item']}")
         print(depth + " | " + hit)
-        print(detail + (f" | {status['deaths_after_segment']} deaths post-VLAN"
-                        if status["deaths_after_segment"] else ""))
+        # Same experiment-supplied label as the full readout below. This
+        # printer kept the hardcoded "post-VLAN" through the first pass of
+        # the fix -- one defect, two printers, and only one was corrected.
+        seg_label = exp.get("segment_label") or "declared"
+        print(detail + (f" | {status['deaths_after_segment']} deaths post-"
+                        f"{seg_label}" if status["deaths_after_segment"]
+                        else ""))
         if n >= target:
             print("TARGET REACHED — run the keep/revert decision")
         return
