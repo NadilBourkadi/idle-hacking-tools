@@ -10,3 +10,10 @@ __pycache__/
 # research log, never a player's save history. A fresh clone starts with an
 # empty data/ tree and the capture hub recreates the structure on first use.
 data/
+
+# The user's global gitignore excludes .claude/ everywhere; this repo
+# deliberately overrides that. The advisory skill and the no-AI-trailer
+# setting are part of the toolkit, not local scratch -- a fresh clone should
+# get `/advise` working. Verified free of paths, tokens and personal data.
+!.claude/
+!.claude/**
