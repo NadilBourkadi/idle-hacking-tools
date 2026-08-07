@@ -977,16 +977,39 @@ def _audit_cicd_budget(cap, homelab, definitions):
                     if prov == "asserted" and "CI/CD" in (basis or "")]
     if not (cicd_level and pending_fits):
         return []
-    cicd_budget = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
     today_utc = datetime.now(timezone.utc).date()
-    used = sum(1 for r in ihlib.cicd_rows()
-               if r.get("seen_ms") and datetime.fromtimestamp(
-                   r["seen_ms"] / 1000, timezone.utc).date() == today_utc)
-    if used >= cicd_budget:
+    today_rows = [r for r in ihlib.cicd_rows()
+                  if r.get("seen_ms") and datetime.fromtimestamp(
+                      r["seen_ms"] / 1000, timezone.utc).date() == today_utc]
+    used = len(today_rows)
+    # The game REPORTS its own daily cap on every run. Prefer that to
+    # CICD_RUNS_PER_LEVEL * level, and where the two disagree say so rather
+    # than picking the optimistic one: whether a mid-day level-up raises the
+    # SAME day's budget is explicitly unobserved (the CICD_RUNS_PER_LEVEL
+    # registry row, simulator-protocol.md par 9.2), and this check must not
+    # quietly answer that open question. On 7 Aug 2026 the pipeline went L3
+    # -> L4 after that day's 8 runs, all of which reported daily_limit 15;
+    # the model said 20 and the check advertised 12 free runs against a
+    # game-reported 7. The next run resolves it for free by reporting the
+    # live cap, so name that rather than guessing.
+    observed = next((r["daily_limit"] for r in reversed(today_rows)
+                     if r.get("daily_limit")), None)
+    modelled = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
+    cicd_budget = observed or modelled
+    if used >= cicd_budget and used >= modelled:
         return []
-    return [("MEASURE", f"{cicd_budget - used}/{cicd_budget} CI/CD "
-                        f"runs unused today (they expire at the UTC "
-                        f"day reset and do not bank) — "
+    if observed and observed != modelled:
+        note = (f"{observed - used} certain, up to {modelled - used} if the "
+                f"L{cicd_level} level-up raised today's cap — the last "
+                f"game-reported limit is {observed} but predates the "
+                f"level-up, and whether a mid-day level-up lifts the same "
+                f"day's budget is UNOBSERVED (simulator-protocol.md par "
+                f"9.2). The next run reports the live cap and settles it")
+    else:
+        basis = "game-reported" if observed else "modelled from level"
+        note = f"{cicd_budget - used}/{cicd_budget} ({basis})"
+    return [("MEASURE", f"CI/CD runs unused today: {note}. They expire at "
+                        f"the UTC day reset and do not bank — "
                         f"{', '.join(pending_fits)} still asserted "
                         f"with the pipeline as named unblock; the "
                         f"held Corrupt crafts and the hardware "
