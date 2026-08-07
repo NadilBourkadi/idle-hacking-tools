@@ -2153,7 +2153,7 @@ def assumptions():
          "applied 0.05. Fitted range: enemy Defense 743-1,990, our ArmorPen 10. "
          "Extrapolating to very high ArmorPen is NOT covered -- the law is "
          "convex, so value per point RISES as ArmorPen approaches enemy "
-         "Defense", None, None),
+         "Defense", "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_FLAT[Thorns]", f["Thorns"], "measured",
          "RE-FIT 0.05 -> 0.13, 29 Jul 2026 -- the inherited guess was ~2.5x "
          "TOO LOW. Thorns is exact: `ptd` = 72.08 per enemy hit that lands, "
@@ -2164,7 +2164,8 @@ def assumptions():
          "at the levels where runs actually end. CONFIRMED at a second stat "
          "level 1 Aug 2026 (shell-ab-2026-07-31 close): ptd/landed-hit "
          "75.08 -> 125.28 as the gear affix added +48 -- delta 1.046x the "
-         "affix through the pool multiplier, per-hit law holds", None, None),
+         "affix through the pool multiplier, per-hit law holds",
+         "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_FLAT[Barrier]", f["Barrier"], "measured",
          "0.02 -> 0.10 -> 0.043 in one day; the 0.10 is WITHDRAWN and was my "
          "error. Barrier absorbs ALL incoming channels (8,473 depletion rounds "
@@ -2203,7 +2204,7 @@ def assumptions():
          "31 Jul 2026", None),
         ("INFERIOR_BAND", INFERIOR_BAND, "measured",
          "symmetric with UPGRADE_BAND, same 31 Jul reversion", "31 Jul 2026",
-         None),
+         "29 Jul 2026", None),
         # --- supplied ---
         ("HACKCOIN_CREDIT_RATE", HACKCOIN_CREDIT_RATE, "supplied",
          "player-supplied exchange rate, not derivable from any capture. An "
@@ -2214,6 +2215,23 @@ def assumptions():
          "swept 0/2/4/6/8/10 over three live candidates: lower better on "
          "mean, median, p10 AND p90 in every case. 2 rather than 0 keeps one "
          "Refactor in hand", "28 Jul 2026", None),
+        ("DAMAGE_K", DAMAGE_K, "measured",
+         "mitigation law dmg = Atk*K/(K+Def-ArmorPen). Fitted INDEPENDENTLY "
+         "in both directions -- 190.2 outgoing / 219.3 incoming -- and the "
+         "agreement is the validation. Everything Defense- or ArmorPen-"
+         "carrying is priced through it, so it is one of the two most "
+         "load-bearing numbers here; it was nevertheless unregistered until "
+         "7 Aug 2026, found by a test that walks the module's own constants",
+         "29 Jul 2026", None),
+        ("HIT_LOGIT_A / HIT_LOGIT_B", (HIT_LOGIT_A, HIT_LOGIT_B), "measured",
+         "hit law logit(hit) = A + B*ln(Acc/Eva), fitted 29 Jul 2026 on a "
+         "fixed-Accuracy era (n=2,674 fights / 174K attempts) after the "
+         "`pm`-biased saturation reading was falsified. Held OUT-OF-SAMPLE "
+         "three times (Software Profiler 30 Jul; the Payload and Firewall "
+         "live windows, the last matching a +0.7pp prediction exactly). "
+         "Superseded the retired 0.532/1.208 pm-biased fit. Unregistered "
+         "until 7 Aug 2026",
+         "29 Jul 2026", None),
         ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "measured",
          "how many craft bases to hold per slot; decides IRREVERSIBLE "
          "decompiles. Three inputs, two load-bearing: band-clearing bases "
@@ -2237,7 +2255,7 @@ def assumptions():
          "both ends = ~718/h; 700 recorded. Both are lower bounds -- the "
          "true rate needs a window with known continuous gathering. Passive "
          "accrual ~zero: harvest pays per GATHER-hour only", "31 Jul 2026",
-         None),
+         "29 Jul 2026", None),
         ("BOARD_TYPICAL_BEST_HC_PER_H", BOARD_TYPICAL_BEST_HC_PER_H,
          "asserted",
          "eyeballed from the 31 Jul - 6 Aug boards (best pending contract "
@@ -2281,7 +2299,7 @@ def assumptions():
          "23.8M/hr 6 Aug), so the live check uses a trailing 72h window -- "
          "the old pooled check lagged the era and let the constant sit at "
          "half the true rate for a week", "6 Aug 2026", _chk_credits_hr),
-        ("TIER_STEP_SHALLOW / _DEEP", f"{TIER_STEP_SHALLOW}/{TIER_STEP_DEEP}",
+        ("TIER_STEP_SHALLOW / TIER_STEP_DEEP / TIER_STEP_DEEP_LOW", f"{TIER_STEP_SHALLOW}/{TIER_STEP_DEEP}",
          "measured", "fitted archive-wide and re-fitted on every run by "
          "fit_tier_steps, so it cannot rot as the inventory turns over",
          "27 Jul 2026", _chk_tier_steps),
@@ -2289,7 +2307,7 @@ def assumptions():
          "the step is region-dependent; one constant 1.4 was fitted on "
          "shallow tiers only and over-projected a T6->T1 chase by 1.9x",
          "27 Jul 2026", None),
-        ("fight cadence (s/fight)", FIGHT_CADENCE_S, "measured",
+        ("FIGHT_CADENCE_S (fight cadence, s/fight)", FIGHT_CADENCE_S, "measured",
          "from the game's own death clock, never the stream's poll interval. "
          "RE-FIT 4.872 -> 4.65 on 1 Aug 2026: the tick ERA-STEPS (daily "
          "medians 4.873 -> 4.750 -> 4.788 -> 4.605 -> 4.641 -> 4.666 over "

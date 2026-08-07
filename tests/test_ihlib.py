@@ -177,6 +177,89 @@ class HomelabJobHoursTest(unittest.TestCase):
                          ihlib.homelab_job_hours(self.INFO, 3600, 1))
 
 
+class AssumptionsRegistryTest(unittest.TestCase):
+    """Every tunable constant must appear in `ihlib.assumptions()`.
+
+    CLAUDE.md has required this since the register was built, as prose only.
+    It was violated twice: `KEEP_DEPTH_PER_SLOT` shipped deciding irreversible
+    decompiles without a row (7 Aug 2026, caught by code review), and this
+    test's first run found `DAMAGE_K` and the fitted hit law — the mitigation
+    and hit-rate formulas everything else is priced through — unregistered
+    since they were fitted on 29 Jul.
+
+    A TOTAL check: it walks the module's own namespace rather than searching
+    for known-bad names, which is what lets it carry the rule. A bare
+    module-level number IS a tunable by definition; structural constants
+    (paths, slot maps, field-name tuples) are excluded by type, and private
+    implementation limits by the underscore convention.
+    """
+
+    def _bare_numeric_constants(self):
+        return {name: value for name, value in vars(ihlib).items()
+                if name.isupper() and not name.startswith("_")
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)}
+
+    def test_every_numeric_constant_is_registered(self):
+        registered = {row[0] for row in ihlib.assumptions()}
+        missing = sorted(
+            name for name in self._bare_numeric_constants()
+            if not any(name in row_name for row_name in registered))
+        self.assertEqual(
+            missing, [],
+            "tunable constants missing from ihlib.assumptions(): "
+            f"{missing}. CLAUDE.md requires registration in the same change "
+            "that introduces the constant.")
+
+    def test_registry_rows_carry_provenance(self):
+        """Status and rationale always; a DATE only where one can exist.
+
+        `asserted` and `inherited` rows legitimately have no validation date
+        -- that absence is the whole point, and MaxHP's empty date is how the
+        register says NEVER VALIDATED. But a `measured` row with no date is a
+        gap: it claims a measurement and does not say when. This test found
+        two on its first run (ArmorPen and Thorns, both measured 29 Jul 2026
+        with the date recorded only in the prose)."""
+        for row in ihlib.assumptions():
+            name, status, rationale, validated = row[0], row[2], row[3], row[4]
+            with self.subTest(constant=name):
+                self.assertIn(status, {"measured", "asserted", "inherited",
+                                       "supplied"})
+                self.assertTrue(rationale and rationale.strip())
+                if status in {"measured", "supplied"}:
+                    self.assertTrue(
+                        validated and validated.strip(),
+                        f"{name} claims to be {status} but records no date")
+
+
+class CliHelpTest(unittest.TestCase):
+    """`ih.py --help` must document every subcommand.
+
+    A TOTAL check (it walks the real subparser registry), which is what lets
+    CLAUDE.md drop its hand-maintained command list and point at --help
+    instead. That list had already drifted once — `locks` needed adding by
+    hand — and a list in prose cannot be kept honest by anything.
+    """
+
+    def _subparsers(self):
+        import ih
+        parser = ih.build_parser()
+        return next(a for a in parser._actions
+                    if hasattr(a, "choices") and a.choices)
+
+    def test_every_subcommand_has_help_text(self):
+        sub = self._subparsers()
+        documented = {a.dest for a in sub._choices_actions if a.help}
+        missing = sorted(set(sub.choices) - documented)
+        self.assertEqual(missing, [], f"subcommands with no help=: {missing}")
+
+    def test_help_text_is_a_description_not_a_restated_name(self):
+        sub = self._subparsers()
+        for action in sub._choices_actions:
+            with self.subTest(command=action.dest):
+                self.assertGreater(len(action.help or ""), len(action.dest) + 8)
+
+
 class DataIsolationTest(unittest.TestCase):
     """The suite must not be able to read the working tree's real data.
 

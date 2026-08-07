@@ -21,3 +21,31 @@ jobs:
       - run: python -m unittest discover tests -v
       # The library must import cleanly with an empty data tree (fresh clone)
       - run: mkdir -p data && python -c "import sys; sys.path.insert(0, 'scripts'); import ihlib, experiments"
+
+  userscript-version:
+    # The capture tool auto-updates via Tampermonkey ONLY when @version
+    # changes, so a behaviour change shipped without a bump silently never
+    # reaches the browser. This is a TOTAL check over a closed condition (did
+    # the file change in this diff, and did the version line change with it)
+    # -- unlike anything that tries to verify the script's read-only
+    # BEHAVIOUR, which is semantic and stays a prose rule in CLAUDE.md.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: require an @version bump when the userscript changes
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch -q origin "${{ github.base_ref }}"
+          script=tools/item-loadout-capture.user.js
+          if git diff --quiet "$base"...HEAD -- "$script"; then
+            echo "userscript unchanged — nothing to check"; exit 0
+          fi
+          if git diff "$base"...HEAD -- "$script" | grep -qE '^[+-].*@version'; then
+            echo "userscript changed and @version was bumped"
+          else
+            echo "::error file=$script::userscript changed without an @version bump — Tampermonkey will not update it"
+            exit 1
+          fi
