@@ -177,6 +177,34 @@ class HomelabJobHoursTest(unittest.TestCase):
                          ihlib.homelab_job_hours(self.INFO, 3600, 1))
 
 
+class CliHelpTest(unittest.TestCase):
+    """`ih.py --help` must document every subcommand.
+
+    A TOTAL check (it walks the real subparser registry), which is what lets
+    CLAUDE.md drop its hand-maintained command list and point at --help
+    instead. That list had already drifted once — `locks` needed adding by
+    hand — and a list in prose cannot be kept honest by anything.
+    """
+
+    def _subparsers(self):
+        import ih
+        parser = ih.build_parser()
+        return next(a for a in parser._actions
+                    if hasattr(a, "choices") and a.choices)
+
+    def test_every_subcommand_has_help_text(self):
+        sub = self._subparsers()
+        documented = {a.dest for a in sub._choices_actions if a.help}
+        missing = sorted(set(sub.choices) - documented)
+        self.assertEqual(missing, [], f"subcommands with no help=: {missing}")
+
+    def test_help_text_is_a_description_not_a_restated_name(self):
+        sub = self._subparsers()
+        for action in sub._choices_actions:
+            with self.subTest(command=action.dest):
+                self.assertGreater(len(action.help or ""), len(action.dest) + 8)
+
+
 class DataIsolationTest(unittest.TestCase):
     """The suite must not be able to read the working tree's real data.
 

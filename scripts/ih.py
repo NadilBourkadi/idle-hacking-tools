@@ -1849,50 +1849,61 @@ def build_parser():
     parser = argparse.ArgumentParser(prog="ih.py")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("captures").set_defaults(fn=cmd_captures)
+    sub.add_parser("captures",
+                       help="list captures and which lazy panels each contains").set_defaults(fn=cmd_captures)
 
-    p = sub.add_parser("loadout")
+    p = sub.add_parser("loadout",
+                       help="the eight equipped items with their affixes and totals")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_loadout)
 
-    p = sub.add_parser("item")
+    p = sub.add_parser("item",
+                       help="full detail for one item: affixes, rolls, craft costs")
     p.add_argument("query")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_item)
 
-    p = sub.add_parser("candidates")
+    p = sub.add_parser("candidates",
+                       help="inventory items ranked against what is equipped")
     p.add_argument("--slot")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_candidates)
 
-    p = sub.add_parser("compare")
+    p = sub.add_parser("compare",
+                       help="two items side by side")
     p.add_argument("a")
     p.add_argument("b")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_compare)
 
-    p = sub.add_parser("diff")
+    p = sub.add_parser("diff",
+                       help="what changed between two captures")
     p.add_argument("old", nargs="?")
     p.add_argument("new", nargs="?")
     p.set_defaults(fn=cmd_diff)
 
-    p = sub.add_parser("stats")
+    p = sub.add_parser("stats",
+                       help="headline player state: level, currencies, streak, zone")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_stats)
 
-    p = sub.add_parser("history")
+    p = sub.add_parser("history",
+                       help="how one item or stat moved across the capture archive")
     p.add_argument("query")
     p.set_defaults(fn=cmd_history)
 
-    p = sub.add_parser("homelab")
+    p = sub.add_parser("homelab",
+                       help="level, running jobs, queue suggestions, purchasable upgrades")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_homelab)
 
-    p = sub.add_parser("hardware")
+    p = sub.add_parser("hardware",
+                       help="chip balance and combat tracks ranked by value per chip")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_hardware)
 
-    p = sub.add_parser("audit")
+    p = sub.add_parser("audit",
+                       help="anomaly sweep: what is silently costing progress right now")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_audit)
 
@@ -1902,7 +1913,8 @@ def build_parser():
     p.add_argument("--floor", type=int, default=ihlib.COMPILE_FLOOR)
     p.set_defaults(fn=cmd_locks)
 
-    p = sub.add_parser("ab")
+    p = sub.add_parser("ab",
+                       help="the live A/B gate: keep rule, deaths banked, mechanism table")
     p.add_argument("--brief", action="store_true")
     p.set_defaults(fn=cmd_ab)
 
@@ -1951,7 +1963,8 @@ def build_parser():
                    choices=("software_profiler", "cicd_pipeline"))
     p.set_defaults(fn=cmd_sims)
 
-    p = sub.add_parser("potential")
+    p = sub.add_parser("potential",
+                       help="projected post-craft ceilings per slot (the craft verdict)")
     p.add_argument("--slot")
     p.add_argument("--file")
     p.add_argument("--top", type=int, default=3)
