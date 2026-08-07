@@ -74,14 +74,40 @@ def is_combat_stat(label):
 
 # ---- Fitted models (docs/static-analysis-2026-07-22.md) -------------------
 
+# Affix-magnitude scaling laws. REFIT 7 Aug 2026 against the game's own
+# `value_min`/`value_max` fields across the whole capture archive (138 flat and
+# 645 percent affix/tier groups, ilvl 314-4767) -- see the register entries.
+#
+# These were inline literals until this refit, which is why the total
+# registry test never saw them: it walks module-level bare numerics, and a
+# constant living inside a function body is invisible to it. Same escape
+# route ENEMY_LEVEL_GROWTH_PER_STREAK used until 6 Aug.
+#
+# Only OFFSET and EXPONENT are load-bearing. Every consumer normalises an
+# observed value by scale(source_ilvl) and re-multiplies by scale(target_ilvl),
+# so the REF denominators cancel in the ratio and are cosmetic (they set what
+# `ih.py item` prints as "scale x...").
+SCALE_PCT_OFFSET, SCALE_PCT_REF, SCALE_PCT_EXPONENT = 250, 1125, 0.4333
+SCALE_FLAT_OFFSET, SCALE_FLAT_REF, SCALE_FLAT_EXPONENT = 250, 1021, 1.0
+
+
 def scale_percent_value(item_level):
     """Percentage-affix magnitude relative to the ilvl-1000 reference."""
-    return ((item_level + 125) / 1125) ** 0.391
+    return ((item_level + SCALE_PCT_OFFSET)
+            / SCALE_PCT_REF) ** SCALE_PCT_EXPONENT
 
 
 def scale_flat_value(item_level):
-    """Flat-affix magnitude relative to reference (noisier fit)."""
-    return ((item_level + 100) / 1021) ** 0.7849
+    """Flat-affix magnitude relative to reference.
+
+    LINEAR in (ilvl + 250). The previous `((ilvl+100)/1021)**0.7849` was a
+    power fit over a much narrower ilvl range and decayed badly above it:
+    extrapolating from ilvl 445-2912 observations to the ilvl-4240 Kernel
+    crafted on 7 Aug 2026 it under-predicted the game's own stated affix
+    midpoint by 19.0%, against +0.6% for this law.
+    """
+    return ((item_level + SCALE_FLAT_OFFSET)
+            / SCALE_FLAT_REF) ** SCALE_FLAT_EXPONENT
 
 
 # The two fitted-cost helpers below have no CLI callers by design: they are
@@ -1919,6 +1945,64 @@ def _chk_tier_steps(cap):
             f"{TIER_STEP_SHALLOW:.3f}/{TIER_STEP_DEEP:.3f}")
 
 
+def _chk_affix_scaling(cap):
+    """Predict each affix's game-stated midpoint from the OTHER item levels.
+
+    A genuine second opinion, not a restatement of the fit: for every
+    affix/tier group in this capture that also appears at a different ilvl
+    somewhere in the archive, normalise the other observations, re-multiply
+    by this item's scale, and compare against the value_min/value_max
+    midpoint the GAME declares here. Drift shows up as a signed error that
+    grows with ilvl, which is exactly how the old flat law hid -- it was
+    accurate in the middle of its range and 19% low at the top.
+    """
+    groups = {}
+    for path in capture_paths():
+        try:
+            other = json.loads(Path(path).read_text())
+        except (OSError, ValueError):
+            continue
+        for _, _, item in iter_items(other):
+            for side in ("prefixes", "suffixes"):
+                for affix in item.get(side) or []:
+                    ilvl = affix.get("item_level") or item.get("item_level") or 0
+                    for e in affix.get("effects") or []:
+                        if not e.get("value_max") or not ilvl:
+                            continue
+                        key = (affix.get("affix_id"), e.get("resource"),
+                               e.get("type"), affix["tier"])
+                        mid = (e["value_min"] + e["value_max"]) / 2
+                        groups.setdefault(key, []).append((ilvl, mid))
+    errors = []
+    for _, _, item in iter_items(cap):
+        for side in ("prefixes", "suffixes"):
+            for affix in item.get(side) or []:
+                ilvl = affix.get("item_level") or item.get("item_level") or 0
+                for e in affix.get("effects") or []:
+                    if not e.get("value_max") or not ilvl:
+                        continue
+                    key = (affix.get("affix_id"), e.get("resource"),
+                           e.get("type"), affix["tier"])
+                    rows = [(i, m) for i, m in groups.get(key, []) if i != ilvl]
+                    if len(rows) < 4:
+                        continue
+                    scale = (scale_flat_value if e["type"] == "flat_add"
+                             else scale_percent_value)
+                    pred = (statistics.median([m / scale(i) for i, m in rows])
+                            * scale(ilvl))
+                    truth = (e["value_min"] + e["value_max"]) / 2
+                    if truth:
+                        errors.append(pred / truth - 1.0)
+    if len(errors) < 8:
+        return ("SKIP", "too few cross-ilvl affix observations to check")
+    med = statistics.median(errors)
+    worst = max(errors, key=abs)
+    status = "OK" if abs(med) < 0.05 else "DRIFT"
+    return (status, f"predicts the game's own affix midpoints from OTHER "
+                    f"item levels to {med:+.1%} median "
+                    f"(worst {worst:+.1%}, n={len(errors)})")
+
+
 def _chk_hardware_curve(cap):
     hw = hardware_state(cap)
     if not hw:
@@ -2320,6 +2404,30 @@ def assumptions():
         ("hardware cost curve", "A*L**p", "measured",
          "fitted live off next_cost and self-validates against the game's own "
          "reset refund", "27 Jul 2026", _chk_hardware_curve),
+        ("SCALE_FLAT_OFFSET/SCALE_FLAT_REF/SCALE_FLAT_EXPONENT",
+         SCALE_FLAT_EXPONENT, "measured",
+         "LINEAR in (ilvl + 250). Refitted 7 Aug 2026 over 138 affix/tier "
+         "groups spanning ilvl 314-4767, against the game's OWN value_min/"
+         "value_max fields -- so this self-validates rather than being a "
+         "fit to our own scores. Was ((ilvl+100)/1021)**0.7849, an inline "
+         "literal that no registry check could see. That form decayed above "
+         "its fitting range: predicting the ilvl-4240 Kernel's T1 "
+         "regeneration midpoint from ilvl 445-2912 observations alone it "
+         "read 175.0 against a game-stated 216.0 (-19.0%), where this law "
+         "reads 217.4 (+0.6%). Flat affixes are the Regen family, the "
+         "confirmed win condition, so this under-projected every craft that "
+         "mattered and is the leading candidate for the +23.7 calibration "
+         "bias. Only OFFSET and EXPONENT matter; SCALE_FLAT_REF cancels",
+         "7 Aug 2026 (refitted)", _chk_affix_scaling),
+        ("SCALE_PCT_OFFSET/SCALE_PCT_REF/SCALE_PCT_EXPONENT",
+         SCALE_PCT_EXPONENT, "measured",
+         "((ilvl + 250)/1125)**0.4333, refitted 7 Aug 2026 in the same pass "
+         "over 645 affix/tier groups. The old (offset 125, k 0.391) was much "
+         "closer than the flat law -- median within-group spread 1.014 vs "
+         "1.0015 refitted, and -2.2% vs -0.1% on the same out-of-sample "
+         "ilvl-4240 test -- so this moves percent-carried verdicts only "
+         "slightly. Refitted anyway rather than left as a known-smaller "
+         "error", "7 Aug 2026 (refitted)", None),
         ("composed_stat_total stat families", "SCALING/DIRECT/economy", "measured",
          "self-validates against the game's reported totals for every stat",
          "27 Jul 2026", _chk_stat_families),
@@ -2339,7 +2447,14 @@ def assumptions():
 # removing the T3 cap (27 Jul) and lowering COMPILE_FLOOR 8 -> 2 (28 Jul) each
 # shifted projections by more than UPGRADE_BAND.
 PREDICTIONS_PATH = DATA_ROOT / "predictions.jsonl"
-CURRENT_MODEL = "uncapped+floor2+archive"
+# Bumped 7 Aug 2026 by the affix-scaling refit. The nine rows tagged
+# `uncapped+floor2+archive` all had their PROJECTIONS computed with a flat
+# scaling law that ran ~19% low at current craft item levels, so that era's
+# +23.7 bias is partly an artefact of the law rather than of the planner, and
+# pooling new grades into it would launder a fixed defect into the new
+# numbers. Their REALIZED values are unaffected (realized scores read the
+# item's actual affix values, never the law) and stay comparable.
+CURRENT_MODEL = "uncapped+floor2+archive+scalefit"
 
 
 def prediction_records(path=PREDICTIONS_PATH):
