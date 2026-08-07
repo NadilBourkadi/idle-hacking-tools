@@ -239,13 +239,41 @@ consolidation dropped signal.
 Roughly **halved**, with the two non-negotiable sections untouched and every
 incident still owned.
 
-## Open questions for the player
+## Resolved — the three open questions
 
-1. **`docs/incidents.md` as a new file, or fold into `decision-log.md`?**
-   The log is chronological and append-only; incidents want to be indexed by
-   failure mode. Leaning new file, cross-linked to log entries.
-2. **Claim 12 (the command list) — drop it?** `--help` is authoritative, but
-   the list is genuinely useful for discovery. Alternative: generate it.
-3. **Claim 67 — is moving the hackcoin *rate* out of `CLAUDE.md` too far?**
-   It is a supplied constant already in `assumptions()`, but it is also the
-   single most decision-relevant number in the workspace.
+All three changed once measured rather than reasoned about.
+
+1. **`docs/incidents.md` is an INDEX, not a store.** The narratives are
+   already in `decision-log.md` (Barrier appears 73 times there, the ladder
+   incident 16, the denominator incident 8). Moving them would have created a
+   *third* copy — exactly the duplication that produced the three stale
+   claims fixed at the top of this branch. It is a one-page table: failure
+   mode, what it cost, the rule that owns it, indexed by kind because the log
+   is indexed by date.
+2. **Fix `--help`, then drop the list.** "Just use `--help`" would not have
+   worked: only 7 of 20 subcommands had a `help=` string, so both sources
+   documented nothing and one merely did it more visibly. All 20 now carry a
+   description, `CliHelpTest` asserts it (a total check — it walks the real
+   subparser registry), and the prose list is gone.
+3. **The hackcoin *rate* moves; the *rule* stays.** That bullet was four
+   things: a rule (stays), the rate (already in `assumptions()` — and the
+   register's copy carries a "re-confirm before leaning on it" caveat the
+   prose copy lacked, so the duplicate was strictly worse), the consequences
+   (stay), and contract-board mechanics (already in `mechanics.md` §20). The
+   instinct to protect it was pattern-matching on "important number" when the
+   actual risk ran the other way.
+
+## Outcome
+
+| section | before | after |
+|---|---:|---:|
+| whole file | 5,563 w | **3,019 w** (−46%) |
+| Never defer a known defect | 445 | 445 (untouched) |
+| Userscript safety | 93 | 93 + 3 lines on why it cannot be tested |
+
+Coverage verified mechanically: 19 load-bearing phrases still present in
+`CLAUDE.md`, 5 relocated claims present in their destination and absent from
+`CLAUDE.md` (no duplicates), 21 of 21 incidents owned. Three enforcement
+checks now carry rules that were prose only — `AssumptionsRegistryTest`,
+`CliHelpTest`, and the CI `@version` job — and the first of those immediately
+found `DAMAGE_K` and the fitted hit law unregistered since 29 Jul.

@@ -891,3 +891,32 @@ Consequences, encoded in `ih.py audit`:
 
 Residual unknowns in `open-questions.md` §16 (payout observation, inactive
 partial progress, board state after a carried completion).
+
+
+## 21. Build guardrails — what the current loadout needs (moved from CLAUDE.md, 7 Aug 2026)
+
+Empirical findings about *this build*, not instructions. They lived in
+`CLAUDE.md` until the 7 Aug consolidation; that file states rules, this one
+states what is known about the game.
+
+- The build needs **Defense, regeneration and fight tempo together**; Max HP is
+  a buffer, not a substitute for mitigation or recovery.
+- **Attack speed is a mitigation stat, not an economy stat.** Fight cadence is a
+  fixed real-time tick, so tempo buys no extra fights per hour; it shortens
+  fights in *rounds* (−2% to −5% measured), which means fewer enemy attacks per
+  fight. Rewards per hour are set by streak depth alone. The 22 Jul
+  "output/tempo does not move the death ceiling" law now survives only in
+  bundle-confounded form: the output-heavy Payload bundle moved the ceiling
+  +14.8 (`payload-ab-2026-07-30`, closed KEEP 31 Jul; attribution shared with a
+  same-hour hardware package). Status in `open-questions.md`.
+- **Accuracy saturation was FALSIFIED 29 Jul.** The reading came from the biased
+  `pm` denominator (`pm` flags only first-attack misses). True per-attack hit
+  rate at the streak-120–159 faces is 65–68%; `Acc` is measured at 0.21, and the
+  fitted hit law (`ihlib.HIT_LOGIT_A/_B`) has held out-of-sample three times.
+  Compare hit rates **within** a streak bracket only — enemy evasion scales with
+  streak, so a pooled comparison measures composition.
+- A tested Kernel trade of **+11 Regeneration and +5.53% Max HP for −7.46%
+  Defense, −1.57% Accuracy and −2.09% Attack Speed was unfavourable.**
+- **Do not assume listed Regeneration equals realised combat-log `prg`.**
+- **Firewall/Router/Kernel replacements must preserve the function of the
+  current sustain anchors**, not merely improve item level.
