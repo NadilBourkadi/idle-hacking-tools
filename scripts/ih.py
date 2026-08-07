@@ -1176,14 +1176,163 @@ def _audit_unequipped(cap, ctx):
     return flags
 
 
+def cmd_locks(args):
+    """Daily lock/unlock actions, grouped BY SLOT so the panel is one pass.
+
+    Ordered by `ihlib.SLOT_ORDER` (the game's own inventory order) with LOCK
+    and UNLOCK interleaved per slot, at the player's request 7 Aug 2026: a
+    list split into a lock block and an unlock block means walking the
+    inventory twice. Every line carries the item's CURRENT flag, so the list
+    is self-verifying against the panel rather than something to take on
+    trust -- and the header states the capture's age, because these actions
+    are a snapshot and a half-worked list looks like a wrong one.
+    """
+    cap, path = ihlib.load_capture(args.file)
+    # This command's recommended action is IRREVERSIBLE, so it is the last
+    # place a known-wrong constant may render clean (it was the only weight-
+    # consuming command missing this banner).
+    for _line in ihlib.pending_refit_banner():
+        print("  " + _line)
+    actions = ihlib.lock_actions(cap, floor=args.floor)
+    age = ihlib.capture_age_minutes(cap)
+    stamp = f"  (capture {age:.0f} min old)" if age is not None else ""
+    print(f"# {path.name}{stamp}")
+    print("# Operating model: anything NOT locked is decompiled and lost.")
+    print("# Value = the WEAKER of raw Δ and Δ-ex-suspect, so no verdict here")
+    print("# rests on a flagged weight. Items already correct are omitted.")
+    used, cap_slots, free, price = (actions["inventory_used"],
+                                    actions["inventory_cap"],
+                                    actions["inventory_free"],
+                                    actions["slot_price_hc"])
+    if cap_slots:
+        cost = f", and a slot costs {price} hackcoin" if price else ""
+        print(f"# Holding is NOT free: inventory {used}/{cap_slots} "
+              f"({free} free){cost}.")
+    print(f"# Depth: keeping the best {actions['per_slot']} base per slot — "
+          f"band-clearing bases arrive ~0.92/day and the median base is "
+          f"crafted\n#         1.2 days after dropping (max ever 4.5), so a "
+          f"deeper queue is never drawn down.")
+    print("# 'now' is the item's CURRENT flag in this capture — if it already "
+          "reads\n#         the target state you have done it; take a fresh "
+          "capture to re-check.")
+
+    by_slot = {}
+    for row in actions["lock"]:
+        by_slot.setdefault(row["slot"], []).append(("LOCK", row))
+    for row in actions["unlock"]:
+        by_slot.setdefault(row["slot"], []).append(("UNLOCK", row))
+    for row in actions.get("contested") or []:
+        by_slot.setdefault(row["slot"], []).append(("KEEP?", row))
+    held = {n.lower() for n in actions["protected"]}
+    held_rows = [(s, i) for _w, s, i in ihlib.iter_items(cap)
+                 if (i.get("name") or "").lower() in held]
+    for slot, item in held_rows:
+        by_slot.setdefault(slot, []).append(("HELD", {
+            "name": item.get("name"), "slot": slot, "worth": None,
+            "stability": item.get("stability") or 0,
+            "item_level": item.get("item_level") or 0,
+            "reason": "revert path for the live A/B gate — do not unlock"}))
+
+    if not by_slot:
+        print("\n  no lock changes needed — every flag matches its value")
+        return
+    n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
+    n_cont = len(actions.get("contested") or [])
+    extra = (f", {n_cont} CONTESTED (no action — the two readings disagree, "
+             f"so they stay locked)" if n_cont else "")
+    print(f"\n  {n_lock} to LOCK, {n_unlock} to UNLOCK+decompile{extra}, "
+          f"in inventory slot order:")
+    for slot in ihlib.SLOT_ORDER:
+        display = ihlib.SLOT_DISPLAY.get(slot, slot)
+        rows = by_slot.get(display)
+        if not rows:
+            continue
+        order = {"LOCK": 0, "HELD": 1, "KEEP?": 2, "UNLOCK": 3}
+        rows.sort(key=lambda r: (order[r[0]],
+                                 -(r[1]["worth"] if r[1]["worth"] is not None
+                                   else 0)))
+        print(f"\n  ── {display} " + "─" * max(1, 40 - len(display)))
+        for action, r in rows:
+            now = "locked" if r.get("locked", True) else "unlocked"
+            worth = f"{r['worth']:+6.1f}" if r["worth"] is not None else "  hold"
+            print(f"    {action:6s} {r['name']:44s} {worth}  "
+                  f"(now: {now})")
+            print(f"           {r['reason']}")
 
 
+def _audit_inventory_capacity(cap, ctx):
+    """Inventory space is bought with HACKCOIN — the scarcest currency.
+
+    Added 7 Aug 2026: the first lock sweep recommended holding 13 craft bases
+    without checking that inventory was 94/102 and that a slot costs 10
+    hackcoin (~83B credit-equivalents). Never recommend a hold without its
+    denominator — the standing rule, missed on exactly the resource it is
+    written about.
+    """
+    used, cap_slots, free, price = ihlib.inventory_pressure(cap)
+    if not cap_slots:
+        return []
+    if free is not None and free <= 10:
+        cost = (f"; a slot costs {price} hackcoin "
+                f"(~{price * ihlib.HACKCOIN_CREDIT_RATE / 1e9:,.0f}B "
+                f"credit-equivalents)" if price else "")
+        # max_slots is SOFT -- seven 5 Aug captures held 103 against a max of
+        # 102 -- so this is spending pressure, not a wall. Said plainly here
+        # because the first version called it a hard cap in a player advisory.
+        return [("INVENTORY", f"inventory {used}/{cap_slots} ({free} nominal "
+                              f"slot(s) free){cost}. NOTE max_slots is soft — "
+                              f"the archive has held 103/102 — so this is "
+                              f"pressure, not a hard wall. `ih.py locks` "
+                              f"lists what to clear")]
+    return []
 
 
+def _audit_decompile_locks(cap, ctx):
+    """`decompile_locked` vs actual craft value — a field nobody had ever read.
+
+    Added 7 Aug 2026 after the player asked what to decompile: the item schema
+    carries `decompile_locked`, 18 inventory items were locked, and the lock
+    set was almost exactly INVERTED against value — 17 of the 18 were
+    low-value while 13 band-clearing craft bases sat unlocked. The locks had
+    been set by hand over weeks and never revisited, so they encoded old
+    verdicts (mostly Corruption-carried Analyzers and Kernels) that the
+    re-fitted weights have since demoted. Both directions cost progress: a
+    stale lock protects junk and a missing one puts a real base one click from
+    deletion.
+
+    DELEGATES to `ihlib.lock_actions` rather than re-deriving the rule. The
+    first version duplicated the logic inline and immediately disagreed with
+    `ih.py locks` (13 holds vs 6) once the per-slot depth cap landed — the
+    same two-panels-drift bug as the homelab ETA, reintroduced within hours of
+    fixing it. One implementation, two callers.
+    """
+    actions = ihlib.lock_actions(cap)
+    flags = []
+    if actions["unlock"]:
+        rows = actions["unlock"]
+        flags.append(("LOCKS", f"{len(rows)} decompile-locked item(s) are NOT "
+                               f"worth holding (value = the weaker of raw and "
+                               f"ex-suspect Δ, so no verdict rests on a "
+                               f"suspect weight) — unlock and decompile: "
+                      + "; ".join(f"{r['name']} [{r['slot']}] {r['worth']:+.1f}"
+                                  for r in rows[:6])
+                      + (f"; +{len(rows) - 6} more — ih.py locks"
+                         if len(rows) > 6 else "")))
+    if actions["lock"]:
+        rows = actions["lock"]
+        flags.append(("LOCKS", f"{len(rows)} band-clearing craft base(s) are "
+                               f"UNLOCKED and one click from deletion — lock: "
+                      + "; ".join(f"{r['name']} [{r['slot']}] {r['worth']:+.1f}"
+                                  for r in rows[:6])
+                      + (f"; +{len(rows) - 6} more — ih.py locks"
+                         if len(rows) > 6 else "")))
+    return flags
 
 
 AUDIT_CHECKS = [
     _audit_pending_refits,
+    _audit_inventory_capacity,
+    _audit_decompile_locks,
     _audit_stream_drift,
     _audit_stale_panels,
     _audit_capture_integrity,
@@ -1665,6 +1814,8 @@ def cmd_brief(args):
         ("calibration (current era)", ["calibration"], _brief_calibration),
         ("potential (band-clearing candidates only)", ["potential"] + pin,
          _brief_potential),
+        ("locks (lock/unlock actions — everything unlocked is decompiled)",
+         ["locks"] + pin, None),
         ("homelab", ["homelab"] + pin, _brief_homelab),
         ("hardware (top tracks)", ["hardware"] + pin, _brief_hardware),
         ("ab", ["ab"], _brief_ab),
@@ -1730,6 +1881,11 @@ def build_parser():
     p.add_argument("--file")
     p.set_defaults(fn=cmd_audit)
 
+    p = sub.add_parser("locks",
+                       help="daily lock/unlock actions (deltas only)")
+    p.add_argument("--file")
+    p.add_argument("--floor", type=int, default=ihlib.COMPILE_FLOOR)
+    p.set_defaults(fn=cmd_locks)
 
     p = sub.add_parser("ab")
     p.add_argument("--brief", action="store_true")

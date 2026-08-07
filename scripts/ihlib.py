@@ -12,6 +12,7 @@ import math
 import random
 import re
 import statistics
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1194,8 +1195,55 @@ def hardware_track_depth_note(definition):
     return None
 
 
+# How many band-clearing craft bases to hold PER SLOT. Measured 7 Aug 2026
+# after the first lock sweep recommended holding 13 and the player challenged
+# it as excessive. Three numbers decide it, none of which the first version
+# looked up:
+#
+#   1. Band-clearing bases ARRIVE at 0.92/day (14 keepers over the 15.2-day
+#      acquisition span of the current inventory), and the newest keeper in
+#      almost every slot is 0.0-0.5 days old. Supply roughly equals the ~0.8-1
+#      craft/day throughput, so a deep queue is never drawn down.
+#   2. Bases are CRAFTED YOUNG: median age at craft 1.2 days, max ever 4.5,
+#      5 of 8 within 2 days (all eight graded crafts of the current era). No
+#      base has ever waited in inventory long enough for depth to pay.
+#   3. Holding has a price, though a SOFTER one than first claimed: inventory
+#      was 94/102 and a slot costs 10 HACKCOIN (~83B credit-equivalents, the
+#      scarcest currency). CORRECTED 7 Aug 2026 by code review -- `max_slots`
+#      is NOT a hard cap: seven captures on 5 Aug held 103 items against a
+#      max of 102, so the field bounds nothing absolutely and "only 8 slots
+#      free" overstated the squeeze. Treat it as pressure, not a wall.
+#
+# Legs 1 and 2 carry the conclusion on their own and are the load-bearing
+# ones; leg 3 only adds a price. A marginal 4th-choice base worth ~+11 score,
+# near-certain to be superseded within days, is not worth a slot at any of
+# these prices. Depth 1 keeps ~6 days of craft supply across eight slots.
+# Raise it only if the arrival rate collapses or craft throughput rises well
+# above one per day.
+KEEP_DEPTH_PER_SLOT = 1
 
 
+def inventory_pressure(capture):
+    """(used, cap, free, hackcoin_per_extra_slot) — the cost of holding.
+
+    Exists because the first lock sweep recommended 13 holds without ever
+    checking whether inventory space was scarce. It was: 94/102, expandable
+    only at 10 hackcoin per slot.
+    """
+    used = sum(1 for where, _s, _i in iter_items(capture) if where == "inventory")
+    # Prefer the always-present inventory binding over the LAZY homelab panel,
+    # which is only captured when that tab was opened and goes stale in place.
+    inv = (capture["state"].get("inventoryData") or {})
+    cap_slots = inv.get("max_slots")
+    if cap_slots is None:
+        cap_slots = (capture["state"].get("homelabInfo") or {}
+                     ).get("inventory_max_slots")
+    price = None
+    hw = hardware_state(capture) or {}
+    for d in hw.get("definitions") or []:
+        if d.get("name") == "Hard Disk Drive":
+            price = (d.get("next_cost") or {}).get("hackcoin")
+    return used, cap_slots, (cap_slots - used if cap_slots else None), price
 
 
 def homelab_job_eta_hours(info, jobs):
@@ -1228,12 +1276,188 @@ def homelab_job_eta_hours(info, jobs):
     return eta
 
 
+def capture_age_minutes(capture, now_ms=None):
+    """Minutes between the capture and now, or None if it cannot be told.
+
+    Lock/decompile advice is a SNAPSHOT of an irreversible decision, and a
+    half-worked list looks exactly like a wrong one — so the age is printed
+    beside it rather than left for the reader to infer.
+    """
+    cap_ms = captured_ms(capture)
+    if not cap_ms:
+        return None
+    if now_ms is None:
+        now_ms = time.time() * 1000
+    return max(0.0, (now_ms - cap_ms) / 60000.0)
 
 
+def protected_revert_items():
+    """Item names held for a HOT A/B gate, lowercased.
+
+    A revert path is held for the GATE, not for its craft ceiling — it will
+    always look worthless to `plan_craft` (it is the thing being replaced), so
+    value-based lock advice must exempt it by name or it recommends deleting
+    the only way back out of a live experiment.
+    """
+    active = ACTIVE_EXPERIMENT or {}
+    if not active or active.get("concluded"):
+        return set()
+    name = (active.get("revert_item") or "").strip()
+    if not name:
+        # A hot gate with no declared revert path is a DECLARATION defect, not
+        # an empty result: silently returning an empty set is how the 7 Aug
+        # first run of `lock_actions` told the player to decompile Shielded
+        # Shell of Bastion while shell-ab-2026-08-07 was live. Fail loudly.
+        raise ValueError(
+            f"experiment {active.get('name')!r} is HOT but declares no "
+            f"'revert_item' — lock/decompile advice cannot run safely until "
+            f"it names the item it replaced (or is marked concluded)")
+    return {name}
 
 
+def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
+    """Daily lock/unlock ACTION list: {"lock": [...], "unlock": [...]}.
+
+    `per_slot` caps how many band-clearing bases are held in each slot. It is
+    1 by default and that default is MEASURED, not taste — see
+    KEEP_DEPTH_PER_SLOT. The first version of this function had no cap and
+    recommended holding 13 bases; the player pushed back that it felt
+    excessive and was right, for a reason nothing here had priced.
+
+    Written 7 Aug 2026 at the player's request. The operating model is
+    **everything not locked is regularly decompiled and lost**, so the lock
+    flag is the only thing standing between a craft base and deletion — which
+    makes drift in it a silent, irreversible progress loss. The first sweep
+    found the lock set almost exactly INVERTED against value: 17 of 18 locked
+    items were not worth holding, and 13 band-clearing bases sat unlocked.
+
+    Deliberately returns only the DELTA — items whose flag disagrees with
+    their value. Anything already correct is omitted, because a list that
+    re-states the whole inventory every day is one nobody reads.
+
+    Value is `min(raw Δ, ex-suspect Δ)`: a base has to clear UPGRADE_BAND
+    whether or not the Corrupt/MaxHP weights are believed. That is
+    deliberately conservative in the KEEP direction (it never recommends
+    discarding something the suspect weights alone were propping up) and
+    conservative in the DISCARD direction too (a base only survives on
+    evidence that does not depend on a flagged weight).
+    """
+    ladders = tier_ladders_archive()
+    preserve = stability_preserve_chance(capture)
+    protected = protected_revert_items()
+    protected_lc = {p.lower() for p in protected}
+    equipped = (capture["state"].get("equipmentData") or {})
+    base, eq_totals = {}, {}
+    for slot, item in equipped.items():
+        display = SLOT_DISPLAY.get(slot, slot)
+        eq_totals[display] = item_stat_totals(item)
+        base[display] = weighted_score(eq_totals[display])
+
+    lock, unlock, candidates, contested_rows = [], [], [], []
+    for where, slot, item in iter_items(capture):
+        if where != "inventory":
+            continue
+        name = item.get("name") or "?"
+        plan = plan_craft(item, ladders, floor=floor, preserve=preserve)
+        raw = plan["score"] - base.get(slot, 0.0)
+        suspect, labels = suspect_share(
+            score_contributions(plan["totals"], eq_totals.get(slot, {})))
+        # Two readings, and the two directions need OPPOSITE tests.
+        #   KEEP  is asserted on the WEAKER reading: only hold what clears the
+        #         band even if the suspect weights are disbelieved.
+        #   DISCARD is irreversible, so it needs BOTH readings to agree: an
+        #         item survives if EITHER reading clears the band.
+        # Using min() for both (the 7 Aug first version) condemned Slippery
+        # Payload of Breaching at raw -39.1 while its ex-suspect delta was
+        # +21.0 -- a decompile verdict resting entirely on Corrupt/MaxHP,
+        # exactly what the printed guarantee says never happens.
+        keep_worth = min(raw, raw - suspect)
+        discard_worth = max(raw, raw - suspect)
+        worth = keep_worth
+        row = {"name": name, "slot": slot, "worth": worth,
+               "keep_worth": keep_worth, "discard_worth": discard_worth,
+               "raw": raw,
+               "ex_suspect": raw - suspect, "suspect_labels": labels,
+               "stability": item.get("stability") or 0,
+               "item_level": item.get("item_level") or 0}
+        row["locked"] = bool(item.get("decompile_locked"))
+        row["protected"] = name.lower() in protected_lc
+        candidates.append(row)
+
+    # THREE outcomes, not two. Rank on the CONSERVATIVE reading among items
+    # that reading defends -- ranking on the generous one let Corrupt-inflated
+    # items displace real keepers and marked them surplus (7 Aug, second
+    # attempt). An item the two readings DISAGREE about is contested and gets
+    # NO action at all: it stays as it is, because an irreversible decompile
+    # must never turn on a weight PENDING_REFITS has flagged.
+    keepers = [r for r in candidates if r["keep_worth"] > UPGRADE_BAND]
+    keepers.sort(key=lambda r: -r["keep_worth"])
+    rank = {}
+    for row in keepers:
+        rank[row["slot"]] = rank.get(row["slot"], 0) + 1
+        row["slot_rank"] = rank[row["slot"]]
+    for row in candidates:
+        row.setdefault("slot_rank", None)
+
+    for row in candidates:
+        real_keeper = row["slot_rank"] is not None
+        in_depth = real_keeper and row["slot_rank"] <= per_slot
+        contested = row["keep_worth"] <= UPGRADE_BAND < row["discard_worth"]
+        if row["protected"]:
+            # Held for the GATE, never discarded -- but an UNLOCKED revert path
+            # is one sweep from deletion, so it must surface as a LOCK action.
+            # The first version skipped protected rows in BOTH directions and
+            # printed a reassuring "HELD" line over an unlocked item.
+            if not row["locked"]:
+                row["reason"] = ("revert path for the live A/B gate and "
+                                 "currently UNLOCKED — lock it now")
+                lock.append(row)
+            continue
+        if in_depth and not row["locked"]:
+            row["reason"] = (f"best {row['slot']} base owned"
+                             if row["slot_rank"] == 1
+                             else f"#{row['slot_rank']} in {row['slot']}")
+            lock.append(row)
+        elif row["locked"] and not in_depth and not contested:
+            row["reason"] = _lock_reason(
+                row["raw"], row["ex_suspect"], row["suspect_labels"],
+                row["slot_rank"], row["slot"], per_slot)
+            unlock.append(row)
+        elif row["locked"] and contested:
+            row["reason"] = (
+                f"CONTESTED: raw {row['raw']:+.1f} vs ex-suspect "
+                f"{row['ex_suspect']:+.1f} — the verdict flips on "
+                f"{'/'.join(row['suspect_labels'])}, so it is left locked. "
+                f"Resolved by the PENDING_REFITS unblock, not by guessing")
+            contested_rows.append(row)
+
+    lock.sort(key=lambda r: -r["worth"])
+    unlock.sort(key=lambda r: r["worth"])
+    used, cap_slots, free, price = inventory_pressure(capture)
+    contested_rows.sort(key=lambda r: -r["discard_worth"])
+    return {"lock": lock, "unlock": unlock, "contested": contested_rows,
+            "protected": sorted(protected),
+            "per_slot": per_slot, "inventory_used": used,
+            "inventory_cap": cap_slots, "inventory_free": free,
+            "slot_price_hc": price}
 
 
+def _lock_reason(raw, ex_suspect, labels, slot_rank=None, slot=None,
+                 per_slot=1):
+    """Why an unlock is safe, in the terms that decide it."""
+    worth = min(raw, ex_suspect)
+    if worth > UPGRADE_BAND and slot_rank and slot_rank > per_slot:
+        return (f"clears the band ({worth:+.1f}) but is only #{slot_rank} in "
+                f"{slot} — superseded before it would ever be crafted "
+                f"(0.92 keepers/day arrive; median base age at craft 1.2d)")
+    if labels and raw > UPGRADE_BAND >= ex_suspect:
+        return (f"raw {raw:+.1f} rests on {'/'.join(labels)} — "
+                f"only {ex_suspect:+.1f} without it")
+    if labels and ex_suspect > UPGRADE_BAND >= raw:
+        return (f"raw {raw:+.1f} but ex-suspect {ex_suspect:+.1f} — the "
+                f"{'/'.join(labels)} term is what sinks it, so this is a "
+                f"depth/rank call, not a value one")
+    return f"{raw:+.1f} vs equipped"
 
 
 def homelab_job_hours(info, ticks, active_jobs=1):
@@ -1983,6 +2207,17 @@ def assumptions():
          "swept 0/2/4/6/8/10 over three live candidates: lower better on "
          "mean, median, p10 AND p90 in every case. 2 rather than 0 keeps one "
          "Refactor in hand", "28 Jul 2026", None),
+        ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "measured",
+         "how many craft bases to hold per slot; decides IRREVERSIBLE "
+         "decompiles. Three inputs, two load-bearing: band-clearing bases "
+         "arrive 0.92/day (14 over the 15.2-day inventory span) and are "
+         "crafted young (median age at craft 1.2d, max 4.5d, n=8), so a "
+         "deeper queue is never drawn down before it is superseded. Third "
+         "input (inventory pressure, 10 hc/slot) only prices it, and is "
+         "WEAKER than first stated: max_slots is soft -- seven 5 Aug "
+         "captures held 103 against a max of 102. Raise only if the arrival "
+         "rate collapses or craft throughput exceeds ~1/day",
+         "7 Aug 2026", None),
         ("plan_craft tier_cap default", 1, "measured",
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",

@@ -167,8 +167,74 @@ class HomelabJobHoursTest(unittest.TestCase):
                          ihlib.homelab_job_hours(self.INFO, 3600, 1))
 
 
+class AuditSmokeTest(unittest.TestCase):
+    """Every registered audit check must RUN on a real capture.
+
+    Added 7 Aug 2026: `_audit_inventory_capacity` shipped calling
+    `hackcoin_equivalent(int)` when it takes a cost dict, and `ih.py audit`
+    died with an AttributeError — the whole sweep, not just the new check.
+    The unit suite was green because nothing executed the registry. A check
+    that crashes is worse than a missing one: it takes the sweep with it."""
+
+    def test_every_audit_check_runs(self):
+        import ih
+        for check in ih.AUDIT_CHECKS:
+            with self.subTest(check=check.__name__):
+                flags = check(FIXTURE, {})
+                self.assertIsInstance(flags, list)
+                for kind, message in flags:
+                    self.assertIsInstance(kind, str)
+                    self.assertIsInstance(message, str)
+
+    def test_run_audit_returns_flags(self):
+        import ih
+        self.assertIsInstance(ih.run_audit(FIXTURE), list)
 
 
+class LockActionsTest(unittest.TestCase):
+    """Guards the 7 Aug decompile-lock rules. Decompiling is IRREVERSIBLE, so
+    every one of these encodes a way the first versions got it wrong."""
+
+    def _capture(self, items):
+        return {"state": {"equipmentData": {}, "inventoryData": {"items": items,
+                                                                "max_slots": 100},
+                          "homelabInfo": {}}}
+
+    def test_contested_item_is_never_discarded(self):
+        # raw below band, ex-suspect above: the readings disagree, so the only
+        # safe action is NONE. The first version decompiled it on raw alone.
+        rows = [{"keep_worth": -39.1, "discard_worth": 21.0, "locked": True,
+                 "protected": False, "slot": "Payload", "name": "x",
+                 "raw": -39.1, "ex_suspect": 21.0,
+                 "suspect_labels": ["Corrupt"]}]
+        keep = [r for r in rows if r["keep_worth"] > ihlib.UPGRADE_BAND]
+        contested = [r for r in rows
+                     if r["keep_worth"] <= ihlib.UPGRADE_BAND < r["discard_worth"]]
+        self.assertEqual(keep, [])
+        self.assertEqual(len(contested), 1)
+
+    def test_min_and_max_readings_differ_for_the_two_directions(self):
+        raw, suspect = -39.1, -60.1        # suspect term is NEGATIVE
+        keep_worth = min(raw, raw - suspect)
+        discard_worth = max(raw, raw - suspect)
+        self.assertLess(keep_worth, discard_worth)
+        self.assertLessEqual(keep_worth, ihlib.UPGRADE_BAND)
+        self.assertGreater(discard_worth, ihlib.UPGRADE_BAND)
+
+    def test_lock_reason_ex_suspect_branch_is_not_inverted(self):
+        text = ihlib._lock_reason(-39.1, 21.0, ["Corrupt"], 1, "Payload", 1)
+        self.assertIn("what sinks it", text)
+        self.assertNotIn("needs the suspect weight to look good", text)
+
+    def test_live_capture_lock_actions_are_disjoint(self):
+        cap, _path = ihlib.load_capture(None)
+        a = ihlib.lock_actions(cap)
+        names = lambda k: {r["name"] for r in (a.get(k) or [])}
+        self.assertFalse(names("lock") & names("unlock"))
+        self.assertFalse(names("unlock") & names("contested"))
+        # nothing protected may ever be proposed for unlock
+        self.assertFalse({n.lower() for n in a["protected"]}
+                         & {n.lower() for n in names("unlock")})
 
 
 class HomelabEtaScheduleTest(unittest.TestCase):
@@ -200,6 +266,31 @@ class HomelabEtaScheduleTest(unittest.TestCase):
         self.assertEqual(ihlib.homelab_job_eta_hours(self.INFO, []), {})
 
 
+class RevertPathProtectionTest(unittest.TestCase):
+    """Guards the hot-gate revert path (7 Aug 2026): the first run of
+    `lock_actions` recommended decompiling Shielded Shell of Bastion while
+    shell-ab-2026-08-07 was live, because the experiment declared no
+    `revert_item` and the lookup returned an empty set instead of failing."""
+
+    def test_hot_experiment_without_revert_item_raises(self):
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT",
+                               {"name": "x-ab", "slot": "Shell"}):
+            with self.assertRaises(ValueError):
+                ihlib.protected_revert_items()
+
+    def test_concluded_experiment_protects_nothing(self):
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT",
+                               {"name": "x-ab", "concluded": "KEEP"}):
+            self.assertEqual(ihlib.protected_revert_items(), set())
+
+    def test_hot_experiment_protects_its_revert_item(self):
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT",
+                               {"name": "x-ab", "revert_item": "Old Shell"}):
+            self.assertEqual(ihlib.protected_revert_items(), {"Old Shell"})
+
+    def test_live_declaration_names_a_revert_item(self):
+        # the real ACTIVE_EXPERIMENT must stay safe to run lock advice against
+        ihlib.protected_revert_items()
 
 
 class PlanCraftTest(unittest.TestCase):
