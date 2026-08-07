@@ -2203,8 +2203,8 @@ def assumptions():
          "first projection recorded after the deepen-scale fix",
          "31 Jul 2026", None),
         ("INFERIOR_BAND", INFERIOR_BAND, "measured",
-         "symmetric with UPGRADE_BAND, same 31 Jul reversion", "31 Jul 2026",
-         "29 Jul 2026", None),
+         "symmetric with UPGRADE_BAND, same 31 Jul reversion",
+         "31 Jul 2026", None),
         # --- supplied ---
         ("HACKCOIN_CREDIT_RATE", HACKCOIN_CREDIT_RATE, "supplied",
          "player-supplied exchange rate, not derivable from any capture. An "
@@ -2254,8 +2254,8 @@ def assumptions():
          "across a 24.3-min two-capture window with the contract active at "
          "both ends = ~718/h; 700 recorded. Both are lower bounds -- the "
          "true rate needs a window with known continuous gathering. Passive "
-         "accrual ~zero: harvest pays per GATHER-hour only", "31 Jul 2026",
-         "29 Jul 2026", None),
+         "accrual ~zero: harvest pays per GATHER-hour only",
+         "31 Jul 2026", None),
         ("BOARD_TYPICAL_BEST_HC_PER_H", BOARD_TYPICAL_BEST_HC_PER_H,
          "asserted",
          "eyeballed from the 31 Jul - 6 Aug boards (best pending contract "

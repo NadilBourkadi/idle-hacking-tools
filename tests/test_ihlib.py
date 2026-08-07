@@ -211,6 +211,29 @@ class AssumptionsRegistryTest(unittest.TestCase):
             f"{missing}. CLAUDE.md requires registration in the same change "
             "that introduces the constant.")
 
+    def test_registry_rows_have_the_documented_arity(self):
+        """Exactly six fields, and `check` is callable-or-None.
+
+        Both other tests in this class read fields by index (`row[2]`,
+        `row[4]`), so a row with a stray extra element passes them while every
+        *unpacking* consumer dies. Two did: INFERIOR_BAND and
+        HARVEST_PER_GATHER_HOUR each carried a duplicated date, which shifted
+        `check` into a seventh slot. `ih.py assumptions` -- the command
+        CLAUDE.md requires before any weight-bearing verdict -- printed the
+        register up to the first bad row and then aborted, and
+        `_audit_homelab` was blind for as long as it lasted (7 Aug 2026,
+        found by the audit's own broken-check flag).
+        """
+        for row in ihlib.assumptions():
+            with self.subTest(constant=row[0]):
+                self.assertEqual(
+                    len(row), 6,
+                    f"{row[0]} has {len(row)} fields, not the 6 that "
+                    "assumptions() documents and every consumer unpacks")
+                self.assertTrue(row[5] is None or callable(row[5]),
+                                f"{row[0]} field 6 must be a live check or "
+                                f"None, not {row[5]!r}")
+
     def test_registry_rows_carry_provenance(self):
         """Status and rationale always; a DATE only where one can exist.
 
