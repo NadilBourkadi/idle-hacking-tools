@@ -312,9 +312,14 @@ across the 3–5 Aug gap — treat them as expiring daily.
   pair needed all 15 runs to bound ~0 at ±1. This does not weaken the
   no-peeking rule: the sin is reading a fraction of a planned block, and a
   pre-declared 8-run tranche read in full is a complete block. Budget grows
-  with pipeline level (L4 = 20/day, building as of 6 Aug), which makes the
-  reserve pattern cheaper; whether a mid-day level-up raises that day's
-  budget is unobserved — note it when L4 completes.
+  with pipeline level (L4 = 20/day), which makes the reserve pattern
+  cheaper. **RESOLVED 7 Aug 2026 (player-observed): a mid-day level-up DOES
+  raise the same day's budget, and already-spent runs carry over rather than
+  resetting** — the L4 build completed with 8/15 used and the counter became
+  12/20, i.e. the cap moved 15 → 20 in place. Consequence for the tranche
+  rule: a pipeline level completing later the same day is a *free budget
+  extension*, so when a level-up is due within hours it is safe to commit the
+  primary tranche early rather than hoarding runs against the old cap.
 - Sets are built from **owned items as-is** — the pipeline can test a
   *finished* item pre-equip, but cannot test a craft *ceiling*. Craft
   approval stays with the §10.1 contract simulator; the pipeline's job is
