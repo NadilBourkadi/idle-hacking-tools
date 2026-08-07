@@ -42,6 +42,7 @@ PAYLOAD_AB_2026_07_23 = {
     "baseline_recent_ms": 1784764800000,
     # VLAN Rules L10 (+1% Def) build completion — segment deaths after this
     "segment_ms": 1784800600000,        # ~2026-07-23T09:57Z (estimated)
+    "segment_label": "the VLAN Rules L10 +1% Def",
     "keep_rule": "mean death streak +2 or better vs baseline 94.1, or "
                  "material miss-rate drop vs Mirrored; revert if depth flat "
                  "AND fights ~10% slower",
@@ -67,6 +68,7 @@ SHELL_AB_2026_07_23 = {
     "baseline_recent_ms": 1784795400000,  # Payload equip — same-loadout era
     # VLAN Rules L10 (+1% Def) completes mid-test — segment deaths after this
     "segment_ms": 1784805060000,        # ~2026-07-23T11:11Z (estimated)
+    "segment_label": "the VLAN Rules L10 +1% Def",
     # Damage clause amended at 4/10 deaths (23 Jul ~11:15Z, logged): the
     # original "damage taken/fight <= +5%" measured GROSS intake, which must
     # rise when trading Def/Barrier for Regen and ignores the recovery the
@@ -106,6 +108,7 @@ DRIVER_AB_2026_07_27 = {
     # Each is ~+0.5% of a realized stat -- inside the noise, but the window
     # measures a BUNDLE and is not a clean single-item read. Stated, not fixed.
     "segment_ms": 1785189000000,        # = equip; no mid-test segment declared
+    "segment_label": "the equip (no mid-test)",
     # Amended 27 Jul 22:0xZ, BEFORE any post-equip death was scored: the
     # original clause read "fights/hour up >= +5%", which is unsatisfiable --
     # fight cadence is a fixed 4.872 s/fight (n=29, sd 0.053, invariant across
@@ -154,6 +157,7 @@ FIREWALL_AB_2026_07_28 = {
     # landed ~20 min after the equip, plus 2 player levels and Mechanical
     # Keyboard L10. End state vs pre-craft: Regen +34.1%, Def -3.4%.
     "segment_ms": 1785277800000,        # ~22:30Z, the hardware purchase
+    "segment_label": "the ECC+Encryption 133.4K-chip",
     # Gates on the OUTCOME and on contamination only. Realized prg/round and
     # net drain are recorded as DIAGNOSTICS and are explicitly NOT gates --
     # that is the mis-specification driver-ab-2026-07-27 made.

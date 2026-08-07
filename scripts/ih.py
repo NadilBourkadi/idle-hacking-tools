@@ -1544,8 +1544,12 @@ def cmd_ab(args):
     print(f"  post-equip deaths ({n}/{target}): {post}  mean {post_mean:.1f}"
           f"  delta {post_mean - pre_mean:+.1f}")
     if status["deaths_after_segment"]:
-        print(f"  ({status['deaths_after_segment']} of them after the VLAN "
-              f"+1% Def segment boundary — analyse separately)")
+        # Label comes from the experiment's own declaration. It was hardcoded
+        # to "VLAN +1% Def" -- one July experiment's boundary -- so every
+        # later segmented window would have been mislabelled with it.
+        label = status["experiment"].get("segment_label") or "the declared"
+        print(f"  ({status['deaths_after_segment']} of them after {label} "
+              f"segment boundary — analyse separately)")
     if post_hit is not None:
         print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) vs old-Payload "
               f"deep-streak baseline {base_hit:.1f}% ({bh}h/{bm}m)")

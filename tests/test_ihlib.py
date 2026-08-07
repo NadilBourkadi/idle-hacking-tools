@@ -581,6 +581,53 @@ class ExperimentStatusTest(unittest.TestCase):
         self.assertEqual(status["pre_death_streaks"], [90])
         self.assertEqual(status["post_death_streaks"], [110])
 
+    def test_undeclared_segment_counts_no_deaths_after_it(self):
+        """`segment_ms: None` means no boundary, so nothing is past one.
+
+        This fell back to ALL post deaths, making "no boundary declared"
+        print identically to "every death is past the boundary" — and the
+        printer captioned it with a hardcoded July VLAN label. On 7 Aug 2026
+        shell-ab-2026-08-07 (segment_ms None) reported all 29 post deaths as
+        post-segment and told the reader to analyse them separately. A false
+        contamination warning argues for discounting a clean result, which
+        is as costly as missing a real one.
+        """
+        status = self._run([self._death(500_000, 90),
+                            self._death(2_000_000, 110),
+                            self._death(3_000_000, 115)])
+        self.assertEqual(status["post_death_streaks"], [110, 115])
+        self.assertEqual(status["deaths_after_segment"], 0)
+
+    def test_declared_segment_counts_only_deaths_after_it(self):
+        segmented = dict(self.EXPERIMENT, segment_ms=2_500_000)
+        with tempfile.TemporaryDirectory() as streams, \
+                tempfile.TemporaryDirectory() as caps:
+            ledger = Path(streams) / "day.jsonl"
+            ledger.write_text("\n".join(
+                json.dumps(r) for r in [self._death(2_000_000, 110),
+                                        self._death(3_000_000, 115)]) + "\n")
+            with mock.patch.object(ihlib, "STREAM_DIR", Path(streams)), \
+                    mock.patch.object(ihlib, "CAPTURES_DIR", Path(caps)):
+                ihlib._STREAM_CACHE["key"] = None
+                status = ihlib.experiment_status(segmented)
+        self.assertEqual(status["deaths_after_segment"], 1)
+
+    def test_every_declared_segment_carries_a_label(self):
+        """A boundary the readout can name. The label was hardcoded to one
+        July experiment's VLAN build, so every later segmented window would
+        have been captioned with someone else's confound."""
+        import experiments
+        for name, exp in vars(experiments).items():
+            if not (name.isupper() and isinstance(exp, dict)
+                    and "segment_ms" in exp):
+                continue
+            if exp.get("segment_ms"):
+                with self.subTest(experiment=name):
+                    self.assertTrue(
+                        (exp.get("segment_label") or "").strip(),
+                        f"{name} declares segment_ms but no segment_label, "
+                        "so its readout cannot name the confound")
+
     def test_sentinel_keeps_post_empty(self):
         sentinel = dict(self.EXPERIMENT, equip_ms=4_102_444_800_000)
         with tempfile.TemporaryDirectory() as streams, \

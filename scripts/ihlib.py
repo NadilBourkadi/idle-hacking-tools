@@ -3702,9 +3702,17 @@ def experiment_status(experiment=None):
     detailed = [f for f in post_fights if f["detail"]]
     ph = sum(f["ph"] for f in detailed)
     pm = sum(f["pm"] for f in detailed)
-    segment_ms = exp.get("segment_ms")  # None -> no mid-window segment declared
+    # None -> no mid-window segment declared, so NOTHING is after it. This
+    # used to fall back to `post_deaths`, which made "no boundary declared"
+    # print identically to "every death is past the boundary" (7 Aug 2026):
+    # shell-ab-2026-08-07 declares segment_ms None and the readout still
+    # announced all 29 deaths as post-segment, over a hardcoded VLAN label
+    # belonging to a July experiment. A false contamination warning on a
+    # clean window is as costly as a missed real one -- it argues for
+    # discounting a result that needs no discount.
+    segment_ms = exp.get("segment_ms")
     segmented = ([e for e in post_deaths if e["ended_at_ms"] >= segment_ms]
-                 if segment_ms else post_deaths)
+                 if segment_ms else [])
     recent_ms = exp.get("baseline_recent_ms", 0)
     return {
         "experiment": exp,
