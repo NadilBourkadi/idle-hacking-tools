@@ -8,11 +8,21 @@ tests without a story are just tests, but most of these have one.
 """
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+
+# Point at an EMPTY data tree BEFORE importing ihlib, which resolves its data
+# paths at import time. This is deliberately here and not only in
+# tests/__init__.py: `python -m unittest discover tests` (what CI runs) makes
+# `tests/` the top-level directory, so the package __init__ is never imported
+# and isolation set up there silently does not apply. `setdefault` keeps the
+# two in agreement. Without it the suite reads whatever captures happen to be
+# on disk — green locally, red in CI (7 Aug 2026).
+os.environ.setdefault("IH_DATA_DIR", tempfile.mkdtemp(prefix="ih-tests-data-"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import ihlib  # noqa: E402
@@ -165,6 +175,23 @@ class HomelabJobHoursTest(unittest.TestCase):
         self.assertEqual(ihlib.homelab_job_hours(self.INFO, -100), 0.0)
         self.assertEqual(ihlib.homelab_job_hours(self.INFO, 3600, 0),
                          ihlib.homelab_job_hours(self.INFO, 3600, 1))
+
+
+class DataIsolationTest(unittest.TestCase):
+    """The suite must not be able to read the working tree's real data.
+
+    Enforced structurally rather than by discipline: `tests/__init__.py` sets
+    IH_DATA_DIR to an empty temp dir. Before that existed, a test calling
+    `load_capture()` passed locally against 146 live captures and failed in
+    CI, where `data/` is git-ignored (7 Aug 2026)."""
+
+    def test_data_root_is_not_the_repo_data_dir(self):
+        self.assertNotEqual(ihlib.DATA_ROOT.resolve(),
+                            (ihlib.ROOT / "data").resolve())
+
+    def test_no_captures_are_visible(self):
+        with self.assertRaises(FileNotFoundError):
+            ihlib.load_capture(None)
 
 
 class AuditSmokeTest(unittest.TestCase):

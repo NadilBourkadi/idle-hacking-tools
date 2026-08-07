@@ -9,6 +9,7 @@ import hashlib
 import itertools
 import json
 import math
+import os
 import random
 import re
 import statistics
@@ -17,7 +18,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CAPTURES_DIR = ROOT / "data" / "captures"
+
+# Every on-disk location hangs off ONE overridable root. `IH_DATA_DIR` exists
+# so tests can point at an empty tree: without it the suite silently read the
+# developer's live captures and passed, while CI -- where `data/` is
+# git-ignored and a clone has none -- failed on the same commit (7 Aug 2026).
+# A test that can see ambient data is not testing what CI runs.
+DATA_ROOT = Path(os.environ.get("IH_DATA_DIR") or (ROOT / "data"))
+CAPTURES_DIR = DATA_ROOT / "captures"
 
 SLOT_DISPLAY = {
     "main_hand": "Payload",
@@ -2312,7 +2320,7 @@ def assumptions():
 # `model` tags the planner era. Rows from different eras are NOT comparable:
 # removing the T3 cap (27 Jul) and lowering COMPILE_FLOOR 8 -> 2 (28 Jul) each
 # shifted projections by more than UPGRADE_BAND.
-PREDICTIONS_PATH = ROOT / "data" / "predictions.jsonl"
+PREDICTIONS_PATH = DATA_ROOT / "predictions.jsonl"
 CURRENT_MODEL = "uncapped+floor2+archive"
 
 
@@ -2881,7 +2889,7 @@ from experiments import *  # noqa: E402,F401,F403 -- deliberate mid-file: sectio
 
 
 
-STREAM_DIR = ROOT / "data" / "combat-stream"
+STREAM_DIR = DATA_ROOT / "combat-stream"
 
 
 def fight_key(f):
@@ -2978,7 +2986,7 @@ def stream_records(dir_=None):
 # a full-HP-start sample cannot see attrition at all. Mitigation and hit
 # reliability are measurable either way.
 
-SIM_DIR = ROOT / "data" / "sim-runs"
+SIM_DIR = DATA_ROOT / "sim-runs"
 
 # Columnar compact combat log, ported from the client's
 # inflateCombatLogCompact (vendor/game-js/hacking.js). `bm` is a per-round
