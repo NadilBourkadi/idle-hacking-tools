@@ -313,8 +313,8 @@ def cmd_potential(args):
                        else "sidegrade")
             marker = "~" if plan["estimated"] else " "
             steps = ", ".join(
-                f"{name} T{f}->T{t}{'~' if est else ''}"
-                for name, f, t, c, est in plan["steps"])
+                f"{label} T{f}->T{t}{'~' if est else ''}"
+                for _uid, label, f, t, c, est in plan["steps"])
             aug = (f"Augment[{plan['augment_side']}]" if plan["augment_open"] else "full")
             print(f" {marker}ceiling   {item.get('name'):<44} score {score:6.1f} "
                   f"({delta:+6.1f} {verdict:<9})  ilvl {item.get('item_level'):>4} "
@@ -387,8 +387,10 @@ def cmd_homelab(args):
     # as in-flight points just like running ones.
     jobs = homelab.get("active_jobs") or []
     pending = homelab.get("pending_jobs") or []
-    tick_s = info.get("tick_seconds") or 5
     in_flight_points = 0
+    # ETAs share a DECLINING split: as each active job finishes the rest speed
+    # up, so a fixed divisor over-states all but the longest.
+    active_eta = ihlib.homelab_job_eta_hours(info, jobs)
     for label, group in (("active jobs", jobs), ("queued jobs", pending)):
         if not group:
             continue
@@ -398,9 +400,16 @@ def cmd_homelab(args):
             total = job.get("duration_ticks") or 1
             pts = job.get("progress_points") or 0
             in_flight_points += pts
-            eta = f"{(total - done) * tick_s / 60:.0f}min"
-            when = f"{done / total * 100:3.0f}%  ~{eta}" if group is jobs \
-                else f"     {eta} once started"
+            # real time, not raw ticks: the lab advances o/n ticks per tick
+            # (ihlib.homelab_job_hours). A queued job is priced as if it ran
+            # alone, which is what it does once the actives drain.
+            if group is jobs:
+                idx = jobs.index(job)
+                when = (f"{done / total * 100:3.0f}%  "
+                        f"~{active_eta.get(idx, 0.0) * 60:.0f}min")
+            else:
+                when = (f"     {ihlib.homelab_job_hours(info, total - done) * 60:.0f}min"
+                        " once started, alone")
             print(f"    {names.get(job.get('target'), job.get('target')):28s} "
                   f"-> L{job.get('target_level')}  {when}  +{pts}pts  "
                   f"[{ihlib.format_cost(job.get('cost_snapshot'))}]")
@@ -416,7 +425,6 @@ def cmd_homelab(args):
     install_names = {d.get("type"): d.get("name")
                      for d in (installs if isinstance(installs, list)
                                else installs.values())}
-    tick_s = info.get("tick_seconds") or 5
     free = (info.get("max_build_slots") or 0) - len(jobs)
     room = (info.get("max_queue_jobs") or 0) - len(pending)
     if free or room:
@@ -443,7 +451,7 @@ def cmd_homelab(args):
         gate = u["def"].get("unlock_level", 0)
         if gate > level or not u["install_present"] or not u["next"]:
             continue
-        hours = (u["next"].get("duration_ticks") or 0) * tick_s / 3600
+        hours = ihlib.homelab_job_hours(info, u["next"].get("duration_ticks") or 0)
         pts = u["next"].get("progress_points", 0)
         rows.append((pts / hours if hours else 0, hours, u))
     for pts_hr, hours, u in sorted(rows, key=lambda r: -r[0]):
@@ -496,8 +504,13 @@ def cmd_hardware(args):
         print(f"  RESET AVAILABLE ({hw.get('reset_preview_mode')}, "
               f"{hw.get('reset_cooldown_mode')}): all-hardware refund "
               f"{ihlib.format_cost(refund)}")
+    for _line in ihlib.pending_refit_banner():
+        print("  " + _line)
     print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
-    print("  current build; additive pooling confirmed — mechanics.md §13):")
+    print("  current build; additive pooling confirmed — mechanics.md §13).")
+    print("  This ranks raw SCORE, which is NOT comparable across stat")
+    print("  families — rows marked !! are score that has twice failed to")
+    print("  convert into death-streak depth:")
     combat_rows, economy_rows = [], []
     for d in hw.get("definitions") or []:
         value = ihlib.hardware_track_value(d, stats_breakdown)
@@ -510,9 +523,12 @@ def cmd_hardware(args):
     for per_1k, value, d in sorted(combat_rows, key=lambda r: -r[0]):
         cost = d.get("next_cost") or {}
         afford = "" if d.get("can_afford") else "  [CAN'T AFFORD]"
+        depth_note = ihlib.hardware_track_depth_note(d)
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
               f"value/lvl {value:5.2f}  per-1K-chips {per_1k:6.2f}  "
               f"next {ihlib.format_cost(cost)}{afford}")
+        if depth_note:
+            print(f"        !! {depth_note}")
     print("\n  economy/farming tracks (not scored):")
     for d in sorted(economy_rows, key=lambda d: d.get("name") or ""):
         print(f"    {d.get('name'):26s} L{d.get('current_level'):>3}  "
@@ -545,32 +561,38 @@ def cmd_contract(args):
     print(f"  vs equipped {equipped.get('name')}  score {baseline:.1f}"
           f"   (Snapshot Backups preserve {preserve:.0%})")
 
+    # Phases are carried as affix UIDs, never display names -- two affixes on
+    # one item can share a name (ihlib.affix_entries).
     phases = []
     for spec in args.phase:
         name, _, tier = spec.rpartition(":")
         if not name or not tier.strip().lstrip("T").isdigit():
             sys.exit(f"bad --phase {spec!r}; use \"of Haste:4\"")
-        phases.append((name.strip(), int(tier.strip().lstrip("T"))))
+        try:
+            uid = ihlib.resolve_affix_uid(base_item, name.strip())
+        except ValueError as exc:
+            sys.exit(str(exc))
+        phases.append((uid, int(tier.strip().lstrip("T"))))
     if not phases:                       # default to plan_craft's own plan
         plan = ihlib.plan_craft(base_item, ladders, floor=args.floor,
                                 preserve=preserve)
-        phases = [(name, to) for name, _frm, to, _c, _e in plan["steps"]]
+        phases = [(uid, to) for uid, _label, _frm, to, _c, _e in plan["steps"]]
         print("  phases taken from plan_craft (pass --phase to override)")
     if not phases:
         sys.exit("no phases to run")
 
+    tiers_now = {uid: a.get("tier")
+                 for uid, _side, a in ihlib.affix_entries(base_item)}
     print("\n  contract (execution order matters -- see best_contract_order):")
-    for name, tier in phases:
-        cur = next((a.get("tier") for side in ("prefixes", "suffixes")
-                    for a in base_item.get(side) or []
-                    if a.get("name") == name), None)
+    for uid, tier in phases:
+        cur = tiers_now.get(uid)
         if cur is None:
-            sys.exit(f"{base_item.get('name')} has no affix {name!r}")
+            sys.exit(f"{base_item.get('name')} has no affix {uid!r}")
         att = sum(ihlib.version_upgrade_expected_attempts(x) for x in range(tier + 1, cur + 1))
         stab = sum(ihlib.version_upgrade_expected_stability(x, preserve)
                    for x in range(tier + 1, cur + 1))
-        print(f"    {name:22s} T{cur} -> T{tier}   exp {att:4.1f} attempts / "
-              f"{stab:4.1f} Stability")
+        print(f"    {ihlib.affix_label(base_item, uid):34s} T{cur} -> T{tier}"
+              f"   exp {att:4.1f} attempts / {stab:4.1f} Stability")
 
     sim = ihlib.simulate_contract(base_item, ladders, phases,
                                   floor=args.floor, preserve=preserve,
@@ -594,7 +616,7 @@ def cmd_contract(args):
                 base_item, ladders, phases, floor=args.floor,
                 preserve=preserve, trials=max(args.trials // 5, 2000),
                 baseline=baseline):
-            label = " -> ".join(n for n, _ in order)
+            label = " -> ".join(ihlib.affix_label(base_item, u) for u, _ in order)
             print(f"    {label:52s} P(>+{ihlib.UPGRADE_BAND:.0f}) "
                   f"{s['p_upgrade']:5.1%}  "
                   f"mean {s['mean']:+5.2f}  p10 {s['p10']:+5.2f}")
@@ -605,7 +627,8 @@ def cmd_contract(args):
                                              floor=args.floor,
                                              preserve=preserve,
                                              baseline=baseline)[:6]:
-            label = ", ".join(f"{n}->T{t}" for n, t in cand)
+            label = ", ".join(f"{ihlib.affix_label(base_item, u)}->T{t}"
+                              for u, t in cand)
             print(f"    {label:52s} mean {sim['mean']:+7.2f}  p10 {sim['p10']:+6.2f}"
                   f"  p90 {sim['p90']:+7.2f}  P(>+{ihlib.UPGRADE_BAND:.0f}) "
                   f"{sim['p_upgrade']*100:5.1f}%")
@@ -912,12 +935,10 @@ def _audit_homelab(cap, ctx):
         flags.append(("IDLE", f"homelab is making NO progress — 0 active "
                               f"jobs and 0 queued. Start: {named}"))
     elif free or room:
-        hours_buffered = sum(
+        hours_buffered = ihlib.homelab_job_hours(info, sum(
             ((j.get("duration_ticks") or 0) - (j.get("progress_ticks") or 0))
             for j in (homelab.get("active_jobs") or [])
-            + (homelab.get("pending_jobs") or [])) * \
-            (info.get("tick_seconds") or 5) / 3600.0 / \
-            max(ihlib.homelab_build_speed(info), 1e-9)
+            + (homelab.get("pending_jobs") or [])))
         flags.append(("COVERAGE", f"homelab has {free} slot(s) and {room} "
                                   f"queue place(s) free — this does NOT "
                                   f"slow the running jobs (throughput is "
@@ -1153,8 +1174,180 @@ def _audit_unequipped(cap, ctx):
     return flags
 
 
+def cmd_locks(args):
+    """Daily lock/unlock actions, grouped BY SLOT so the panel is one pass.
+
+    Ordered by `ihlib.SLOT_ORDER` (the game's own inventory order) with LOCK
+    and UNLOCK interleaved per slot, at the player's request 7 Aug 2026: a
+    list split into a lock block and an unlock block means walking the
+    inventory twice. Every line carries the item's CURRENT flag, so the list
+    is self-verifying against the panel rather than something to take on
+    trust -- and the header states the capture's age, because these actions
+    are a snapshot and a half-worked list looks like a wrong one.
+    """
+    cap, path = ihlib.load_capture(args.file)
+    # This command's recommended action is IRREVERSIBLE, so it is the last
+    # place a known-wrong constant may render clean (it was the only weight-
+    # consuming command missing this banner).
+    for _line in ihlib.pending_refit_banner():
+        print("  " + _line)
+    actions = ihlib.lock_actions(cap, floor=args.floor)
+    age = ihlib.capture_age_minutes(cap)
+    stamp = f"  (capture {age:.0f} min old)" if age is not None else ""
+    print(f"# {path.name}{stamp}")
+    print("# Operating model: anything NOT locked is decompiled and lost.")
+    print("# Value = the WEAKER of raw Δ and Δ-ex-suspect, so no verdict here")
+    print("# rests on a flagged weight. Items already correct are omitted.")
+    used, cap_slots, free, price = (actions["inventory_used"],
+                                    actions["inventory_cap"],
+                                    actions["inventory_free"],
+                                    actions["slot_price_hc"])
+    if cap_slots:
+        cost = f", and a slot costs {price} hackcoin" if price else ""
+        print(f"# Holding is NOT free: inventory {used}/{cap_slots} "
+              f"({free} free){cost}.")
+    print(f"# Depth: keeping the best {actions['per_slot']} base per slot — "
+          f"band-clearing bases arrive ~0.92/day and the median base is "
+          f"crafted\n#         1.2 days after dropping (max ever 4.5), so a "
+          f"deeper queue is never drawn down.")
+    print("# 'now' is the item's CURRENT flag in this capture — if it already "
+          "reads\n#         the target state you have done it; take a fresh "
+          "capture to re-check.")
+
+    by_slot = {}
+    for row in actions["lock"]:
+        by_slot.setdefault(row["slot"], []).append(("LOCK", row))
+    for row in actions["unlock"]:
+        by_slot.setdefault(row["slot"], []).append(("UNLOCK", row))
+    for row in actions.get("contested") or []:
+        by_slot.setdefault(row["slot"], []).append(("KEEP?", row))
+    held = {n.lower() for n in actions["protected"]}
+    held_rows = [(s, i) for _w, s, i in ihlib.iter_items(cap)
+                 if (i.get("name") or "").lower() in held]
+    for slot, item in held_rows:
+        by_slot.setdefault(slot, []).append(("HELD", {
+            "name": item.get("name"), "slot": slot, "worth": None,
+            "stability": item.get("stability") or 0,
+            "item_level": item.get("item_level") or 0,
+            "reason": "revert path for the live A/B gate — do not unlock"}))
+
+    if not by_slot:
+        print("\n  no lock changes needed — every flag matches its value")
+        return
+    n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
+    n_cont = len(actions.get("contested") or [])
+    extra = (f", {n_cont} CONTESTED (no action — the two readings disagree, "
+             f"so they stay locked)" if n_cont else "")
+    print(f"\n  {n_lock} to LOCK, {n_unlock} to UNLOCK+decompile{extra}, "
+          f"in inventory slot order:")
+    for slot in ihlib.SLOT_ORDER:
+        display = ihlib.SLOT_DISPLAY.get(slot, slot)
+        rows = by_slot.get(display)
+        if not rows:
+            continue
+        order = {"LOCK": 0, "HELD": 1, "KEEP?": 2, "UNLOCK": 3}
+        rows.sort(key=lambda r: (order[r[0]],
+                                 -(r[1]["worth"] if r[1]["worth"] is not None
+                                   else 0)))
+        print(f"\n  ── {display} " + "─" * max(1, 40 - len(display)))
+        for action, r in rows:
+            now = "locked" if r.get("locked", True) else "unlocked"
+            worth = f"{r['worth']:+6.1f}" if r["worth"] is not None else "  hold"
+            print(f"    {action:6s} {r['name']:44s} {worth}  "
+                  f"(now: {now})")
+            print(f"           {r['reason']}")
+
+
+def _audit_inventory_capacity(cap, ctx):
+    """Inventory space is bought with HACKCOIN — the scarcest currency.
+
+    Added 7 Aug 2026: the first lock sweep recommended holding 13 craft bases
+    without checking that inventory was 94/102 and that a slot costs 10
+    hackcoin (~83B credit-equivalents). Never recommend a hold without its
+    denominator — the standing rule, missed on exactly the resource it is
+    written about.
+    """
+    used, cap_slots, free, price = ihlib.inventory_pressure(cap)
+    if not cap_slots:
+        return []
+    if free is not None and free <= 10:
+        cost = (f"; a slot costs {price} hackcoin "
+                f"(~{price * ihlib.HACKCOIN_CREDIT_RATE / 1e9:,.0f}B "
+                f"credit-equivalents)" if price else "")
+        # max_slots is SOFT -- seven 5 Aug captures held 103 against a max of
+        # 102 -- so this is spending pressure, not a wall. Said plainly here
+        # because the first version called it a hard cap in a player advisory.
+        return [("INVENTORY", f"inventory {used}/{cap_slots} ({free} nominal "
+                              f"slot(s) free){cost}. NOTE max_slots is soft — "
+                              f"the archive has held 103/102 — so this is "
+                              f"pressure, not a hard wall. `ih.py locks` "
+                              f"lists what to clear")]
+    return []
+
+
+def _audit_decompile_locks(cap, ctx):
+    """`decompile_locked` vs actual craft value — a field nobody had ever read.
+
+    Added 7 Aug 2026 after the player asked what to decompile: the item schema
+    carries `decompile_locked`, 18 inventory items were locked, and the lock
+    set was almost exactly INVERTED against value — 17 of the 18 were
+    low-value while 13 band-clearing craft bases sat unlocked. The locks had
+    been set by hand over weeks and never revisited, so they encoded old
+    verdicts (mostly Corruption-carried Analyzers and Kernels) that the
+    re-fitted weights have since demoted. Both directions cost progress: a
+    stale lock protects junk and a missing one puts a real base one click from
+    deletion.
+
+    DELEGATES to `ihlib.lock_actions` rather than re-deriving the rule. The
+    first version duplicated the logic inline and immediately disagreed with
+    `ih.py locks` (13 holds vs 6) once the per-slot depth cap landed — the
+    same two-panels-drift bug as the homelab ETA, reintroduced within hours of
+    fixing it. One implementation, two callers.
+    """
+    actions = ihlib.lock_actions(cap)
+    flags = []
+    if actions["unlock"]:
+        rows = actions["unlock"]
+        flags.append(("LOCKS", f"{len(rows)} decompile-locked item(s) are safe "
+                               f"to discard (NEITHER reading defends them, or "
+                               f"they are out-ranked in slot) — unlock and "
+                               f"decompile: "
+                      + "; ".join(f"{r['name']} [{r['slot']}] {r['worth']:+.1f}"
+                                  for r in rows[:6])
+                      + (f"; +{len(rows) - 6} more — ih.py locks"
+                         if len(rows) > 6 else "")))
+    if actions["lock"]:
+        rows = actions["lock"]
+        flags.append(("LOCKS", f"{len(rows)} band-clearing craft base(s) are "
+                               f"UNLOCKED and one click from deletion — lock: "
+                      + "; ".join(f"{r['name']} [{r['slot']}] {r['worth']:+.1f}"
+                                  for r in rows[:6])
+                      + (f"; +{len(rows) - 6} more — ih.py locks"
+                         if len(rows) > 6 else "")))
+    # Contested items are a THIRD outcome and must be reported, not silently
+    # omitted. A sweep listing only actionable rows reads as "everything else
+    # is fine", when in fact these hold inventory indefinitely while a flagged
+    # weight goes unresolved -- which makes the holding cost attributable to a
+    # specific missing measurement rather than looking like clutter.
+    if actions.get("contested"):
+        rows = actions["contested"]
+        flags.append(("LOCKS", f"{len(rows)} item(s) are CONTESTED — raw and "
+                               f"ex-suspect disagree, so they stay locked and "
+                               f"no decompile is advised. They hold inventory "
+                               f"until the flagged weight resolves (see "
+                               f"PENDING_REFITS): "
+                      + "; ".join(f"{r['name']} [{r['slot']}] raw "
+                                  f"{r['raw']:+.1f} / ex {r['ex_suspect']:+.1f}"
+                                  for r in rows[:4])
+                      + (f"; +{len(rows) - 4} more — ih.py locks"
+                         if len(rows) > 4 else "")))
+    return flags
+
+
 AUDIT_CHECKS = [
     _audit_pending_refits,
+    _audit_inventory_capacity,
+    _audit_decompile_locks,
     _audit_stream_drift,
     _audit_stale_panels,
     _audit_capture_integrity,
@@ -1170,10 +1363,24 @@ AUDIT_CHECKS = [
 
 
 def run_audit(cap):
-    """Run every registered check; returns [(KIND, message)] in display order."""
+    """Run every registered check; returns [(KIND, message)] in display order.
+
+    A check that raises is REPORTED, not propagated: on 7 Aug 2026
+    `_audit_inventory_capacity` died on a bad call and took the entire sweep
+    with it -- losing the KNOWN-WRONG banner, the staleness flags and every
+    unrelated check -- and `_audit_decompile_locks` could do the same whenever
+    an experiment omits `revert_item`. The sweep exists to surface problems,
+    so it must degrade to "this check is broken" rather than to silence.
+    """
     flags, ctx = [], {}
     for check in AUDIT_CHECKS:
-        flags.extend(check(cap, ctx))
+        try:
+            flags.extend(check(cap, ctx))
+        except Exception as exc:            # noqa: BLE001 - reported, not raised
+            flags.append(("CHECK-BROKEN",
+                          f"audit check {check.__name__} failed: "
+                          f"{type(exc).__name__}: {exc} — the other checks "
+                          f"still ran, but this one is blind until fixed"))
     return flags
 
 
@@ -1393,6 +1600,21 @@ def _section_output(argv):
     return buf.getvalue()
 
 
+def _is_refit_banner(line):
+    """True for any line of the PENDING_REFITS warning block.
+
+    The banner is multi-line (header, one row per refit, blocked_on, unblock)
+    and every line must survive digest filtering — a half-printed warning is
+    worse than none, because it looks like a formatting artefact.
+    """
+    probe = line.lstrip("# ").strip().lower()
+    return (probe.startswith("!!")
+            or probe.startswith("blocked on:")
+            or probe.startswith("unblock by:")
+            or "known-wrong" in probe
+            or "applied " in probe and "since " in probe)
+
+
 def _brief_potential(text):
     """Best band-clearing candidate per slot, verdict-bearing lines only.
 
@@ -1425,7 +1647,11 @@ def _brief_potential(text):
             slot, keep, kept_one = line.strip("= ").strip(), True, False
             out.append(line)
         elif line.startswith("# "):
-            if "idle-hacking" in line:   # capture name; drop static boilerplate
+            # capture name and the KNOWN-WRONG banner survive; static
+            # boilerplate does not. The banner was being stripped here, which
+            # let craft ceilings computed from a known-wrong constant render
+            # clean in the digest that drives the advisory.
+            if "idle-hacking" in line or _is_refit_banner(line):
                 out.append(line)
         elif stripped.startswith(("ceiling", "~ceiling")):
             if "UPGRADE" in line and not kept_one:
@@ -1518,6 +1744,12 @@ def _brief_hardware(text):
             out.append(f"  ({dropped} lower-value combat track(s) and the "
                        f"economy tracks suppressed — ih.py hardware)")
             break
+        elif in_tracks and line.strip().startswith("!!"):
+            # a track's depth-suspect note belongs to the row ABOVE it and is
+            # not a track of its own -- counting it as one silently dropped a
+            # real track and skewed the suppressed count
+            if kept and kept <= 3:
+                out.append(line)
         elif in_tracks and line.startswith("    ") and line.strip():
             if kept < 3:
                 out.append(line)
@@ -1597,6 +1829,8 @@ def cmd_brief(args):
         ("calibration (current era)", ["calibration"], _brief_calibration),
         ("potential (band-clearing candidates only)", ["potential"] + pin,
          _brief_potential),
+        ("locks (lock/unlock actions — everything unlocked is decompiled)",
+         ["locks"] + pin, None),
         ("homelab", ["homelab"] + pin, _brief_homelab),
         ("hardware (top tracks)", ["hardware"] + pin, _brief_hardware),
         ("ab", ["ab"], _brief_ab),
@@ -1661,6 +1895,12 @@ def build_parser():
     p = sub.add_parser("audit")
     p.add_argument("--file")
     p.set_defaults(fn=cmd_audit)
+
+    p = sub.add_parser("locks",
+                       help="daily lock/unlock actions (deltas only)")
+    p.add_argument("--file")
+    p.add_argument("--floor", type=int, default=ihlib.COMPILE_FLOOR)
+    p.set_defaults(fn=cmd_locks)
 
     p = sub.add_parser("ab")
     p.add_argument("--brief", action="store_true")

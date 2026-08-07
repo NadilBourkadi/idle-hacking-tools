@@ -186,7 +186,12 @@ close corroborates the sim (6 Aug): decomposing `driver-ab-2026-08-03`'s
 own depth share at ~+1.9 ± 2 — a +44.0-score, Barrier-carried craft again
 reading ~0 depth, now in live data.** Still open on mechanism (alpha-consumes-
 the-pool is the suspect); next step is a dedicated CI/CD pair isolating
-Barrier at matched depth. Until resolved, treat Barrier-carried score deltas
+Barrier at matched depth. **Entered in `ihlib.PENDING_REFITS` 7 Aug 2026**
+as the per-family score->depth conversion (applied as 1.0 everywhere), after
+`hardware_plan` was found routing 96% of a 161K-chip balance into the Barrier
+track over the Regen track purely on unconverted score; `ih.py hardware` now
+marks depth-suspect rows and every weight-consuming command banners while the
+row stands. Unblock: the pair below, full 15-run block. Until resolved, treat Barrier-carried score deltas
 at deep streaks as optimistic on depth — they may still be real on economy
 (shorter drawdown ⇒ fewer near-death fights; note the driver window's
 damage-taken/fight at streak 24–42 *fell* 306 → 181 behind the bigger pool).
@@ -435,3 +440,20 @@ likely (a); the player noticing the next event's announcement settles (b).
 
 
 **Lead, 6 Aug 2026 (found during the public-repo audit):** `currentPlayer` carries `game_tick_ms = 5000` / `tick_seconds = 5` — a server tick constant sitting 7% above the measured 4.65 s/fight cadence era. If fight cadence is derived from this tick minus some processing offset, the era-steps may be server-version steps (`server_version` is also in the capture and changes on deploys — check whether cadence era boundaries coincide with `server_version` changes across the capture archive).
+
+### 18. Why did our hit rate fall in every matched streak band across the Router swap?
+
+`router-ab-2026-08-06` (closed KEEP 7 Aug, +10.0) changed no Accuracy, yet our
+per-attack hit rate fell in **all four** matched streak bands: 80.7→80.0 (24–42),
+79.3→77.4 (60–85), 78.2→76.1 (86–105), 76.7→74.6 (106–130). A consistent
+0.7–2.1pp drop across every band is not noise-shaped, and the fitted hit law
+`logit(hit) = -0.164 + 1.420*ln(Acc/Eva)` predicts no move from this swap.
+Candidate explanations, none tested: (a) enemy *composition* shifted within each
+band as the build reached deeper streaks (band is streak, not enemy class — the
+segment-by-the-natural-categorical rule applies and has not been run here);
+(b) the same-window VLAN +1% Def / hardware changes carried an Accuracy-pool
+side effect not read out of the capture; (c) enemy evasion scales with something
+other than streak. Discriminant: re-segment the post window by **enemy class**
+within one band and compare like-for-like; if composition explains it, the
+per-class hit rates should be flat across the boundary. Until then, treat
+pooled post-equip hit rates in this era as composition-contaminated.

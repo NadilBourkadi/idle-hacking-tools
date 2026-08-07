@@ -19,7 +19,7 @@ __all__ = [
     "PAYLOAD_AB_2026_07_23", "SHELL_AB_2026_07_23", "DRIVER_AB_2026_07_27",
     "FIREWALL_AB_2026_07_28", "PAYLOAD_AB_2026_07_30",
     "FIREWALL_AB_2026_07_31", "SHELL_AB_2026_07_31", "DRIVER_AB_2026_08_03",
-    "ROUTER_AB_2026_08_06", "ACTIVE_EXPERIMENT",
+    "ROUTER_AB_2026_08_06", "SHELL_AB_2026_08_07", "ACTIVE_EXPERIMENT",
 ]
 
 PAYLOAD_AB_2026_07_23 = {
@@ -452,6 +452,20 @@ DRIVER_AB_2026_08_03["concluded"] = (
     "grades in equipment-tests.md; new standing baseline 189.2.")
 
 ROUTER_AB_2026_08_06 = {
+    "concluded": "KEEP -- 7 Aug 2026, mean 199.8 over 24/24 deaths vs gate "
+                 ">=187.2 (baseline 189.8), delta +10.0. Contamination "
+                 "checks passed: no zone change, cadence 4.649s in the 4.65 "
+                 "era. BUNDLE: all 24 post deaths fall after the VLAN +1% "
+                 "Def boundary. Prediction (1), the Regen-law forward test, "
+                 "predicted +5.4 (sharpened +7.5 +-1.5) and the window "
+                 "delivered +10.0 -- first out-of-sample LIVE confirmation, "
+                 "over-delivering like the rest of the era; realized "
+                 "prg/round 292.3 -> 320.3; (2) rounds/fight +8.1..+11.6% "
+                 "vs the predicted +10-18%, at the low edge. Unexplained and "
+                 "filed as open-questions par.18: our hit rate fell "
+                 "0.7-2.1pp in ALL FOUR matched bands on a swap that changed "
+                 "no Accuracy. Revert path Titanic Router of the Undying "
+                 "RELEASED. See docs/decision-log.md",
     "name": "router-ab-2026-08-06",
     "item": "Aggressive Router of Recovery",  # will rename on promotion
     "slot": "Router",
@@ -508,6 +522,83 @@ ROUTER_AB_2026_08_06 = {
                  "this swap -- a clean Regen/Def family test.",
 }
 
+SHELL_AB_2026_08_07 = {
+    "name": "shell-ab-2026-08-07",
+    "item": "Assault Shell of the Shadow",
+    "slot": "Shell",
+    # The item this replaced, held as the revert path while the gate is hot.
+    # Read by ihlib.protected_revert_items() so lock/decompile advice cannot
+    # recommend deleting the only way back out of a live experiment.
+    "revert_item": "Shielded Shell of Bastion",
+    # Boundary from the capture pair: 08:30:37.344Z still showed Shielded
+    # Shell of Bastion, 08:59:51.068Z showed the crafted Shell equipped.
+    # That leaves ~29 ambiguous minutes -- WIDER than the Router's ~2 -- so
+    # the boundary is set at the FIRST-EQUIPPED capture and every ambiguous
+    # fight falls PRE, which biases against the treatment (the driver lesson).
+    "equip_ms": 1786093191068,          # 2026-08-07T08:59:51.068Z
+    "boundary_fight_id": None,
+    # Baseline = the post-Router same-loadout era STRICTLY BEFORE equip_ms
+    # (router-ab-2026-08-06 closed KEEP this morning at 199.8/24; the era
+    # accrued one more pre-equip death for 25, mean 199.8). Frozen here for
+    # the gate numbers. NOTE the 26th death of that era (streak 212) fell
+    # AFTER 08:59:51 and is therefore POST -- it was pooled into an earlier
+    # draft of this baseline, which would have set the gate off a treatment
+    # observation. Declare-the-cohort applies to the frozen list too.
+    "baseline_deaths": [200, 208, 186, 195, 183, 200, 199, 198, 214, 206,
+                        200, 202, 202, 201, 200, 194, 188, 203, 194, 206,
+                        205, 207, 201, 203, 201],
+    "baseline_hits": (104737, 38163),   # post-Router era player ph/pm basis
+    "target_deaths": 24,
+    "baseline_recent_ms": 1786045764621,  # Router equip -- same-loadout era
+    # DECLARED BUNDLE for the LIVE window only: the ECC Memory L181->L193
+    # buy (~160K chips, Regen-side) landed between the 08:59:51 and 09:00:28
+    # captures, i.e. ~35 min after equip. NOTE the SIM block is NOT bundled:
+    # both arms ran 08:59:32-08:59:46, before the chips were spent (161,060
+    # -> 168,057 at 08:59:51 -> 7,878 at 09:00:28), so the +20.20 +- 1.32 is
+    # the craft alone -- the cleanest paired readout the pipeline has given.
+    "segment_ms": None,
+    "keep_rule": "KEEP if mean death streak >= 197.8 (baseline 199.8 - 2); "
+                 "REVERT if mean <= 194.8. Contamination checks only: no "
+                 "zone change in the window, and fight cadence must stay at "
+                 "the ~4.65 era value (trailing-window check). "
+                 "SIM-FIRST DECISION ALREADY TAKEN (par 9.4): the 4/4 paired "
+                 "CI/CD block read B-A = +20.20 +- 1.32 streaks (~15 sigma), "
+                 "arms identified from player_combat_stats and constant "
+                 "within arm; equip followed. This live gate is confirmation "
+                 "+ the THIRD sim-vs-live agreement pair. "
+                 "PRE-REGISTERED treatment predictions (diagnostics, not "
+                 "gates): (1) ABSOLUTE-SCALE TEST -- sim delta +20.2 on a "
+                 "baseline of 199.8 predicts a live post mean of ~220-222 "
+                 "(plus a small ECC term); landing 218-224 holds the sim's "
+                 "absolute scale at n=3 gear eras. (2) REGEN LAW FORWARD "
+                 "TEST #2: item Regen 49 -> 202 = +153 listed, so 0.119/pt "
+                 "predicts +18.2 streaks from the Regen term ALONE -- i.e. "
+                 "~90% of the observed +20.2, the law's second out-of-sample "
+                 "test and its first on a clean unbundled pair. (3) BARRIER "
+                 "CORROBORATION for par.15: loadout Barrier fell 18.0% "
+                 "(7,195 -> 5,901) INSIDE a +20.2 gain; after the Regen term "
+                 "only ~+2.0 streaks remain for the NET of Def +4.5%, Acc "
+                 "+4.2% and MaxHP +1.7% MINUS Barrier -18% and Thorns -40%, "
+                 "which bounds Barrier's marginal depth cost as small. This "
+                 "CORROBORATES par.15 but does NOT unblock the PENDING_REFIT "
+                 "-- Barrier did not move alone, so the dedicated isolation "
+                 "pair is still owed. (4) realized prg/round at streak >= 60 "
+                 "rises from 320.3 toward ~430 (loadout Regen 869 -> 1,160, "
+                 "+33.6%). (5) rounds/fight at matched band FLAT within "
+                 "+-2%: this swap changed no Attack Speed, which makes it a "
+                 "discriminant against the Router window's AtkSpd confound. "
+                 "(6) HIT-RATE DISCRIMINANT for par.18: Acc rose 4.2% "
+                 "(Augment landed Omniscient T1) but Eva rose 5.8%, so the "
+                 "fitted law logit(hit) = -0.164 + 1.420*ln(Acc/Eva) "
+                 "predicts our hit rate DOWN ~0.4pp at matched band. If the "
+                 "observed drop is ~0.4pp rather than the Router window's "
+                 "0.7-2.1pp, par.18's anomaly was composition, not a broken "
+                 "law. NOTE this is NOT a MaxHP test: MaxHP went UP 1.7%, "
+                 "not down 8.3% as the contract projected, because "
+                 "watchdog_matrix reached T1 -- the asserted 0.5 weight "
+                 "stays unbounded by this window.",
+}
+
 # Concluded experiments stay importable for retrospective analysis:
 # experiment_status(SHELL_AB_2026_07_23).
-ACTIVE_EXPERIMENT = ROUTER_AB_2026_08_06
+ACTIVE_EXPERIMENT = SHELL_AB_2026_08_07
