@@ -52,6 +52,15 @@ Failed attempts do not improve the tier and consume resources. Normal failures c
 
 ## Priority open questions
 
+> **`par.N` cross-references from code and from other docs address the
+> numbering of *this* section.** The dated archive sections lower down
+> ("static-analysis resolutions", "confirmed test outcomes") carry their own
+> independent 12–17 series, so several numbers appear more than once in this
+> file. §17 appears three times. Read `par.15` as §15 below (the Barrier
+> weight), never as the archive's §15 (hackcoin deduction timing). Noted
+> 7 Aug 2026 rather than renumbered, because renumbering would silently
+> break every existing `par.N` reference in `ihlib.py` and `ih.py`.
+
 ### 1. Snapshot Backup — RESOLVED 22 July 2026
 
 From `homelabInfo` in the rich capture:
@@ -457,3 +466,51 @@ other than streak. Discriminant: re-segment the post window by **enemy class**
 within one band and compare like-for-like; if composition explains it, the
 per-class hit rates should be flat across the boundary. Until then, treat
 pooled post-equip hit rates in this era as composition-contaminated.
+
+**Evidence for (a), 7 Aug 2026 — the sign flipped.** `shell-ab-2026-08-07`
+pre-registered prediction (6) as the discriminant for this question: Acc +4.2%
+against Eva +5.8% makes the fitted law predict hit rate **down ~0.4pp** at
+matched band. Observed within-band pre→post: 79.9→80.1 (24–42), 77.3→78.5
+(60–85), 76.2→77.7 (86–105), 74.5→76.0 (106–130) — **up in all four bands,
+by +0.2 to +1.5pp.** So the law missed by ~1–2pp here in the *opposite*
+direction to the Router window's 0.7–2.1pp shortfall. Two windows deviating
+by a similar magnitude with opposite sign is the shape of a band-composition
+effect, not of a broken law, which promotes (a) and demotes (c). The
+discriminant named above — re-segmenting one band by enemy class — is still
+the test that would close it, and is now the cheapest open item here.
+
+Note the pooled headline does *not* show this: `ih.py ab` printed 72.9% vs a
+73.3% baseline, i.e. −0.4pp, appearing to confirm the prediction exactly. That
+pooled figure compares against the **old-Payload** `baseline_hits`, not this
+experiment's own pre window, and `experiment_mechanism` already carries the
+comment explaining why pooled hit rates are confounded by streak composition
+alone. Grade prediction (6) on the bracket table, never on that line.
+
+### 19. Why did rounds per fight RISE across a swap that raised hit rate? (added 7 Aug 2026)
+
+`shell-ab-2026-08-07` pre-registered prediction (5): rounds/fight flat within
+±2% at matched band, offered as a discriminant against the Router window's
+Attack Speed confound, since this swap changed no Attack Speed. It **missed**:
+25.5→26.2 (+2.7%), 29.9→30.1 (+0.7%), 32.9→34.4 (+4.6%), 38.7→40.1 (+3.6%).
+
+The miss is not a selection artefact — the obvious candidate was the mechanism
+table conditioning on `victory`, but win rate is **100% in both arms in all
+four bands** (deaths occur past streak 200, well beyond the deepest bracket at
+106–130), so nothing is being selected away. Checked 7 Aug 2026.
+
+What makes it interesting is that hit rate rose in the same bands (§18). More
+hits per round with the same attack speed should *shorten* fights, so two
+measured quantities are pulling opposite ways. The leading candidate is
+**Thorns −40%** across this swap: if reflected damage is a non-trivial share of
+kill throughput at these depths, losing 40% of it lengthens fights regardless
+of hit rate. That is a hypothesis, not a fit — Thorns' offensive contribution
+has never been measured, and `CRAFT_WEIGHTS` prices it as defensive.
+
+Why it matters beyond bookkeeping: rounds/fight is currently used as an
+AtkSpd discriminant, and this window shows it moving with no AtkSpd change, so
+it is **not clean for that purpose**. It also bears on the live Router
+candidate `Bulwarked Router of Thorns` (+19.5, with Thorns +10.6 carrying more
+than half the delta) — if Thorns carries unpriced kill-speed value the weight
+is low, and if the rounds effect is something else entirely it is unaffected.
+Do not re-weight on one observation. Discriminant: a CI/CD pair differing only
+in Thorns at matched depth, reading rounds/fight rather than streak depth.
