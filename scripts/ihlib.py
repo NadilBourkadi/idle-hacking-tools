@@ -2363,15 +2363,21 @@ def assumptions():
          "29 Jul 2026", None),
         ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "measured",
          "how many craft bases to hold per slot; decides IRREVERSIBLE "
-         "decompiles. Three inputs, two load-bearing: band-clearing bases "
-         "arrive 0.92/day (14 over the 15.2-day inventory span) and are "
-         "crafted young (median age at craft 1.2d, max 4.5d, n=8), so a "
-         "deeper queue is never drawn down before it is superseded. Third "
-         "input (inventory pressure, 10 hc/slot) only prices it, and is "
-         "WEAKER than first stated: max_slots is soft -- seven 5 Aug "
-         "captures held 103 against a max of 102. Raise only if the arrival "
-         "rate collapses or craft throughput exceeds ~1/day",
-         "7 Aug 2026", None),
+         "decompiles. RAISED 1 -> 2 on 7 Aug 2026 because its original "
+         "load-bearing leg measured the WRONG QUANTITY. That leg was "
+         "'band-clearing bases arrive 0.92/day and are crafted young "
+         "(median age 1.2d)', which treats every base over UPGRADE_BAND as "
+         "INTERCHANGEABLE. Scoring every base in the archive by arrival "
+         "date, the Analyzer slot takes in a band-clearing base every 0.9 "
+         "days but a TOP-DECILE one (keep_worth >= 46.5) only every 6.8 -- "
+         "so depth 1 discarded rank-2 bases whose real replacement time was "
+         "~7x what the justification claimed. It cost four bases the day it "
+         "shipped, including the highest-raw base owned (+121.2). The right "
+         "comparison is the replacement time of a base of EQUAL QUALITY, "
+         "never the raw keeper arrival rate. Inventory pressure (10 hc/slot) "
+         "only prices it and has collapsed at 23/102; max_slots is soft "
+         "anyway -- seven 5 Aug captures held 103 against a max of 102",
+         "7 Aug 2026 (re-derived)", None),
         ("plan_craft tier_cap default", 1, "measured",
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",
