@@ -1425,17 +1425,35 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         name = item.get("name") or "?"
         plan = plan_craft(item, ladders, floor=floor, preserve=preserve)
         raw = plan["score"] - base.get(slot, 0.0)
-        _suspect, labels = suspect_share(
+        suspect, labels = suspect_share(
             score_contributions(plan["totals"], eq_totals.get(slot, {})))
-        # The ex-suspect reading needs the ex-suspect-OPTIMAL plan, not this
-        # plan re-scored: see `suspect_free_weights`. `labels` still comes from
-        # the raw plan, because the message names which families the RAW
-        # verdict leans on.
+        # TWO different ex-suspect questions, and conflating them was a defect
+        # (8 Aug 2026, caught in review before it shipped):
+        #
+        #   ex_suspect  = this plan RE-SCORED without the flagged families.
+        #                 Answers "does the raw verdict LEAN on a flagged
+        #                 weight?" -- the disagreement test. Pessimistic by
+        #                 construction, and the only reading allowed anywhere
+        #                 near an irreversible decompile.
+        #   ex_replanned = value of the best plan built WITHOUT them. Answers
+        #                 "what is the base worth under disbelief?" It is a
+        #                 larger number, and using it in the disagreement test
+        #                 cancelled the CONTESTED hold on five bases and put
+        #                 them on the UNLOCK list -- deletions enabled by a
+        #                 number derived from the very weight the printed
+        #                 guarantee says never decides a decompile.
+        #
+        # So ex_replanned may only ever RAISE what we hold: it feeds
+        # `keep_worth` and the slot ranking, never `discard_worth` and never
+        # `contested`. max() rather than trusting ex_replanned >= ex_suspect:
+        # plan_craft is ratio-greedy, not an exact maximum, so the ordering is
+        # a near-certainty rather than a guarantee.
         sf = suspect_free_weights()
         plan_sf = plan_craft(item, ladders, floor=floor, preserve=preserve,
                              weights=sf)
-        ex_suspect = (weighted_score(plan_sf["totals"], sf)
-                      - weighted_score(eq_totals.get(slot, {}), sf))
+        ex_suspect = raw - suspect
+        ex_replanned = (weighted_score(plan_sf["totals"], sf)
+                        - weighted_score(eq_totals.get(slot, {}), sf))
         # Two readings, and the two directions need OPPOSITE tests.
         #   KEEP  is asserted on the WEAKER reading: only hold what clears the
         #         band even if the suspect weights are disbelieved.
@@ -1445,12 +1463,12 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         # Payload of Breaching at raw -39.1 while its ex-suspect delta was
         # +21.0 -- a decompile verdict resting entirely on Corrupt/MaxHP,
         # exactly what the printed guarantee says never happens.
-        keep_worth = min(raw, ex_suspect)
+        keep_worth = min(raw, max(ex_suspect, ex_replanned))
         discard_worth = max(raw, ex_suspect)
         worth = keep_worth
         row = {"name": name, "slot": slot, "worth": worth,
                "keep_worth": keep_worth, "discard_worth": discard_worth,
-               "raw": raw,
+               "raw": raw, "ex_replanned": ex_replanned,
                "ex_suspect": ex_suspect, "suspect_labels": labels,
                "stability": item.get("stability") or 0,
                "item_level": item.get("item_level") or 0}
@@ -1476,7 +1494,7 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     for row in candidates:
         real_keeper = row["slot_rank"] is not None
         in_depth = real_keeper and row["slot_rank"] <= per_slot
-        contested = row["keep_worth"] <= UPGRADE_BAND < row["discard_worth"]
+        contested = is_contested(row["raw"], row["ex_suspect"])
         if row["protected"]:
             # Held for the GATE, never discarded -- but an UNLOCKED revert path
             # is one sweep from deletion, so it must surface as a LOCK action.
@@ -2723,6 +2741,22 @@ SUSPECT_WEIGHTS = {
     # discounting every Regen-carried Δ that is now the best-measured
     # family in the table. Fit is regime-local (deep-attrition era).
 }
+
+
+def is_contested(raw, ex_suspect):
+    """Do the two readings of one base straddle `UPGRADE_BAND`?
+
+    Deliberately a function of the (raw, RE-SCORED ex-suspect) pair and
+    nothing else -- split out of `lock_actions` on 8 Aug 2026 so it cannot
+    quietly acquire another input. It did: `keep_worth` was folded in, and
+    once `keep_worth` started carrying the more generous RE-PLANNED reading
+    (`suspect_free_weights`) that inflation cancelled the hold on five
+    contested bases and moved them onto the irreversible UNLOCK list --
+    deletions decided by a weight `PENDING_REFITS` has flagged, which is the
+    one thing the printed guarantee promises never happens. The re-planned
+    reading may raise what is HELD; it must never reach this test.
+    """
+    return min(raw, ex_suspect) <= UPGRADE_BAND < max(raw, ex_suspect)
 
 
 def suspect_free_weights():
