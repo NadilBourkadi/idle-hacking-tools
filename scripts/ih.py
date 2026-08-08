@@ -346,11 +346,30 @@ def cmd_potential(args):
                     f"{label} {value:+.1f}" for value, label in parts))
                 bad, labels = ihlib.suspect_share(parts)
                 if labels and abs(bad) > 2:
+                    # The ex-suspect number that matters is the value of the
+                    # ex-suspect-OPTIMAL plan, not this plan re-scored -- see
+                    # ihlib.suspect_free_weights. Re-scoring the raw plan
+                    # prices a contract nobody would run under those beliefs,
+                    # and it released the best Analyzer base to the AT RISK
+                    # list on 8 Aug 2026 while this very panel called it best
+                    # in slot.
+                    sf = ihlib.suspect_free_weights()
+                    plan_sf = ihlib.plan_craft(
+                        item, ladders, floor=args.floor, tier_cap=args.cap,
+                        preserve=preserve, deep_step=deep_step, weights=sf)
+                    d_sf = (ihlib.weighted_score(plan_sf["totals"], sf)
+                            - ihlib.weighted_score(eq_totals, sf))
                     print(f"            !!    {abs(bad):.1f} of that is "
-                          f"{'/'.join(labels)} — Δ ex-suspect "
-                          f"{delta - bad:+.1f}. "
+                          f"{'/'.join(labels)}; re-planned WITHOUT them the "
+                          f"base is worth {d_sf:+.1f} (this plan re-scored: "
+                          f"{delta - bad:+.1f}). "
                           + "; ".join(ihlib.SUSPECT_WEIGHTS[label]
                                       for label in labels))
+                    steps_sf = ", ".join(
+                        f"{label} T{f}->T{t}{'~' if est else ''}"
+                        for _uid, label, f, t, c, est in plan_sf["steps"])
+                    if steps_sf and steps_sf != steps:
+                        print(f"            ex-suspect plan: {steps_sf}")
             econ = []
             for label in sorted(set(plan["totals"]) | set(eq_totals)):
                 if ihlib.is_combat_stat(label):
