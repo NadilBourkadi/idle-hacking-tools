@@ -1268,10 +1268,17 @@ def cmd_locks(args):
         cost = f", and a slot costs {price} hackcoin" if price else ""
         print(f"# Holding is NOT free: inventory {used}/{cap_slots} "
               f"({free} free){cost}.")
-    print(f"# Depth: keeping the best {actions['per_slot']} base per slot — "
-          f"band-clearing bases arrive ~0.92/day and the median base is "
-          f"crafted\n#         1.2 days after dropping (max ever 4.5), so a "
-          f"deeper queue is never drawn down.")
+    # The old header quoted the ~0.92/day keeper arrival rate as the reason
+    # for the depth. That rate is real and was the WRONG quantity: it counts
+    # every band-clearing base as interchangeable, and top-decile bases
+    # arrive ~7x less often (see KEEP_DEPTH_PER_SLOT). Restating a refuted
+    # justification in prose is how it survives a fix.
+    n = actions["per_slot"]
+    print(f"# Depth: keeping the best {n} base{'s' if n != 1 else ''} per "
+          f"slot — sized on how long a base of EQUAL QUALITY takes to "
+          f"replace\n#         (top-decile ~6.8 days in the measured slot), "
+          f"not on the ~0.92/day rate at which\n#         any band-clearing "
+          f"base arrives. Anything held beyond that depth is listed AT RISK.")
     print("# 'now' is the item's CURRENT flag in this capture — if it already "
           "reads\n#         the target state you have done it; take a fresh "
           "capture to re-check.")
