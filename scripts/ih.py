@@ -528,8 +528,8 @@ def cmd_hardware(args):
     print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
     print("  current build; additive pooling confirmed — mechanics.md §13).")
     print("  This ranks raw SCORE, which is NOT comparable across stat")
-    print("  families — rows marked !! are score that has twice failed to")
-    print("  convert into death-streak depth:")
+    print("  families — rows marked !! carry a family in SUSPECT_WEIGHTS,")
+    print("  whose own note says why it is not trusted:")
     combat_rows, economy_rows = [], []
     for d in hw.get("definitions") or []:
         value = ihlib.hardware_track_value(d, stats_breakdown)
@@ -597,6 +597,32 @@ def cmd_contract(args):
                                 preserve=preserve)
         phases = [(uid, to) for uid, _label, _frm, to, _c, _e in plan["steps"]]
         print("  phases taken from plan_craft (pass --phase to override)")
+        # `plan_craft` maximises RAW score, so when a flagged family wins the
+        # greedy search this default is the contract `suspect_free_weights`
+        # calls "one nobody would run under those beliefs". `potential` and
+        # `locks` both price the base on the re-planned reading; without this
+        # block the one command CLAUDE.md mandates for every craft silently
+        # disagreed with both (found in review, 8 Aug 2026).
+        eq_totals_c = ihlib.item_stat_totals(equipped)
+        bad, labels = ihlib.suspect_share(
+            ihlib.score_contributions(plan["totals"], eq_totals_c))
+        sf = ihlib.suspect_free_weights()
+        plan_sf = ihlib.plan_craft(base_item, ladders, floor=args.floor,
+                                   preserve=preserve, weights=sf)
+        phases_sf = [(uid, to) for uid, _l, _f, to, _c, _e in plan_sf["steps"]]
+        if labels and abs(bad) > 2 and phases_sf and phases_sf != phases:
+            d_sf = (ihlib.weighted_score(plan_sf["totals"], sf)
+                    - ihlib.weighted_score(eq_totals_c, sf))
+            print(f"  !! this plan leans {abs(bad):.1f} on "
+                  f"{'/'.join(labels)}. Re-planned without them the base is "
+                  f"worth {d_sf:+.1f} on a DIFFERENT contract:")
+            print("     " + ", ".join(
+                f"{label} T{f}->T{t}" for _uid, label, f, t, _c, _e
+                in plan_sf["steps"]))
+            print("     rerun with --ex-suspect to price that one instead")
+            if args.ex_suspect:
+                phases = phases_sf
+                print("     --ex-suspect: pricing the re-planned contract")
     if not phases:
         sys.exit("no phases to run")
 
@@ -2055,6 +2081,9 @@ def build_parser():
     p.add_argument("--file")
     p.add_argument("--deepen", action="store_true",
                    help="also test plans deeper than plan_craft proposes")
+    p.add_argument("--ex-suspect", action="store_true",
+                   help="price the plan built WITHOUT the flagged families "
+                        "instead of plan_craft's raw-optimal one")
     p.set_defaults(fn=cmd_contract)
 
     p = sub.add_parser("calibration",

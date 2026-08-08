@@ -536,6 +536,36 @@ class LockActionsTest(unittest.TestCase):
         self.assertEqual(keep, [])
         self.assertEqual(len(contested), 1)
 
+    def test_replanned_value_can_never_cancel_a_contested_hold(self):
+        """Caught in review before shipping, 8 Aug 2026.
+
+        `contested` used to be `keep_worth <= BAND < discard_worth`. When
+        `keep_worth` began carrying the ex-suspect-OPTIMAL re-plan (a strictly
+        larger number than the re-scored reading), that inflation pushed
+        `keep_worth` over the band and cancelled the hold on five bases --
+        `Aligned Analyzer of Thunder`, `Resilient Analyzer of Puncturing` and
+        `Resilient Analyzer of Decay` among them -- which then fell to the
+        depth cap and were printed as UNLOCK+decompile. Irreversible deletions
+        decided by a flagged weight, under a header promising the opposite.
+
+        `is_contested` takes the (raw, re-scored) pair and nothing else, so no
+        re-planned number can reach the test however large it gets.
+        """
+        # the real 8 Aug numbers for Aligned Analyzer of Thunder
+        raw, ex_rescored, ex_replanned = 69.1, -6.6, 19.8
+        self.assertTrue(ihlib.is_contested(raw, ex_rescored))
+        # the re-planned reading clears the band on its own and must not be
+        # able to change that verdict -- the signature makes it unpassable
+        self.assertGreater(ex_replanned, ihlib.UPGRADE_BAND)
+        keep_worth = min(raw, max(ex_rescored, ex_replanned))
+        self.assertGreater(keep_worth, ihlib.UPGRADE_BAND)
+        self.assertTrue(ihlib.is_contested(raw, ex_rescored),
+                        "a raised keep_worth must not cancel the hold")
+
+    def test_agreeing_readings_are_not_contested(self):
+        self.assertFalse(ihlib.is_contested(84.5, 43.4))   # both clear
+        self.assertFalse(ihlib.is_contested(-158.2, -94.1))  # both fail
+
     def test_min_and_max_readings_differ_for_the_two_directions(self):
         raw, suspect = -39.1, -60.1        # suspect term is NEGATIVE
         keep_worth = min(raw, raw - suspect)
