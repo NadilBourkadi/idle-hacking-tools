@@ -79,6 +79,17 @@ class StatModelTest(unittest.TestCase):
             ihlib.composed_stat_total(b, "accuracy"), 17215.309830158225,
             places=6)
 
+    def test_one_suspect_registry_feeds_hardware_and_crafts(self):
+        """`hardware` kept its own dict and printed the Barrier caveat while
+        `potential`/`locks` ranked Barrier at face value (8 Aug 2026)."""
+        defn = {"effects": [{"combat_stat": "damage_barrier",
+                             "additive_per_level": 0.01}]}
+        note = ihlib.hardware_track_depth_note(defn)
+        self.assertIsNotNone(note, "hardware lost its depth-suspect warning")
+        self.assertIn("Barrier", note)
+        self.assertIn("Barrier", ihlib.SUSPECT_WEIGHTS,
+                      "the craft-side registry must carry the same finding")
+
     def test_gear_flat_pool_is_the_single_multiplicand_source(self):
         """`hardware_track_value` re-derived this pool inline until 8 Aug 2026.
         Two producers of one number is how a fix lands in one caller only."""
