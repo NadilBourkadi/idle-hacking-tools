@@ -787,10 +787,10 @@
      }
     ],
     "hardware": 0.39,
-    "homelab": 0,
+    "homelab": 0.005,
     "homelab_flat": 0,
     "syndicate": 0,
-    "total": 91.74000000000001
+    "total": 91.74695
    },
    "post_combat_heal": {
     "base": 0,

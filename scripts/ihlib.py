@@ -1738,8 +1738,7 @@ def hardware_track_value(defn, stats_breakdown):
         else:
             b = (stats_breakdown or {}).get(stat) or {}
             flat = b.get("equipment_flat") or 0
-            pool = (1 + (b.get("equipment_pct") or 0) + (b.get("hardware") or 0)
-                    + (b.get("homelab") or 0))
+            pool = gear_flat_pool(b)
             value += per_level * flat * CRAFT_WEIGHTS_FLAT[label] / pool
     return value
 
@@ -2924,6 +2923,33 @@ ECONOMY_KEY = "equipment"
 ECONOMY_MULT_KEYS = ("participation_bonus", "firewall_cache", "homelab_mult")
 # everything else in stats_breakdown is gear-flat (regeneration, corruption,
 # thorns, damage_barrier, armor_penetration) -> pool multiplies equipment_flat.
+#
+# ...but the homelab term does NOT join that pool for a gear-flat stat: it is
+# added ALONGSIDE equipment_flat, inside the bracket the pool multiplies.
+#   gear-flat:  total = (equipment_flat + homelab) * (1 + equipment_pct + hardware)
+#   scaling:    total = (base + level + equipment_flat) * (1 + equipment_pct
+#                                                          + hardware + homelab)
+# Found 8 Aug 2026 by audit's MODEL self-check, the same detector that caught
+# `homelab_mult` on the economy family on 31 Jul: Malware Sandbox L1
+# ("Increases Corruption by 0.5% per level" -> homelab 0.005) populated the
+# field for the first time on a gear-flat stat and the pool reading missed the
+# game's total by +0.35%. (65 + 0.005) * 1.39 = 90.35695 reproduces it exactly,
+# where 65 * 1.395 = 90.675 does not. The pool reading is ruled out for
+# gear-flat and confirmed for scaling: on `accuracy` the same swap misses by
+# -5.6%, so the two families genuinely differ.
+#
+# The plain reading is that the game credits a gear-flat stat with the RAW
+# FRACTION as a flat addend -- 0.5% delivers +0.005 corruption, not +0.5% of
+# 90.4 (+0.45). That is ~90x smaller than the description implies and is very
+# likely a game-side bug; the model reproduces what the game does, not what it
+# says. REGIME: ONE observation, one stat, one level -- corruption is the only
+# gear-flat stat that has ever carried a non-zero homelab across all 159
+# archived captures, and equipment_pct is 0 there, so this cannot yet
+# distinguish `homelab * (1 + pct + hardware)` from `homelab * (1 + hardware)`
+# (they differ by <0.01 corruption today). Malware Sandbox L2 is the forward
+# test: it predicts total = (65 + 0.01) * 1.39 = 90.3639, against 91.00 under
+# the pool reading. `validate_stat_totals` re-checks every capture, so a wrong
+# form here cannot stay quiet.
 
 
 def is_economy_breakdown(breakdown):
@@ -2948,6 +2974,20 @@ def stat_pool(breakdown):
                    and isinstance(v, (int, float)))
     return (1 + (b.get("equipment_pct") or 0)
             + (b.get("hardware") or 0) + (b.get("homelab") or 0))
+
+
+def gear_flat_pool(breakdown):
+    """Multiplier a gear-flat stat's `equipment_flat` actually receives.
+
+    NOT `stat_pool`: the homelab term sits inside the bracket rather than in
+    the pool for this family (see the note above ECONOMY_MULT_KEYS). Both
+    `composed_stat_total` and `hardware_track_value` must read the multiplicand
+    from here -- `hardware_track_value` re-derived the pool inline until 8 Aug
+    2026, which is exactly the shape of duplication that hides a defect in one
+    caller while the other is fixed.
+    """
+    b = breakdown or {}
+    return stat_pool(b) - (b.get("homelab") or 0)
 
 
 def economy_multiplier(breakdown):
@@ -2979,7 +3019,10 @@ def composed_stat_total(breakdown, stat, d_equipment_pct=0.0, d_hardware=0.0,
     flat = (b.get("equipment_flat") or 0) + d_equipment_flat
     if stat in SCALING_STATS:
         return ((b.get("base") or 0) + (b.get("level") or 0) + flat) * pool
-    return flat * pool
+    # gear-flat: homelab lands in the bracket, not the pool, so a homelab delta
+    # moves the addend and must be taken back out of `pool`.
+    homelab = (b.get("homelab") or 0) + d_homelab
+    return (flat + homelab) * (pool - homelab)
 
 
 def validate_stat_totals(capture, tolerance=1e-6):
