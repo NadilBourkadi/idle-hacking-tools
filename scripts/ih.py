@@ -1320,8 +1320,10 @@ def cmd_locks(args):
         return
     n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
     n_cont = len(actions.get("contested") or [])
-    extra = (f", {n_cont} CONTESTED (no action — the two readings disagree, "
-             f"so they stay locked)" if n_cont else "")
+    # "no action" is only true of contested items that are ALREADY locked;
+    # unlocked ones are a LOCK action and are counted in n_lock above.
+    extra = (f", {n_cont} CONTESTED and already locked (no action — the two "
+             f"readings disagree, so they stay as they are)" if n_cont else "")
     print(f"\n  {n_lock} to LOCK, {n_unlock} to UNLOCK+decompile{extra}, "
           f"in inventory slot order:")
     for slot in ihlib.SLOT_ORDER:
