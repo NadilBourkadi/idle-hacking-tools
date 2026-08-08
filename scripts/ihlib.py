@@ -1209,23 +1209,23 @@ def homelab_build_speed(info):
     return max(1.0, min(20.0, (1.0 + upgrades + bonus) * mult))
 
 
-# Stat families whose SCORE has been shown not to convert to death-streak
-# depth at the same rate as the rest (open-questions.md par.15; the matching
-# PENDING_REFITS row). A ranking that sums raw score across families silently
-# over-weights these, so every panel that ranks by score must mark them.
-DEPTH_SUSPECT_STATS = {
-    "damage_barrier": "Barrier: >=23 score/streak vs Regen's ~5.0 — a "
-                      "+44.0-score Barrier-carried craft read ~0 depth twice "
-                      "(sim -0.58+-1.03, live ~+1.9+-2). par.15",
-}
-
-
 def hardware_track_depth_note(definition):
-    """Warning for a hardware track whose score does not convert to depth."""
+    """Warning for a hardware track whose score does not convert to depth.
+
+    Reads `SUSPECT_WEIGHTS`, the single registry. Until 8 Aug 2026 this had its
+    OWN dict (`DEPTH_SUSPECT_STATS`, keyed by game stat id) holding Barrier
+    while `SUSPECT_WEIGHTS` (keyed by craft label) did not -- so `hardware`
+    printed the Barrier caveat and `potential`/`locks`/`contract` did not, on
+    the same underlying finding. Its own comment said "every panel that ranks
+    by score must mark them" and two of the three did not. Found by the two
+    panels disagreeing in one advisory, which is how every defect here is
+    found; merged rather than synchronised, because two dicts that agree today
+    are the defect, not the fix.
+    """
     for effect in definition.get("effects") or []:
-        note = DEPTH_SUSPECT_STATS.get(effect.get("combat_stat"))
-        if note:
-            return note
+        label = stat_label(effect.get("combat_stat") or "")
+        if label in SUSPECT_WEIGHTS:
+            return f"{label}: {SUSPECT_WEIGHTS[label]}"
     return None
 
 
@@ -2681,6 +2681,18 @@ SUSPECT_WEIGHTS = {
     # a Δ that is now sound.
     "MaxHP": "still UNMEASURED — pure attrition buffer, and the profiler's "
              "full-HP single fights cannot see it (needs CI/CD Pipeline)",
+    # Barrier ADDED to this registry 8 Aug 2026. The finding is older -- it is
+    # the open PENDING_REFITS row (score -> death-streak depth per family) and
+    # was already printed by `hardware` -- but it lived in a SECOND dict that
+    # only the hardware panel read, so `potential`, `locks` and `contract` rank
+    # Barrier-carried score at full face value while `hardware` warns about it.
+    # Decision-bearing when merged: Brutal Driver of Hardening reads +57.0 raw
+    # and ~-1.2 ex-suspect (58.2 of it is Barrier), i.e. the headline upgrade
+    # of the Driver slot is entirely one unconverted family.
+    "Barrier": ">=23 score/streak vs Regen's ~5.0 — a +44.0-score "
+               "Barrier-carried craft read ~0 depth TWICE (sim -0.58+-1.03, "
+               "live ~+1.9+-2), so this score has not been shown to buy "
+               "survival at all. par.15",
     # Regen REMOVED 6 Aug 2026: magnitude measured on the CI/CD pair at
     # +3.69 +- 0.72 streaks per +31 item-flat (5-sigma, confounds net
     # negative, matches the Shell live close at 0.119 streaks/point). A
