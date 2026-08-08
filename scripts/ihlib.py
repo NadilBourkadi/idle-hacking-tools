@@ -384,13 +384,43 @@ PENDING_REFITS = [
         "name": "score -> death-streak depth conversion (per stat family)",
         "applied": "1.0 for every family (raw score summed across families)",
         "opened": "2026-08-07",
-        "blocked_on": "no paired measurement isolating Barrier's marginal "
-                      "depth at the 180+ faces; only Regen has a fitted "
-                      "score/streak figure",
-        "unblock": "the dedicated CI/CD Barrier pair named as the next step "
-                   "in open-questions.md par.15 — two arms differing ONLY in "
-                   "Barrier at matched depth, full 15-run block (a near-zero "
-                   "effect fit, so it does not qualify for an 8-run tranche)",
+        "blocked_on": "Barrier's marginal depth has never been measured "
+                      "against a matched arm; only Regen (~5.0) and now "
+                      "ArmorPen (6-9, open-questions par.21) have figures",
+        # RESPECIFIED 8 Aug 2026. The previous unblock could not be satisfied
+        # by any number of runs, which made this row a permanent parking space
+        # for a known-wrong constant -- the exact thing the anti-deferral rule
+        # exists to stop. Three separate errors, all found by pricing the test
+        # instead of restating it:
+        #
+        # 1. It asked for a CONVERSION (score per streak). If Barrier's effect
+        #    really is ~0 that ratio is division by zero -- unbounded, never
+        #    fittable. Estimate the RECIPROCAL instead: depth yield
+        #    beta = streaks per unit score, which is finite and tight even at
+        #    zero effect. The weight correction is beta_family/beta_reference,
+        #    so beta = 0 +- small IS the answer rather than a failure to get one.
+        # 2. It demanded arms differing ONLY in Barrier. No such pair exists:
+        #    the purest gear swap owned is Daemon Shielded-of-Bastion ->
+        #    Immortal-of-Rending at Barrier -49.0 against 11.9 of signed
+        #    other movement, and the only pure lever (Packet Shield, a
+        #    damage_barrier-only hardware track) costs 7.89K chips against a
+        #    6,095 balance and cannot be sold back outside the monthly reset.
+        #    Perfect isolation is not a precondition -- subtract the other
+        #    families at their own betas and state the model dependence.
+        # 3. The 15-run floor was sized on the OBSERVED effect (~0) rather
+        #    than on the separation between the competing hypotheses. Measured
+        #    per-run SD is 2.02 streaks (df=44, grouped by stat vector), so
+        #    6 runs/arm gives SE 1.17 while the two hypotheses sit 9.8 streaks
+        #    apart on the Daemon lever -- 8 sigma. Power is about the
+        #    difference you need to detect, not the one you happened to see.
+        "unblock": "one 12-run CI/CD block, 6 per arm, on the Daemon lever "
+                   "(Shielded Daemon of Bastion vs Immortal Daemon of "
+                   "Rending, Barrier -49.0 score). Fit beta_Barrier = streaks "
+                   "per unit score after subtracting the -11.9 of other "
+                   "families at their own betas. Barrier converting like "
+                   "Regen predicts -11.5 streaks, converting at zero predicts "
+                   "-1.7; SE is 1.17, so the block separates them at ~8 sigma "
+                   "and CLOSES this row either way",
     },
 ]
 

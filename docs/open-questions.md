@@ -591,3 +591,56 @@ Corporate Network. The zones differ by ~30 streaks for this build, so if the
 conversion is regime-local the two zones will disagree, and if it is a property
 of the stat they will not. That is one extra pair of runs and it tests whether
 any of these conversions generalise outside the regime they were fitted in.
+
+## par.22 — The par.15 Barrier test was mis-specified and is respecified here (8 Aug 2026)
+
+par.15 has stood since 7 Aug asking for "two arms differing ONLY in Barrier at
+matched depth, full 15-run block". Pricing that design rather than restating it
+shows **it could not have been satisfied by any number of runs**, which turned
+the matching `PENDING_REFITS` row into a permanent home for a constant everyone
+agrees is wrong.
+
+**1. It asked for the wrong parameter.** A *conversion* (score per streak) is
+`ΔS / Δdepth`. Under the working hypothesis — Barrier buys ~no depth — that is
+division by zero: unbounded, and only ever a lower bound (hence "≥23", never a
+value). Estimate the **reciprocal**: depth yield **β = streaks per unit score**,
+which is finite and tightly estimable *especially* at zero effect. The weight
+correction is `β_family / β_reference`, so **β = 0 ± small is the answer**, not a
+failure to obtain one. This reparameterization applies to par.21 (ArmorPen) too:
+β_Regen ≈ 0.20, β_ArmorPen ≈ 0.13 streaks per score point.
+
+**2. Perfect isolation is not available and was never needed.** No owned gear
+swap isolates Barrier — the purest is Daemon `Shielded Daemon of Bastion` →
+`Immortal Daemon of Rending` at **Barrier −49.0 score against 11.9 of signed
+other movement** (AtkSpd −6.6, Thorns −8.6, CritDmg +2.1, AtkDmg +2.1 …). The one
+pure lever is **Packet Shield**, a `damage_barrier`-only hardware track at
++0.005 pool/level — but its next level costs 7.89K chips against a 6,095 balance
+and hardware cannot be sold back outside the monthly reset. Subtract the other
+families at their own βs and state the model dependence; that residual roughly
+√2's the error and leaves the test decisive.
+
+**3. The 15-run floor was sized on the wrong quantity.** It was justified as "a
+near-zero effect fit, so it does not qualify for an 8-run tranche" — sizing the
+block on the effect previously *observed* (~0) rather than on the separation
+between the hypotheses being distinguished. **Power is about the difference you
+need to detect, not the one you happened to see.** Measured per-run SD is **2.02
+streaks** (df=44, arms grouped by stat vector — the 9.78 you get grouping by
+`gear_set_id` is contamination, since that id is reused across blocks with
+different gear).
+
+**Respecified design — one 12-run block, 6 per arm:**
+
+| hypothesis | predicted Δ (streaks) |
+|---|---|
+| Barrier converts like Regen (5.0 score/streak) | **−11.5** |
+| Barrier converts at ~0 (par.15 working hypothesis) | **−1.7** |
+
+SE at 6/arm is **1.17**, so the two sit **~8σ** apart. It is decisive at 8 runs
+(6.8σ) and still decisive at 6 (5.9σ). β_Barrier lands with SE ≈ 0.024 streaks
+per score point — about 12% of β_Regen — which is a tight enough bound to either
+zero the weight or scale it, and **closes the `PENDING_REFITS` row either way**.
+
+**Free extension, +2 runs:** re-run both arms in Corporate Network. The zones sit
+~30 streaks apart for this build, so if β is regime-local they disagree and if it
+is a property of the stat they do not. That tests the one assumption every β in
+this workspace rests on.
