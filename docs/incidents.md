@@ -36,10 +36,13 @@ owns it is not negotiable in that moment. Argue with it afterwards, in writing.
 | 21 | **Numbers restated in prose, going stale silently** — three in `CLAUDE.md` at once | an untested-constant tally, the calibration bias, and a pointer to a file deleted hours earlier. All three were computable on demand | *Prose states rules; the tool states numbers* |
 | 22 | **A safety rule that only protected the status quo** — "a contested item gets NO action, it stays as it is" | the guarantee held only for items already LOCKED. For a fresh drop the status quo is UNLOCKED, and unlocked means deleted, so unlocked contested bases were destroyed by exactly the flagged weight the rule promised would never decide a decompile. Four band-clearing bases lost, including the highest-raw base owned (+121.2) | *State the default an inaction rule falls back to* |
 | 23 | **A measured constant justified by the wrong quantity** — `KEEP_DEPTH_PER_SLOT = 1` | "0.92 band-clearing keepers/day" counts everything over the band and treats those bases as interchangeable. Top-decile bases arrive every 6.8 days, not daily, so depth 1 discarded rank-2 bases whose real replacement time was ~7x its own justification | *Check that the rate you measured is the rate the decision needs* |
+| 24 | **One finding kept in two registries, one of them unread by most callers** — the Barrier score→depth result lived in `DEPTH_SUSPECT_STATS` (hardware only) and not in `SUSPECT_WEIGHTS` (crafts, locks, contracts) | `hardware` printed the caveat while the craft board three sections above it ranked Barrier at face value in the same `brief`. Brutal Driver of Hardening read +57.0 raw / −6.4 ex-suspect; Leviathan's Firewall of Isolation +98.8 → −120.6 | *Build the second opinion*; merge, never synchronise |
+| 25 | **A disbelieved weight was applied to the scoring but not to the PLAN** — `locks` re-scored the raw-optimal craft plan ex-suspect | that plan spends Stability where the flagged family scores highest, so the ex-suspect number priced a contract nobody would run. It released the best Analyzer base owned to the deletion list at +43.4 (true ex-suspect value +70.9) in the same advisory where `potential` called it best in slot | *If you disbelieve a weight, re-optimise under the disbelief — do not just re-score* |
+| 26 | **A stat family's formula assumed from its siblings** — the homelab term put in the pool for gear-flat stats | wrong by +0.35% the moment a gear-flat stat first carried one, in 159 captures. The game credits the raw fraction as a flat addend, so "+0.5% Corruption" delivers +0.005 — ~90× less than the description, and a homelab upgrade recommended for its stat is worth nothing | *Self-validate against the game's own totals* |
 
 ## What the shape of this list says
 
-**Nineteen of the twenty-one were found by something other than reading the
+**Twenty-two of the twenty-six were found by something other than reading the
 code** — a player question, a coincidence, a cross-check between two views,
 or an automated review. That is the argument for building second opinions
 deliberately rather than trusting a careful read.
@@ -49,6 +52,9 @@ checking whether it had ever been measured (#3, #4, #5, #6, #7, #13, #18, #19,
 #21). That is why `ih.py assumptions` runs before any verdict resting on a
 weight, and why the register is the first thing `audit` prints.
 
-**Three are duplication** (#15, #16, #21): the same fact computed or written in
-two places, drifting apart. Prefer one implementation with two callers, and
-prefer pointing at a command over restating its output.
+**Four are duplication** (#15, #16, #21, #24): the same fact computed, written
+or registered in two places, drifting apart. Prefer one implementation with two
+callers, and prefer pointing at a command over restating its output. #24 is the
+sharpest form — the two copies never drifted, one was simply never consulted by
+the callers that needed it, so both were individually correct and the advice was
+still wrong.

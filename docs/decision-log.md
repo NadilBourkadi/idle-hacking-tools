@@ -1331,3 +1331,78 @@ Three further findings on the same check, all of which would have silently disab
 Two more on the lock work: the at-risk block invited locking a rank-3 unlocked base while the unlock list recommended decompiling an identically-ranked locked one — **one verdict with two opposite recommendations, decided by a flag rather than by value** — and `ab --brief` rendered "deaths post-the VLAN Rules L10 +1% Def" with a different fallback string from the full printer, the same one-defect-two-printers shape the hunk it sat in claimed to have fixed.
 
 Running total for the day: **21 defects**, of which **12 were found by review of fixes rather than of original code**. The lesson is now unambiguous and belongs in `incidents.md` if it recurs once more: *a fix is a change like any other, and the freshest code in a session is the least reviewed.*
+
+## 8 August 2026 — three defects found by two panels disagreeing, and the craft they moved
+
+Session opened with `/advise` on the 07:40Z capture. `audit` raised a `MODEL`
+flag; chasing it turned up two further defects, and the third was found because
+`potential` and `locks` gave opposite verdicts on the same item **inside the
+advisory being written**. All three are fixed here; the branch is `fix/`.
+
+**Defect 1 — the gear-flat family's homelab term was in the wrong bracket.**
+`composed_stat_total(corruption)` modelled 90.6750 against the game's own
+90.3569. Malware Sandbox L1 had just populated `homelab` on a gear-flat stat for
+the first time in 159 archived captures, and the pool reading (`flat × (1 + pct
++ hardware + homelab)`) missed by +0.35%. `(equipment_flat + homelab) × (1 +
+equipment_pct + hardware)` reproduces it exactly. The families genuinely differ
+— the same swap on `accuracy` misses by −5.6% — so this is a gear-flat-only
+correction, recorded in `mechanics.md` §13 with its regime and a named forward
+test (Malware Sandbox L2 predicts 90.3639, not 91.00). **The plain reading is
+that the game credits the raw fraction as a flat addend: "+0.5% Corruption"
+delivers +0.005, ~90× less than advertised.** No craft verdict moved (the pool
+shifts 1.395 → 1.390, below display precision), but the *advice* did: a
+gear-flat homelab upgrade is now bought for its progress points only.
+
+**Defect 2 — one finding, two registries, and only one of them consulted.**
+`DEPTH_SUSPECT_STATS` (keyed by game stat id) held the Barrier score→depth
+finding and was read **only by `ih.py hardware`**. `SUSPECT_WEIGHTS` (keyed by
+craft label) drives `potential`, `locks` and `contract`, and did not carry
+Barrier at all. So the hardware panel warned that Barrier score has twice failed
+to convert into death-streak depth while, three sections above it in the same
+`brief`, the craft board ranked Barrier-carried score at full face value. The
+dict's own comment read *"every panel that ranks by score must mark them"*; two
+of the three did not. Merged into `SUSPECT_WEIGHTS`, with
+`hardware_track_depth_note` reading it through `stat_label` — **merged, not
+synchronised**, because two dicts that agree today are the defect. This is
+incident #16's shape for the third time.
+
+It moved live verdicts immediately: **Brutal Driver of Hardening** read +57.0
+raw and **−6.4 ex-suspect** (58.2 of it Barrier); **Leviathan's Firewall of
+Isolation** went +98.8 → **−120.6**. Both had been presented as clean upgrades.
+
+**Defect 3 — the ex-suspect reading priced a contract nobody would run.**
+`locks` valued every base by re-scoring the **raw-optimal** plan under the
+disbelieving weights. But `plan_craft` is a greedy search: it spends Stability
+wherever score-per-Stability is highest, so once Barrier was flagged the
+raw-optimal plan for `Shielded Analyzer of Puncturing` sank 13.1 of its 26
+Stability into Barrier — and re-scoring *that* plan ex-suspect returned +43.4
+and **released the best Analyzer base owned to the AT RISK deletion list, in the
+same advisory where `potential` called it best in slot.** The base was never the
+problem; the plan was. `plan_craft` and `weighted_score` now take a `weights`
+override and `suspect_free_weights()` re-plans under disbelief, which is a
+maximum over plans and so can never lose to any single plan scored the same way
+(the new regression test asserts exactly that impossibility). `Shielded Analyzer
+of Puncturing` +43.4 → **+70.9, best Analyzer base, LOCK**; `Intangible Firewall
+of Restoration` +46.2 → **+72.4**. `potential` now prints the ex-suspect plan
+beside the raw one, so the two panels state one number.
+
+**Consequence for the craft approved this session.** The planner's own contract
+(of Quarantine T6→T1, of Puncturing T8→T2) simulates at mean +78.0 raw but is
+worth only ~+43 once Barrier is disbelieved. The Barrier-free contract — **of
+Puncturing T8→T1 then of Swiftness T7→T1** — simulates at mean +71.5 raw with
+p10 +63.1 and a worst case of **+12.9**, and essentially all of it survives the
+disbelieving reading. The deeper, lower-probability phase is last, where it
+absorbs leftover Stability. Recorded in `predictions.jsonl` at projected +71.4 /
+p10 63.1 / p90 80.1.
+
+`Intangible Firewall of Restoration` is the nearest miss and is held, not
+approved: on the trustworthy reading it is a statistical tie (+72.2 vs +70.9),
+but its contract's worst case is −23.8 against the Analyzer's +12.9, it would
+replace a Def +30.42% sustain anchor with none, and the Analyzer is the weakest
+equipped slot by a factor of 3.3 (38.4 vs 126.7). That is a judgement call on
+tiebreakers, not on the score, and is flagged in the PR as cheap to overrule.
+
+Suite 59 → 62. Note that the suite was green through all three defects: the
+fixture carried no gear-flat homelab term, no test compared the two suspect
+registries, and none exercised planning under disbelief. *"The tests pass" is a
+fact, "verified" is a claim* — again.
