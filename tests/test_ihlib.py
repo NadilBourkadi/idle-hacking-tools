@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -211,6 +212,29 @@ class AssumptionsRegistryTest(unittest.TestCase):
             f"{missing}. CLAUDE.md requires registration in the same change "
             "that introduces the constant.")
 
+    def test_registry_rows_have_the_documented_arity(self):
+        """Exactly six fields, and `check` is callable-or-None.
+
+        Both other tests in this class read fields by index (`row[2]`,
+        `row[4]`), so a row with a stray extra element passes them while every
+        *unpacking* consumer dies. Two did: INFERIOR_BAND and
+        HARVEST_PER_GATHER_HOUR each carried a duplicated date, which shifted
+        `check` into a seventh slot. `ih.py assumptions` -- the command
+        CLAUDE.md requires before any weight-bearing verdict -- printed the
+        register up to the first bad row and then aborted, and
+        `_audit_homelab` was blind for as long as it lasted (7 Aug 2026,
+        found by the audit's own broken-check flag).
+        """
+        for row in ihlib.assumptions():
+            with self.subTest(constant=row[0]):
+                self.assertEqual(
+                    len(row), 6,
+                    f"{row[0]} has {len(row)} fields, not the 6 that "
+                    "assumptions() documents and every consumer unpacks")
+                self.assertTrue(row[5] is None or callable(row[5]),
+                                f"{row[0]} field 6 must be a live check or "
+                                f"None, not {row[5]!r}")
+
     def test_registry_rows_carry_provenance(self):
         """Status and rationale always; a DATE only where one can exist.
 
@@ -301,6 +325,108 @@ class AuditSmokeTest(unittest.TestCase):
         self.assertIsInstance(ih.run_audit(FIXTURE), list)
 
 
+class CicdBudgetMessageTest(unittest.TestCase):
+    """The free-runs line the advisory acts on. Every case here is a review
+    finding from 7 Aug 2026: the check reported a budget from a model where
+    the game reports its own, then over-advertised it three further ways."""
+
+    def _run(self, rows, cicd_level):
+        import ih
+        with mock.patch.object(ihlib, "cicd_rows", return_value=rows):
+            return ih._audit_cicd_budget_note(cicd_level)
+
+    @staticmethod
+    def _row(used, limit):
+        now = datetime.now(timezone.utc)
+        return {"seen_ms": now.timestamp() * 1000,
+                "daily_used": used, "daily_limit": limit}
+
+    def test_uses_game_reported_used_not_the_row_count(self):
+        """Both halves of the fraction must come from one producer. Counting
+        ledger rows under-counts any run made while the hub wasn't
+        streaming, which overstates the free budget."""
+        note = self._run([self._row(9, 15)], cicd_level=3)
+        self.assertIn("6/15", note)
+
+    def test_level_up_narrative_only_when_a_level_up_explains_the_gap(self):
+        # observed 15 == 5 * L3 while the pipeline reads L4: supported.
+        self.assertIn("L3->L4", self._run([self._row(8, 15)], cicd_level=4))
+        # observed 13 matches no level: must NOT assert a level-up.
+        other = self._run([self._row(8, 13)], cicd_level=4)
+        self.assertNotIn("level-up raised", other)
+        self.assertIn("no level-up explains", other)
+
+    def test_counts_never_go_negative(self):
+        """`observed - used` and `modelled - used` were printed unclamped, so
+        a game cap above the model (or a missing newest limit) could print
+        '-2 free runs'."""
+        for used, limit, level in [(12, 15, 2), (16, 15, 4), (14, 15, 3)]:
+            with self.subTest(used=used, limit=limit, level=level):
+                note = self._run([self._row(used, limit)], cicd_level=level)
+                for token in note.replace("/", " ").replace("(", " ").split():
+                    self.assertFalse(
+                        token.lstrip("-").isdigit() and token.startswith("-"),
+                        f"negative count in: {note}")
+
+
+class AffixScalingCheckTest(unittest.TestCase):
+    """The live check must catch the defect it was written for.
+
+    Its first version pooled flat and percent affixes into one median and
+    gated on |median| < 5%. Percent observations outnumber flat ~5:1 and were
+    already accurate, and the flat law's error was a TAIL — accurate
+    mid-range, 19% low at the top — so reinstating the known-broken law made
+    the check print OK at -0.0% median (7 Aug 2026 review finding). A check
+    that cannot fail on the bug it guards is worse than none: it launders the
+    bug as validated.
+    """
+
+    def _archive(self):
+        """One flat affix observed across a wide ilvl span, truth = linear."""
+        obs = {}
+        for tier in (1, 5, 9):
+            key = ("suffix_regeneration", "regeneration", "flat_add", tier)
+            obs[key] = {ilvl: (ilvl + 250) / 1021 * (100.0 / tier)
+                        for ilvl in (400, 900, 1600, 2400, 3200, 4200)}
+        return obs
+
+    def _capture_at(self, ilvl, tier=1):
+        mid = (ilvl + 250) / 1021 * (100.0 / tier)
+        return {"state": {"equipmentData": {}, "inventoryData": {"items": [{
+            "name": "Probe", "slot": "acc1", "item_level": ilvl,
+            "prefixes": [], "suffixes": [{
+                "name": "of Mending", "tier": tier,
+                "affix_id": "suffix_regeneration",
+                "effects": [{"resource": "regeneration", "type": "flat_add",
+                             "value": mid, "value_min": mid * 0.9,
+                             "value_max": mid * 1.1}]}]}]}}}
+
+    def _run(self, law):
+        caps = [self._capture_at(i, t) for i in (900, 2400, 4200)
+                for t in (1, 5, 9)]
+        merged = {"state": {"equipmentData": {}, "inventoryData": {"items": [
+            it for c in caps
+            for it in c["state"]["inventoryData"]["items"]]}}}
+        with mock.patch.object(ihlib, "_affix_range_observations",
+                               return_value=self._archive()), \
+             mock.patch.object(ihlib, "scale_flat_value", law):
+            return ihlib._chk_affix_scaling(merged)
+
+    def test_correct_law_passes(self):
+        status, detail = self._run(lambda i: (i + 250) / 1021)
+        self.assertEqual(status, "OK", detail)
+
+    def test_the_old_broken_flat_law_is_flagged(self):
+        status, detail = self._run(lambda i: ((i + 100) / 1021) ** 0.7849)
+        self.assertEqual(status, "DRIFT", detail)
+        self.assertIn("flat", detail)
+
+    def test_flat_and_percent_are_reported_separately(self):
+        _s, detail = self._run(lambda i: (i + 250) / 1021)
+        self.assertIn("flat", detail)
+        self.assertIn("pct", detail)
+
+
 class LockActionsTest(unittest.TestCase):
     """Guards the 7 Aug decompile-lock rules. Decompiling is IRREVERSIBLE, so
     every one of these encodes a way the first versions got it wrong."""
@@ -369,6 +495,81 @@ class LockActionsTest(unittest.TestCase):
         self.assertFalse(names("lock") & names("contested"))
         self.assertNotIn("Old Shell", names("unlock"))
         self.assertEqual(a["protected"], ["Old Shell"])
+
+    @staticmethod
+    def _scored_item(name, slot, locked, corrupt=0, regen=0):
+        suffixes = []
+        if corrupt:
+            suffixes.append({"name": "of Infection", "tier": 9,
+                             "affix_id": "suffix_corruption",
+                             "effects": [{"resource": "corruption",
+                                          "type": "flat_add",
+                                          "value": corrupt}]})
+        if regen:
+            suffixes.append({"name": "of Mending", "tier": 9,
+                             "affix_id": "suffix_regeneration",
+                             "effects": [{"resource": "regeneration",
+                                          "type": "flat_add", "value": regen}]})
+        return {"name": name, "slot": slot, "decompile_locked": locked,
+                "item_level": 1000, "stability": 25, "prefixes": [],
+                "suffixes": suffixes, "max_normal_affixes": 6,
+                "max_prefixes": 3, "max_suffixes": 3}
+
+    def _run(self, items):
+        cap = {"state": {"equipmentData": {},
+                         "inventoryData": {"max_slots": 100, "items": items},
+                         "homelabInfo": {}}}
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None):
+            return ihlib.lock_actions(cap)
+
+    def test_unlocked_contested_item_is_locked_not_ignored(self):
+        """The contested guarantee was STATUS-QUO BIASED and so did not hold.
+
+        "An item the two readings disagree about gets NO action, it stays as
+        it is" protects a LOCKED item. For a fresh drop the status quo is
+        UNLOCKED, and under the operating model unlocked means deleted — so
+        an unlocked contested item was destroyed by precisely the flagged
+        weight the rule promises will never decide a decompile. Real loss:
+        `Aligned Analyzer of Breaching`, keep +7.2 vs discard +103.1,
+        decompiled 7 Aug 2026 with no line of output.
+        """
+        a = self._run([self._scored_item("Corrupt Base", "acc1", False,
+                                         corrupt=200)])
+        locked_names = {r["name"] for r in a["lock"]}
+        self.assertIn("Corrupt Base", locked_names,
+                      "an unlocked contested base must be proposed for LOCK, "
+                      "not silently left to the next decompile sweep")
+        self.assertNotIn("Corrupt Base", {r["name"] for r in a["unlock"]})
+
+    def test_band_clearing_base_outside_the_cap_is_surfaced_not_silent(self):
+        """Delta-only output must never hide an impending irreversible loss.
+
+        A band-clearing base that is already unlocked and ranks outside the
+        depth cap generates no lock/unlock delta, so the list said nothing
+        while it was deleted. That silence cost `Untouchable Analyzer of
+        Aiming` (keep +42.5, raw +121.2 — the highest raw base owned).
+        """
+        items = [self._scored_item(f"Regen {i}", "acc1", False, regen=r)
+                 for i, r in enumerate((400, 300, 200, 100), start=1)]
+        a = self._run(items)
+        at_risk = {r["name"] for r in a["at_risk"]}
+        self.assertTrue(at_risk, "band-clearing unlocked surplus must appear "
+                                 "in at_risk so the cap's cost is visible")
+        for row in a["at_risk"]:
+            self.assertGreater(row["slot_rank"], a["per_slot"])
+            self.assertFalse(row["locked"])
+
+    def test_keep_depth_holds_more_than_the_single_best_base(self):
+        """Depth 1 discarded rank-2 bases whose true replacement time was
+        ~7 days while its justification claimed ~1 (the 0.92/day figure
+        counts ALL band-clearing bases as interchangeable; top-decile ones
+        arrive every 6.8 days in the measured slot)."""
+        self.assertGreaterEqual(ihlib.KEEP_DEPTH_PER_SLOT, 2)
+        items = [self._scored_item(f"Regen {i}", "acc1", False, regen=r)
+                 for i, r in enumerate((400, 300), start=1)]
+        a = self._run(items)
+        self.assertEqual({r["name"] for r in a["lock"]},
+                         {"Regen 1", "Regen 2"})
 
 
 class HomelabEtaScheduleTest(unittest.TestCase):
@@ -557,6 +758,53 @@ class ExperimentStatusTest(unittest.TestCase):
                             self._death(2_000_000, 110)])
         self.assertEqual(status["pre_death_streaks"], [90])
         self.assertEqual(status["post_death_streaks"], [110])
+
+    def test_undeclared_segment_counts_no_deaths_after_it(self):
+        """`segment_ms: None` means no boundary, so nothing is past one.
+
+        This fell back to ALL post deaths, making "no boundary declared"
+        print identically to "every death is past the boundary" — and the
+        printer captioned it with a hardcoded July VLAN label. On 7 Aug 2026
+        shell-ab-2026-08-07 (segment_ms None) reported all 29 post deaths as
+        post-segment and told the reader to analyse them separately. A false
+        contamination warning argues for discounting a clean result, which
+        is as costly as missing a real one.
+        """
+        status = self._run([self._death(500_000, 90),
+                            self._death(2_000_000, 110),
+                            self._death(3_000_000, 115)])
+        self.assertEqual(status["post_death_streaks"], [110, 115])
+        self.assertEqual(status["deaths_after_segment"], 0)
+
+    def test_declared_segment_counts_only_deaths_after_it(self):
+        segmented = dict(self.EXPERIMENT, segment_ms=2_500_000)
+        with tempfile.TemporaryDirectory() as streams, \
+                tempfile.TemporaryDirectory() as caps:
+            ledger = Path(streams) / "day.jsonl"
+            ledger.write_text("\n".join(
+                json.dumps(r) for r in [self._death(2_000_000, 110),
+                                        self._death(3_000_000, 115)]) + "\n")
+            with mock.patch.object(ihlib, "STREAM_DIR", Path(streams)), \
+                    mock.patch.object(ihlib, "CAPTURES_DIR", Path(caps)):
+                ihlib._STREAM_CACHE["key"] = None
+                status = ihlib.experiment_status(segmented)
+        self.assertEqual(status["deaths_after_segment"], 1)
+
+    def test_every_declared_segment_carries_a_label(self):
+        """A boundary the readout can name. The label was hardcoded to one
+        July experiment's VLAN build, so every later segmented window would
+        have been captioned with someone else's confound."""
+        import experiments
+        for name, exp in vars(experiments).items():
+            if not (name.isupper() and isinstance(exp, dict)
+                    and "segment_ms" in exp):
+                continue
+            if exp.get("segment_ms"):
+                with self.subTest(experiment=name):
+                    self.assertTrue(
+                        (exp.get("segment_label") or "").strip(),
+                        f"{name} declares segment_ms but no segment_label, "
+                        "so its readout cannot name the confound")
 
     def test_sentinel_keeps_post_empty(self):
         sentinel = dict(self.EXPERIMENT, equip_ms=4_102_444_800_000)

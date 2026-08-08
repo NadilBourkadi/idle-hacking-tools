@@ -74,14 +74,40 @@ def is_combat_stat(label):
 
 # ---- Fitted models (docs/static-analysis-2026-07-22.md) -------------------
 
+# Affix-magnitude scaling laws. REFIT 7 Aug 2026 against the game's own
+# `value_min`/`value_max` fields across the whole capture archive (138 flat and
+# 645 percent affix/tier groups, ilvl 314-4767) -- see the register entries.
+#
+# These were inline literals until this refit, which is why the total
+# registry test never saw them: it walks module-level bare numerics, and a
+# constant living inside a function body is invisible to it. Same escape
+# route ENEMY_LEVEL_GROWTH_PER_STREAK used until 6 Aug.
+#
+# Only OFFSET and EXPONENT are load-bearing. Every consumer normalises an
+# observed value by scale(source_ilvl) and re-multiplies by scale(target_ilvl),
+# so the REF denominators cancel in the ratio and are cosmetic (they set what
+# `ih.py item` prints as "scale x...").
+SCALE_PCT_OFFSET, SCALE_PCT_REF, SCALE_PCT_EXPONENT = 250, 1125, 0.4333
+SCALE_FLAT_OFFSET, SCALE_FLAT_REF, SCALE_FLAT_EXPONENT = 250, 1021, 1.0
+
+
 def scale_percent_value(item_level):
     """Percentage-affix magnitude relative to the ilvl-1000 reference."""
-    return ((item_level + 125) / 1125) ** 0.391
+    return ((item_level + SCALE_PCT_OFFSET)
+            / SCALE_PCT_REF) ** SCALE_PCT_EXPONENT
 
 
 def scale_flat_value(item_level):
-    """Flat-affix magnitude relative to reference (noisier fit)."""
-    return ((item_level + 100) / 1021) ** 0.7849
+    """Flat-affix magnitude relative to reference.
+
+    LINEAR in (ilvl + 250). The previous `((ilvl+100)/1021)**0.7849` was a
+    power fit over a much narrower ilvl range and decayed badly above it:
+    extrapolating from ilvl 445-2912 observations to the ilvl-4240 Kernel
+    crafted on 7 Aug 2026 it under-predicted the game's own stated affix
+    midpoint by 19.0%, against +0.6% for this law.
+    """
+    return ((item_level + SCALE_FLAT_OFFSET)
+            / SCALE_FLAT_REF) ** SCALE_FLAT_EXPONENT
 
 
 # The two fitted-cost helpers below have no CLI callers by design: they are
@@ -1225,10 +1251,27 @@ def hardware_track_depth_note(definition):
 # Legs 1 and 2 carry the conclusion on their own and are the load-bearing
 # ones; leg 3 only adds a price. A marginal 4th-choice base worth ~+11 score,
 # near-certain to be superseded within days, is not worth a slot at any of
-# these prices. Depth 1 keeps ~6 days of craft supply across eight slots.
-# Raise it only if the arrival rate collapses or craft throughput rises well
-# above one per day.
-KEEP_DEPTH_PER_SLOT = 1
+# these prices.
+#
+# RAISED 1 -> 2 on 7 Aug 2026, because leg 1 was measuring the wrong thing.
+# "0.92 band-clearing keepers/day" counts everything over UPGRADE_BAND and
+# treats those bases as INTERCHANGEABLE. They are not: scoring every base in
+# the archive by arrival date, the Analyzer slot takes in a band-clearing
+# base every 0.9 days but a TOP-DECILE one (keep_worth >= 46.5) only every
+# 6.8 days. Depth 1 therefore discarded rank-2 bases whose true replacement
+# time was ~7 days while the justification claimed ~1.
+#
+# It cost real progress the same day it was written: `Resilient Analyzer of
+# Aiming` (keep +46.5, exactly the top-decile line) and `Untouchable Analyzer
+# of Aiming` (keep +42.5, raw +121.2 -- the highest raw base owned in any
+# slot) were both rank > 1, produced NO output at all because the list is
+# delta-only and they were already unlocked, and were decompiled.
+#
+# Leg 3's price has also collapsed: inventory is 23/102 after that sweep, so
+# holding a second base per slot is currently free. Re-examine if inventory
+# pressure returns -- but note the correct comparison is the replacement time
+# of a base of EQUAL QUALITY, never the raw keeper arrival rate.
+KEEP_DEPTH_PER_SLOT = 2
 
 
 def inventory_pressure(capture):
@@ -1438,12 +1481,40 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                 f"{'/'.join(row['suspect_labels'])}, so it is left locked. "
                 f"Resolved by the PENDING_REFITS unblock, not by guessing")
             contested_rows.append(row)
+        elif contested and not row["locked"]:
+            # "No action on disagreement" was STATUS-QUO BIASED, and for a
+            # fresh drop the status quo is DELETION. An unlocked contested
+            # item was therefore destroyed by exactly the flagged weight this
+            # rule promises will never decide a decompile -- the guarantee
+            # held only for items that happened to be locked already.
+            # `Aligned Analyzer of Breaching` (keep +7.2 vs discard +103.1)
+            # went that way on 7 Aug 2026 with no line of output.
+            # Locking is cheap and reversible; decompiling is neither, so the
+            # tie breaks toward holding until PENDING_REFITS resolves.
+            row["reason"] = (
+                f"CONTESTED and UNLOCKED: raw {row['raw']:+.1f} vs "
+                f"ex-suspect {row['ex_suspect']:+.1f} — the verdict flips on "
+                f"{'/'.join(row['suspect_labels'])}, so it must not be lost "
+                f"to a flagged weight. Lock it until the refit resolves")
+            lock.append(row)
+
+    # Band-clearing bases that the depth cap declines to hold AND that are
+    # already unlocked produce no lock/unlock delta -- correct as a delta, but
+    # under the "unlocked is deleted" operating model it means the list stays
+    # silent while real value is destroyed. On 7 Aug 2026 that silence cost
+    # `Untouchable Analyzer of Aiming` (keep +42.5, raw +121.2). Surfacing
+    # them is not a recommendation to hold; it is the cost of the cap, stated.
+    at_risk = [r for r in candidates
+               if r["slot_rank"] is not None and r["slot_rank"] > per_slot
+               and not r["locked"] and not r["protected"]]
+    at_risk.sort(key=lambda r: -r["keep_worth"])
 
     lock.sort(key=lambda r: -r["worth"])
     unlock.sort(key=lambda r: r["worth"])
     used, cap_slots, free, price = inventory_pressure(capture)
     contested_rows.sort(key=lambda r: -r["discard_worth"])
     return {"lock": lock, "unlock": unlock, "contested": contested_rows,
+            "at_risk": at_risk,
             "protected": sorted(protected),
             "per_slot": per_slot, "inventory_used": used,
             "inventory_cap": cap_slots, "inventory_free": free,
@@ -1919,6 +1990,117 @@ def _chk_tier_steps(cap):
             f"{TIER_STEP_SHALLOW:.3f}/{TIER_STEP_DEEP:.3f}")
 
 
+_AFFIX_OBS_CACHE = {}
+
+
+def _affix_range_observations():
+    """{(affix_id, resource, type, tier): {ilvl: midpoint}} over the archive.
+
+    Keyed by ilvl rather than appended per capture, so an affix owned on ONE
+    item contributes ONE observation however many captures it survived in.
+    Appending per capture silently weighted the fit by item longevity.
+    """
+    paths = tuple(sorted(str(p) for p in capture_paths()))
+    if paths in _AFFIX_OBS_CACHE:
+        return _AFFIX_OBS_CACHE[paths]
+    groups = {}
+    for path in paths:
+        try:
+            cap = json.loads(Path(path).read_text())
+        except (OSError, ValueError):
+            continue
+        for _, _, item in iter_items(cap):
+            for side in ("prefixes", "suffixes"):
+                for affix in item.get(side) or []:
+                    ilvl = (affix.get("item_level")
+                            or item.get("item_level") or 0)
+                    tier = affix.get("tier")
+                    if not ilvl or tier is None:
+                        continue
+                    for e in affix.get("effects") or []:
+                        # value_min may legitimately be 0, so test presence.
+                        if e.get("value_max") is None or e.get("value_min") is None:
+                            continue
+                        key = (affix.get("affix_id"), e.get("resource"),
+                               e.get("type"), tier)
+                        mid = (e["value_min"] + e["value_max"]) / 2
+                        groups.setdefault(key, {})[ilvl] = mid
+    while len(_AFFIX_OBS_CACHE) >= 4:
+        _AFFIX_OBS_CACHE.pop(next(iter(_AFFIX_OBS_CACHE)))
+    _AFFIX_OBS_CACHE[paths] = groups
+    return groups
+
+
+def _chk_affix_scaling(cap):
+    """Predict each affix's game-stated midpoint from the OTHER item levels.
+
+    A genuine second opinion, not a restatement of the fit: for every
+    affix/tier group in this capture that also appears at a different ilvl
+    somewhere in the archive, normalise the other observations, re-multiply
+    by this item's scale, and compare against the value_min/value_max
+    midpoint the GAME declares here.
+
+    REPORTS PER EFFECT TYPE, AND ON THE TOP-ILVL QUARTILE. The first version
+    pooled flat and percent into one median and gated on |median| < 5%, which
+    **did not catch the defect it was written for**: percent observations
+    outnumber flat ~5:1 and were already accurate, and the flat law's error
+    was a TAIL -- accurate mid-range, 19% low at the top. Reinstating the
+    broken law made that version print OK at -0.0% median. A drifting law
+    shows up as error that GROWS WITH ILVL, so the tail is the whole signal
+    and pooling two laws over it is how the signal was lost.
+    """
+    groups = _affix_range_observations()
+    per_type = {"flat_add": [], "mult_add": []}
+    for _, _, item in iter_items(cap):
+        for side in ("prefixes", "suffixes"):
+            for affix in item.get(side) or []:
+                ilvl = affix.get("item_level") or item.get("item_level") or 0
+                tier = affix.get("tier")
+                if not ilvl or tier is None:
+                    continue
+                for e in affix.get("effects") or []:
+                    if e.get("value_max") is None or e.get("value_min") is None:
+                        continue
+                    etype = e.get("type")
+                    key = (affix.get("affix_id"), e.get("resource"),
+                           etype, tier)
+                    rows = [(i, m) for i, m in groups.get(key, {}).items()
+                            if i != ilvl]
+                    # distinct ITEM LEVELS, which is what "predict from other
+                    # levels" needs -- a count of observations let one item
+                    # seen in six captures pass as six pieces of evidence.
+                    if len(rows) < 3:
+                        continue
+                    scale = (scale_flat_value if etype == "flat_add"
+                             else scale_percent_value)
+                    pred = (statistics.median([m / scale(i) for i, m in rows])
+                            * scale(ilvl))
+                    truth = (e["value_min"] + e["value_max"]) / 2
+                    if truth and etype in per_type:
+                        per_type[etype].append((ilvl, pred / truth - 1.0))
+    parts, status = [], "SKIP"
+    for etype, label in (("flat_add", "flat"), ("mult_add", "pct")):
+        rows = sorted(per_type[etype])
+        if len(rows) < 8:
+            parts.append(f"{label} n={len(rows)} (too few)")
+            continue
+        errs = [e for _i, e in rows]
+        med = statistics.median(errs)
+        # Top-ilvl quartile: where an ilvl-dependent law fails first, and
+        # where every craft base we care about now sits.
+        tail = [e for _i, e in rows[max(1, len(rows) * 3 // 4):]]
+        tail_med = statistics.median(tail) if tail else 0.0
+        bad = abs(med) >= 0.05 or abs(tail_med) >= 0.08
+        if bad:
+            status = "DRIFT"
+        elif status != "DRIFT":
+            status = "OK"
+        parts.append(f"{label} {med:+.1%} median / {tail_med:+.1%} top-ilvl "
+                     f"quartile (n={len(rows)})")
+    return (status, "predicts the game's own affix midpoints from OTHER "
+                    "item levels: " + "; ".join(parts))
+
+
 def _chk_hardware_curve(cap):
     hw = hardware_state(cap)
     if not hw:
@@ -2203,8 +2385,8 @@ def assumptions():
          "first projection recorded after the deepen-scale fix",
          "31 Jul 2026", None),
         ("INFERIOR_BAND", INFERIOR_BAND, "measured",
-         "symmetric with UPGRADE_BAND, same 31 Jul reversion", "31 Jul 2026",
-         "29 Jul 2026", None),
+         "symmetric with UPGRADE_BAND, same 31 Jul reversion",
+         "31 Jul 2026", None),
         # --- supplied ---
         ("HACKCOIN_CREDIT_RATE", HACKCOIN_CREDIT_RATE, "supplied",
          "player-supplied exchange rate, not derivable from any capture. An "
@@ -2234,15 +2416,21 @@ def assumptions():
          "29 Jul 2026", None),
         ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "measured",
          "how many craft bases to hold per slot; decides IRREVERSIBLE "
-         "decompiles. Three inputs, two load-bearing: band-clearing bases "
-         "arrive 0.92/day (14 over the 15.2-day inventory span) and are "
-         "crafted young (median age at craft 1.2d, max 4.5d, n=8), so a "
-         "deeper queue is never drawn down before it is superseded. Third "
-         "input (inventory pressure, 10 hc/slot) only prices it, and is "
-         "WEAKER than first stated: max_slots is soft -- seven 5 Aug "
-         "captures held 103 against a max of 102. Raise only if the arrival "
-         "rate collapses or craft throughput exceeds ~1/day",
-         "7 Aug 2026", None),
+         "decompiles. RAISED 1 -> 2 on 7 Aug 2026 because its original "
+         "load-bearing leg measured the WRONG QUANTITY. That leg was "
+         "'band-clearing bases arrive 0.92/day and are crafted young "
+         "(median age 1.2d)', which treats every base over UPGRADE_BAND as "
+         "INTERCHANGEABLE. Scoring every base in the archive by arrival "
+         "date, the Analyzer slot takes in a band-clearing base every 0.9 "
+         "days but a TOP-DECILE one (keep_worth >= 46.5) only every 6.8 -- "
+         "so depth 1 discarded rank-2 bases whose real replacement time was "
+         "~7x what the justification claimed. It cost four bases the day it "
+         "shipped, including the highest-raw base owned (+121.2). The right "
+         "comparison is the replacement time of a base of EQUAL QUALITY, "
+         "never the raw keeper arrival rate. Inventory pressure (10 hc/slot) "
+         "only prices it and has collapsed at 23/102; max_slots is soft "
+         "anyway -- seven 5 Aug captures held 103 against a max of 102",
+         "7 Aug 2026 (re-derived)", None),
         ("plan_craft tier_cap default", 1, "measured",
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",
@@ -2254,8 +2442,8 @@ def assumptions():
          "across a 24.3-min two-capture window with the contract active at "
          "both ends = ~718/h; 700 recorded. Both are lower bounds -- the "
          "true rate needs a window with known continuous gathering. Passive "
-         "accrual ~zero: harvest pays per GATHER-hour only", "31 Jul 2026",
-         "29 Jul 2026", None),
+         "accrual ~zero: harvest pays per GATHER-hour only",
+         "31 Jul 2026", None),
         ("BOARD_TYPICAL_BEST_HC_PER_H", BOARD_TYPICAL_BEST_HC_PER_H,
          "asserted",
          "eyeballed from the 31 Jul - 6 Aug boards (best pending contract "
@@ -2320,6 +2508,30 @@ def assumptions():
         ("hardware cost curve", "A*L**p", "measured",
          "fitted live off next_cost and self-validates against the game's own "
          "reset refund", "27 Jul 2026", _chk_hardware_curve),
+        ("SCALE_FLAT_OFFSET/SCALE_FLAT_REF/SCALE_FLAT_EXPONENT",
+         SCALE_FLAT_EXPONENT, "measured",
+         "LINEAR in (ilvl + 250). Refitted 7 Aug 2026 over 138 affix/tier "
+         "groups spanning ilvl 314-4767, against the game's OWN value_min/"
+         "value_max fields -- so this self-validates rather than being a "
+         "fit to our own scores. Was ((ilvl+100)/1021)**0.7849, an inline "
+         "literal that no registry check could see. That form decayed above "
+         "its fitting range: predicting the ilvl-4240 Kernel's T1 "
+         "regeneration midpoint from ilvl 445-2912 observations alone it "
+         "read 175.0 against a game-stated 216.0 (-19.0%), where this law "
+         "reads 217.4 (+0.6%). Flat affixes are the Regen family, the "
+         "confirmed win condition, so this under-projected every craft that "
+         "mattered and is the leading candidate for the +23.7 calibration "
+         "bias. Only OFFSET and EXPONENT matter; SCALE_FLAT_REF cancels",
+         "7 Aug 2026 (refitted)", _chk_affix_scaling),
+        ("SCALE_PCT_OFFSET/SCALE_PCT_REF/SCALE_PCT_EXPONENT",
+         SCALE_PCT_EXPONENT, "measured",
+         "((ilvl + 250)/1125)**0.4333, refitted 7 Aug 2026 in the same pass "
+         "over 645 affix/tier groups. The old (offset 125, k 0.391) was much "
+         "closer than the flat law -- median within-group spread 1.014 vs "
+         "1.0015 refitted, and -2.2% vs -0.1% on the same out-of-sample "
+         "ilvl-4240 test -- so this moves percent-carried verdicts only "
+         "slightly. Refitted anyway rather than left as a known-smaller "
+         "error", "7 Aug 2026 (refitted)", None),
         ("composed_stat_total stat families", "SCALING/DIRECT/economy", "measured",
          "self-validates against the game's reported totals for every stat",
          "27 Jul 2026", _chk_stat_families),
@@ -2339,7 +2551,14 @@ def assumptions():
 # removing the T3 cap (27 Jul) and lowering COMPILE_FLOOR 8 -> 2 (28 Jul) each
 # shifted projections by more than UPGRADE_BAND.
 PREDICTIONS_PATH = DATA_ROOT / "predictions.jsonl"
-CURRENT_MODEL = "uncapped+floor2+archive"
+# Bumped 7 Aug 2026 by the affix-scaling refit. The nine rows tagged
+# `uncapped+floor2+archive` all had their PROJECTIONS computed with a flat
+# scaling law that ran ~19% low at current craft item levels, so that era's
+# +23.7 bias is partly an artefact of the law rather than of the planner, and
+# pooling new grades into it would launder a fixed defect into the new
+# numbers. Their REALIZED values are unaffected (realized scores read the
+# item's actual affix values, never the law) and stay comparable.
+CURRENT_MODEL = "uncapped+floor2+archive+scalefit"
 
 
 def prediction_records(path=PREDICTIONS_PATH):
@@ -3702,9 +3921,17 @@ def experiment_status(experiment=None):
     detailed = [f for f in post_fights if f["detail"]]
     ph = sum(f["ph"] for f in detailed)
     pm = sum(f["pm"] for f in detailed)
-    segment_ms = exp.get("segment_ms")  # None -> no mid-window segment declared
+    # None -> no mid-window segment declared, so NOTHING is after it. This
+    # used to fall back to `post_deaths`, which made "no boundary declared"
+    # print identically to "every death is past the boundary" (7 Aug 2026):
+    # shell-ab-2026-08-07 declares segment_ms None and the readout still
+    # announced all 29 deaths as post-segment, over a hardcoded VLAN label
+    # belonging to a July experiment. A false contamination warning on a
+    # clean window is as costly as a missed real one -- it argues for
+    # discounting a result that needs no discount.
+    segment_ms = exp.get("segment_ms")
     segmented = ([e for e in post_deaths if e["ended_at_ms"] >= segment_ms]
-                 if segment_ms else post_deaths)
+                 if segment_ms else [])
     recent_ms = exp.get("baseline_recent_ms", 0)
     return {
         "experiment": exp,

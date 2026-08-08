@@ -143,9 +143,15 @@ attribution is a cheap one.
    every advisory, not an occasional one. Never list items that need no
    action, and never dump the inventory. Every line is an imperative with
    an item name. Value is the WEAKER of raw Δ and Δ-ex-suspect, so no
-   lock verdict rests on a flagged weight, and depth is **one base per
-   slot** — measured from a 0.92/day keeper arrival rate, a 1.2-day median
-   base age at craft, and inventory slots priced at 10 hackcoin. **Quote
+   lock verdict rests on a flagged weight. An item the two readings
+   DISAGREE about is **held, not ignored** — already-locked stays locked,
+   an **unlocked** one is a LOCK action, because "no action" protects only
+   the status quo and for a fresh drop the status quo is deletion. Depth is
+   `KEEP_DEPTH_PER_SLOT` per slot, sized on how long a base of **equal
+   quality** takes to replace (top-decile ~6.8 days), NOT on the ~0.92/day
+   rate at which any band-clearing base arrives. Copy through the **AT
+   RISK** block: band-clearing bases outside the depth cap that are already
+   unlocked produce no delta line and are deleted silently otherwise. **Quote
    the inventory denominator** (used/cap and the slot price) whenever the
    list recommends holding anything; the first version of this section
    recommended 13 holds without it and was rightly challenged. **The revert path of a hot A/B
@@ -156,6 +162,13 @@ attribution is a cheap one.
    warnings.
 7. **Log actions** — decision-log entries now due (equipment changes, scarce
    spends, confirmed mechanics to move out of open-questions).
+
+8. **Code changes shipped** — if the session touched `scripts/`, `tools/` or
+   `tests/`, the branch is **pushed and a PR is open** before the advisory is
+   written. Not "ready to push". Every commit independently green, `make ci`
+   passing, `/code-review` findings fixed, CI polled after pushing. State the
+   PR link and any judgement call you want overruled. Merge — and only
+   merge — waits for the player (`CLAUDE.md` git rules).
 
 Lead with the decision; state confidence (directional vs formula-level) on
 anything heuristic. Ask for a fresh capture instead of guessing when a

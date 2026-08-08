@@ -52,6 +52,15 @@ Failed attempts do not improve the tier and consume resources. Normal failures c
 
 ## Priority open questions
 
+> **`par.N` cross-references from code and from other docs address the
+> numbering of *this* section.** The dated archive sections lower down
+> ("static-analysis resolutions", "confirmed test outcomes") carry their own
+> independent 12–17 series, so several numbers appear more than once in this
+> file. §17 appears three times. Read `par.15` as §15 below (the Barrier
+> weight), never as the archive's §15 (hackcoin deduction timing). Noted
+> 7 Aug 2026 rather than renumbered, because renumbering would silently
+> break every existing `par.N` reference in `ihlib.py` and `ih.py`.
+
 ### 1. Snapshot Backup — RESOLVED 22 July 2026
 
 From `homelabInfo` in the rich capture:
@@ -302,13 +311,32 @@ Corrected model (`version_upgrade_expected_stability` = `1 + ((1-p)/p) × (1-pre
 
 Method note worth keeping: this was found because the player knew a game system the capture-derived model had silently outgrown. Any hard-coded "current level: N" in these docs is a decaying assertion — read levels from the capture.
 
-### 17. What `reward_streak_soft_cap` actually caps (added 27 July 2026)
+### 17. What `reward_streak_soft_cap` actually caps — **RESOLVED 7 August 2026** (`mechanics.md` §22)
 
 Every zone carries one (Small Business Server 120, Corporate Network 200). The community new-player guide advises moving zone once you can exceed the current cap by ~10%, which presupposes rewards stop scaling past it.
 
 **Not visible in credits.** Across 5,325 winning fights, credits per enemy level are flat at 8.25 → 8.45 through every streak band 60–129, including the 120–129 band that sits past the cap. Either the cap applies to a different reward axis (drop chance, drop rarity, chips, contract progress — `rarity_multiplier` being a separate zone field points this way), or it softens gradually, or 34 fights past the cap is simply too few to see it.
 
 **PARKED 27 July 2026 — the measurement window closed.** Resolving this needed fights above the cap, and the move to Corporate Network raises the cap to 200 while costing ~4 streaks of depth. Streaks will sit near 129 against a 200 cap, so no data above a cap will accrue again until depth roughly doubles. That is the right trade — the question is low-value and the transition case never depended on it (`mechanics.md` §15) — but it is the reason the ~34 fights banked above 120 on 27 July are the only such sample that will exist for a long time. If the question ever matters, those fights plus the 90–119 bands are the sample; compare drop rate, `drop_rarity` distribution and `chips_drop` per fight, normalised by enemy level.
+
+**RESOLVED 7 August 2026 — it is a gradual reward taper keyed to the fraction of the cap.** The window reopened exactly as this entry predicted it would: depth roughly doubled (mean death streak 222.0 after the 7 Aug Kernel craft) and Corporate Network's cap is 210, so the deep end of every run now sits past it.
+
+Measuring **median** credits per enemy level by streak band, in both zone eras:
+
+| fraction of cap | Small Business (cap 126) | Corporate (cap 210) |
+|---|---|---|
+| 0.0–0.75 | 100% of peak | 100% of peak |
+| ~0.8 | 100% | 97.8% |
+| ~0.9 | — | 83.9% |
+| ~0.95 | 88.9% | 83.9% |
+| 1.05 | — | 83.5% |
+
+The taper onset tracks the **fraction of the cap**, not any absolute streak — which is the discriminant this entry asked for, and it holds across a zone change that moved the cap 126 → 210. Rewards are flat to ~0.75–0.8 of the cap, then decay to ~84% of peak. It is a soft taper, not a cliff, and it does not zero out.
+
+Two method notes, both of which bit during this analysis:
+
+- **Use the median, not the mean.** The mean-per-band read showed erosion beginning around streak 140 (0.67 of cap) and decaying smoothly, which would have falsified the fraction-of-cap hypothesis. That was credit-drop skew, not signal. The median shows a flat plateau to 0.76 and a clean step down.
+- The capture's cap values are **5% above** the ones recorded here on 27 July (126 vs 120, 210 vs 200) — exactly +5% in both zones. Something grants a streak-cap bonus; nothing in the workspace models it. Not resolved, and not load-bearing for the taper result, which is computed against the capture's own values.
 
 General lesson worth more than the question: **a progression step can close a measurement window.** When a move changes the regime being measured, bank the observation first or accept losing it — and say which, rather than discovering it later.
 
@@ -457,3 +485,51 @@ other than streak. Discriminant: re-segment the post window by **enemy class**
 within one band and compare like-for-like; if composition explains it, the
 per-class hit rates should be flat across the boundary. Until then, treat
 pooled post-equip hit rates in this era as composition-contaminated.
+
+**Evidence for (a), 7 Aug 2026 — the sign flipped.** `shell-ab-2026-08-07`
+pre-registered prediction (6) as the discriminant for this question: Acc +4.2%
+against Eva +5.8% makes the fitted law predict hit rate **down ~0.4pp** at
+matched band. Observed within-band pre→post: 79.9→80.1 (24–42), 77.3→78.5
+(60–85), 76.2→77.7 (86–105), 74.5→76.0 (106–130) — **up in all four bands,
+by +0.2 to +1.5pp.** So the law missed by ~1–2pp here in the *opposite*
+direction to the Router window's 0.7–2.1pp shortfall. Two windows deviating
+by a similar magnitude with opposite sign is the shape of a band-composition
+effect, not of a broken law, which promotes (a) and demotes (c). The
+discriminant named above — re-segmenting one band by enemy class — is still
+the test that would close it, and is now the cheapest open item here.
+
+Note the pooled headline does *not* show this: `ih.py ab` printed 72.9% vs a
+73.3% baseline, i.e. −0.4pp, appearing to confirm the prediction exactly. That
+pooled figure compares against the **old-Payload** `baseline_hits`, not this
+experiment's own pre window, and `experiment_mechanism` already carries the
+comment explaining why pooled hit rates are confounded by streak composition
+alone. Grade prediction (6) on the bracket table, never on that line.
+
+### 19. Why did rounds per fight RISE across a swap that raised hit rate? (added 7 Aug 2026)
+
+`shell-ab-2026-08-07` pre-registered prediction (5): rounds/fight flat within
+±2% at matched band, offered as a discriminant against the Router window's
+Attack Speed confound, since this swap changed no Attack Speed. It **missed**:
+25.5→26.2 (+2.7%), 29.9→30.1 (+0.7%), 32.9→34.4 (+4.6%), 38.7→40.1 (+3.6%).
+
+The miss is not a selection artefact — the obvious candidate was the mechanism
+table conditioning on `victory`, but win rate is **100% in both arms in all
+four bands** (deaths occur past streak 200, well beyond the deepest bracket at
+106–130), so nothing is being selected away. Checked 7 Aug 2026.
+
+What makes it interesting is that hit rate rose in the same bands (§18). More
+hits per round with the same attack speed should *shorten* fights, so two
+measured quantities are pulling opposite ways. The leading candidate is
+**Thorns −40%** across this swap: if reflected damage is a non-trivial share of
+kill throughput at these depths, losing 40% of it lengthens fights regardless
+of hit rate. That is a hypothesis, not a fit — Thorns' offensive contribution
+has never been measured, and `CRAFT_WEIGHTS` prices it as defensive.
+
+Why it matters beyond bookkeeping: rounds/fight is currently used as an
+AtkSpd discriminant, and this window shows it moving with no AtkSpd change, so
+it is **not clean for that purpose**. It also bears on the live Router
+candidate `Bulwarked Router of Thorns` (+19.5, with Thorns +10.6 carrying more
+than half the delta) — if Thorns carries unpriced kill-speed value the weight
+is low, and if the rounds effect is something else entirely it is unaffected.
+Do not re-weight on one observation. Discriminant: a CI/CD pair differing only
+in Thorns at matched depth, reading rounds/fight rather than streak depth.

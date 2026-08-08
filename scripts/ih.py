@@ -977,20 +977,82 @@ def _audit_cicd_budget(cap, homelab, definitions):
                     if prov == "asserted" and "CI/CD" in (basis or "")]
     if not (cicd_level and pending_fits):
         return []
-    cicd_budget = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
-    today_utc = datetime.now(timezone.utc).date()
-    used = sum(1 for r in ihlib.cicd_rows()
-               if r.get("seen_ms") and datetime.fromtimestamp(
-                   r["seen_ms"] / 1000, timezone.utc).date() == today_utc)
-    if used >= cicd_budget:
+    note = _audit_cicd_budget_note(cicd_level)
+    if note is None:
         return []
-    return [("MEASURE", f"{cicd_budget - used}/{cicd_budget} CI/CD "
-                        f"runs unused today (they expire at the UTC "
-                        f"day reset and do not bank) — "
+    return [("MEASURE", f"CI/CD runs unused today: {note}. They expire at "
+                        f"the UTC day reset and do not bank — "
                         f"{', '.join(pending_fits)} still asserted "
                         f"with the pipeline as named unblock; the "
                         f"held Corrupt crafts and the hardware "
                         f"reset re-cut wait on those fits")]
+
+
+def _audit_cicd_budget_note(cicd_level):
+    """How many free simulator runs remain today, and how sure we are.
+
+    Split out from `_audit_cicd_budget` so the branching is directly
+    testable: every branch below is a 7 Aug 2026 review finding about this
+    line over-advertising free capacity. Returns None when nothing is free.
+    """
+    today_utc = datetime.now(timezone.utc).date()
+    today_rows = [r for r in ihlib.cicd_rows()
+                  if r.get("seen_ms") and datetime.fromtimestamp(
+                      r["seen_ms"] / 1000, timezone.utc).date() == today_utc]
+    # The game reports `daily_used` alongside `daily_limit`, so take BOTH
+    # halves of the fraction from the same producer. Counting ledger rows
+    # instead under-counts whenever a run happened while the capture hub was
+    # not streaming, which overstates the free budget -- the same
+    # over-advertising this check was fixed to stop, moved into the numerator.
+    used = next((r["daily_used"] for r in reversed(today_rows)
+                 if r.get("daily_used") is not None), len(today_rows))
+    # The game REPORTS its own daily cap on every run. Prefer that to
+    # CICD_RUNS_PER_LEVEL * level, and where the two disagree say so rather
+    # than picking the optimistic one: whether a mid-day level-up raises the
+    # SAME day's budget is explicitly unobserved (the CICD_RUNS_PER_LEVEL
+    # registry row, simulator-protocol.md par 9.2), and this check must not
+    # quietly answer that open question. On 7 Aug 2026 the pipeline went L3
+    # -> L4 after that day's 8 runs, all of which reported daily_limit 15;
+    # the model said 20 and the check advertised 12 free runs against a
+    # game-reported 7. The next run resolves it for free by reporting the
+    # live cap, so name that rather than guessing.
+    observed = next((r["daily_limit"] for r in reversed(today_rows)
+                     if r.get("daily_limit")), None)
+    modelled = ihlib.CICD_RUNS_PER_LEVEL * cicd_level
+    cicd_budget = observed or modelled
+    certain = max(0, cicd_budget - used)
+    upper = max(certain, modelled - used)
+    if not certain and not upper:
+        return None
+    if observed is None:
+        note = f"{certain}/{modelled} (modelled from pipeline level)"
+    elif observed == modelled:
+        note = f"{certain}/{observed} (game-reported)"
+    else:
+        # Only claim a level-up when the observed cap is consistent with an
+        # EARLIER level. Firing this narrative on mere disagreement would
+        # assert a mid-day level-up that never happened -- and cite par 9.2
+        # in support of it -- whenever CICD_RUNS_PER_LEVEL is simply wrong
+        # for this level, or the game changes the cap.
+        per = ihlib.CICD_RUNS_PER_LEVEL
+        implied = observed / per if per else None
+        levelled_up = (implied is not None and implied == int(implied)
+                       and int(implied) < cicd_level)
+        if levelled_up:
+            note = (f"{certain} certain, up to {upper} if the "
+                    f"L{int(implied)}->L{cicd_level} level-up raised today's "
+                    f"cap — the last game-reported limit is {observed}, "
+                    f"consistent with L{int(implied)}, and whether a mid-day "
+                    f"level-up lifts the same day's budget is UNOBSERVED "
+                    f"(simulator-protocol.md par 9.2). The next run reports "
+                    f"the live cap and settles it")
+        else:
+            note = (f"{certain} (game-reported cap {observed}). NOTE the "
+                    f"model says {modelled} ({per}/level x L{cicd_level}) "
+                    f"and the game says {observed}, a gap no level-up "
+                    f"explains — CICD_RUNS_PER_LEVEL may be wrong at this "
+                    f"level. Trusting the game's figure")
+    return note
 
 
 def _audit_contracts(cap, ctx):
@@ -1206,10 +1268,17 @@ def cmd_locks(args):
         cost = f", and a slot costs {price} hackcoin" if price else ""
         print(f"# Holding is NOT free: inventory {used}/{cap_slots} "
               f"({free} free){cost}.")
-    print(f"# Depth: keeping the best {actions['per_slot']} base per slot — "
-          f"band-clearing bases arrive ~0.92/day and the median base is "
-          f"crafted\n#         1.2 days after dropping (max ever 4.5), so a "
-          f"deeper queue is never drawn down.")
+    # The old header quoted the ~0.92/day keeper arrival rate as the reason
+    # for the depth. That rate is real and was the WRONG quantity: it counts
+    # every band-clearing base as interchangeable, and top-decile bases
+    # arrive ~7x less often (see KEEP_DEPTH_PER_SLOT). Restating a refuted
+    # justification in prose is how it survives a fix.
+    n = actions["per_slot"]
+    print(f"# Depth: keeping the best {n} base{'s' if n != 1 else ''} per "
+          f"slot — sized on how long a base of EQUAL QUALITY takes to "
+          f"replace\n#         (top-decile ~6.8 days in the measured slot), "
+          f"not on the ~0.92/day rate at which\n#         any band-clearing "
+          f"base arrives. Anything held beyond that depth is listed AT RISK.")
     print("# 'now' is the item's CURRENT flag in this capture — if it already "
           "reads\n#         the target state you have done it; take a fresh "
           "capture to re-check.")
@@ -1231,13 +1300,39 @@ def cmd_locks(args):
             "item_level": item.get("item_level") or 0,
             "reason": "revert path for the live A/B gate — do not unlock"}))
 
+    def _print_at_risk():
+        """What the depth cap is about to lose, stated rather than implied."""
+        risk = actions.get("at_risk") or []
+        if not risk:
+            return
+        # Framing must MATCH the unlock lines above, which release
+        # cap-surplus bases with "clears the band but is only #N in slot".
+        # Saying "lock any you want kept" here while telling the player to
+        # decompile an identically-ranked locked base is one verdict with two
+        # opposite recommendations, decided by a flag rather than by value
+        # (7 Aug 2026 review). Same verdict; the only difference is that a
+        # locked one needs a click and an unlocked one does not.
+        print(f"\n  AT RISK — {len(risk)} band-clearing base(s) sit outside "
+              f"the depth cap ({actions['per_slot']}/slot) and are already "
+              f"UNLOCKED, so the next sweep deletes them without appearing "
+              f"in the list above.")
+        print("  Same verdict as the UNLOCK lines: the cap releases these. "
+              "Listed only so the loss is\n  visible rather than silent — "
+              "re-lock one if you disagree with the cap.")
+        for r in risk:
+            print(f"    {r['name']:44s} keep {r['keep_worth']:+6.1f}  "
+                  f"raw {r['raw']:+6.1f}   #{r['slot_rank']} in {r['slot']}")
+
     if not by_slot:
         print("\n  no lock changes needed — every flag matches its value")
+        _print_at_risk()
         return
     n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
     n_cont = len(actions.get("contested") or [])
-    extra = (f", {n_cont} CONTESTED (no action — the two readings disagree, "
-             f"so they stay locked)" if n_cont else "")
+    # "no action" is only true of contested items that are ALREADY locked;
+    # unlocked ones are a LOCK action and are counted in n_lock above.
+    extra = (f", {n_cont} CONTESTED and already locked (no action — the two "
+             f"readings disagree, so they stay as they are)" if n_cont else "")
     print(f"\n  {n_lock} to LOCK, {n_unlock} to UNLOCK+decompile{extra}, "
           f"in inventory slot order:")
     for slot in ihlib.SLOT_ORDER:
@@ -1256,6 +1351,7 @@ def cmd_locks(args):
             print(f"    {action:6s} {r['name']:44s} {worth}  "
                   f"(now: {now})")
             print(f"           {r['reason']}")
+    _print_at_risk()
 
 
 def _audit_inventory_capacity(cap, ctx):
@@ -1528,8 +1624,13 @@ def cmd_ab(args):
                   " fights have round detail")
         print(f"A/B {exp['item']}")
         print(depth + " | " + hit)
-        print(detail + (f" | {status['deaths_after_segment']} deaths post-VLAN"
-                        if status["deaths_after_segment"] else ""))
+        # Same experiment-supplied label as the full readout below. This
+        # printer kept the hardcoded "post-VLAN" through the first pass of
+        # the fix -- one defect, two printers, and only one was corrected.
+        seg_label = exp.get("segment_label") or "the declared"
+        print(detail + (f" | {status['deaths_after_segment']} deaths after "
+                        f"{seg_label} boundary" if status["deaths_after_segment"]
+                        else ""))
         if n >= target:
             print("TARGET REACHED — run the keep/revert decision")
         return
@@ -1544,8 +1645,12 @@ def cmd_ab(args):
     print(f"  post-equip deaths ({n}/{target}): {post}  mean {post_mean:.1f}"
           f"  delta {post_mean - pre_mean:+.1f}")
     if status["deaths_after_segment"]:
-        print(f"  ({status['deaths_after_segment']} of them after the VLAN "
-              f"+1% Def segment boundary — analyse separately)")
+        # Label comes from the experiment's own declaration. It was hardcoded
+        # to "VLAN +1% Def" -- one July experiment's boundary -- so every
+        # later segmented window would have been mislabelled with it.
+        label = status["experiment"].get("segment_label") or "the declared"
+        print(f"  ({status['deaths_after_segment']} of them after {label} "
+              f"segment boundary — analyse separately)")
     if post_hit is not None:
         print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) vs old-Payload "
               f"deep-streak baseline {base_hit:.1f}% ({bh}h/{bm}m)")
