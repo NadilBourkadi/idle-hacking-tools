@@ -563,12 +563,18 @@ def fit_tier_steps(capture, min_obs=6, ladders=None):
     return (median(shallow, TIER_STEP_SHALLOW), median(deep, TIER_STEP_DEEP))
 
 
-def weighted_score(totals):
-    """Scalar bottleneck score of a {label: (pct, flat)} totals dict."""
+def weighted_score(totals, weights=None):
+    """Scalar bottleneck score of a {label: (pct, flat)} totals dict.
+
+    `weights` is an optional (pct_weights, flat_weights) pair; it defaults to
+    the live CRAFT_WEIGHTS. Pass `suspect_free_weights()` to score a plan as if
+    every flagged family were worth nothing.
+    """
+    pct_w, flat_w = weights or (CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT)
     score = 0.0
     for label, (pct, flat) in totals.items():
-        score += pct * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
-        score += flat * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
+        score += pct * 100 * pct_w.get(label, 0.0)
+        score += flat * flat_w.get(label, 0.0)
     return score
 
 
@@ -806,7 +812,8 @@ def augment_state(item):
 
 
 def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
-               deep_step=TIER_STEP_DEEP, deep_step_low=TIER_STEP_DEEP_LOW):
+               deep_step=TIER_STEP_DEEP, deep_step_low=TIER_STEP_DEEP_LOW,
+               weights=None):
     """Greedy expected-Stability Version-Upgrade plan + Compile projection.
 
     Model assumptions (conservative, documented):
@@ -851,6 +858,13 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
     Returns dict with steps, expected_spend, augment info, compile_pct,
     projected totals {label: (pct, flat)} and weighted scores.
     """
+    # Which weights the GREEDY SEARCH optimises, not just how the result is
+    # scored -- the two are the same decision. A plan chosen to maximise raw
+    # score routes Stability into whatever family scores highest, and if that
+    # family is flagged, re-scoring THAT plan ex-suspect answers the wrong
+    # question: it prices a plan nobody would run under those beliefs. See
+    # `suspect_free_weights`.
+    pct_w, flat_w = weights or (CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT)
     stability = item.get("stability") or 0
     ilvl = item.get("item_level") or 0
     open_slot, forced_side = augment_state(item)
@@ -878,9 +892,9 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
             estimated = estimated or not (m1 and m2)
             label = stat_label(e.get("resource") or "?")
             if e.get("type") == "flat_add":
-                gain += (nxt - cur) * scale_flat_value(ilvl) * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
+                gain += (nxt - cur) * scale_flat_value(ilvl) * flat_w.get(label, 0.0)
             else:
-                gain += (nxt - cur) * scale_percent_value(ilvl) * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
+                gain += (nxt - cur) * scale_percent_value(ilvl) * 100 * pct_w.get(label, 0.0)
         return gain, estimated
 
     steps, spend, attempts = [], 0.0, 0.0
@@ -980,8 +994,8 @@ def plan_craft(item, ladders, floor=COMPILE_FLOOR, tier_cap=1, preserve=0.0,
         "compile_pct": compile_pct,
         "totals": totals,
         "totals_low": totals_low,
-        "score": weighted_score(totals),
-        "score_low": weighted_score(totals_low),
+        "score": weighted_score(totals, weights),
+        "score_low": weighted_score(totals_low, weights),
         "deep_reliance": deep_reliance,   # promotions into unobserved deep tiers
         "estimated": any_estimated,
     }
@@ -1411,8 +1425,17 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         name = item.get("name") or "?"
         plan = plan_craft(item, ladders, floor=floor, preserve=preserve)
         raw = plan["score"] - base.get(slot, 0.0)
-        suspect, labels = suspect_share(
+        _suspect, labels = suspect_share(
             score_contributions(plan["totals"], eq_totals.get(slot, {})))
+        # The ex-suspect reading needs the ex-suspect-OPTIMAL plan, not this
+        # plan re-scored: see `suspect_free_weights`. `labels` still comes from
+        # the raw plan, because the message names which families the RAW
+        # verdict leans on.
+        sf = suspect_free_weights()
+        plan_sf = plan_craft(item, ladders, floor=floor, preserve=preserve,
+                             weights=sf)
+        ex_suspect = (weighted_score(plan_sf["totals"], sf)
+                      - weighted_score(eq_totals.get(slot, {}), sf))
         # Two readings, and the two directions need OPPOSITE tests.
         #   KEEP  is asserted on the WEAKER reading: only hold what clears the
         #         band even if the suspect weights are disbelieved.
@@ -1422,13 +1445,13 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         # Payload of Breaching at raw -39.1 while its ex-suspect delta was
         # +21.0 -- a decompile verdict resting entirely on Corrupt/MaxHP,
         # exactly what the printed guarantee says never happens.
-        keep_worth = min(raw, raw - suspect)
-        discard_worth = max(raw, raw - suspect)
+        keep_worth = min(raw, ex_suspect)
+        discard_worth = max(raw, ex_suspect)
         worth = keep_worth
         row = {"name": name, "slot": slot, "worth": worth,
                "keep_worth": keep_worth, "discard_worth": discard_worth,
                "raw": raw,
-               "ex_suspect": raw - suspect, "suspect_labels": labels,
+               "ex_suspect": ex_suspect, "suspect_labels": labels,
                "stability": item.get("stability") or 0,
                "item_level": item.get("item_level") or 0}
         row["locked"] = bool(item.get("decompile_locked"))
@@ -2700,6 +2723,26 @@ SUSPECT_WEIGHTS = {
     # discounting every Regen-carried Δ that is now the best-measured
     # family in the table. Fit is regime-local (deep-attrition era).
 }
+
+
+def suspect_free_weights():
+    """(pct, flat) CRAFT_WEIGHTS with every `SUSPECT_WEIGHTS` family zeroed.
+
+    For planning under disbelief, not just scoring under it. `plan_craft` is a
+    greedy search that spends Stability where score-per-Stability is highest,
+    so with Barrier flagged (8 Aug 2026) the raw-optimal plan for
+    `Shielded Analyzer of Puncturing` sank 13.1 of its 26 Stability into
+    of Quarantine (Barrier T6->T1) -- and the lock recommender then priced the
+    base by re-scoring THAT plan ex-suspect, getting +43.4 and releasing the
+    base to the AT RISK list. Planning ex-suspect instead spends the same
+    Stability on of Puncturing (ArmorPen, measured) and of Swiftness, worth
+    ~+72 on the same disbelieving reading. The base was never the problem; the
+    plan was. Found when `potential` called it the best Analyzer base in the
+    same advisory where `locks` released it for deletion.
+    """
+    pct = {k: v for k, v in CRAFT_WEIGHTS_PCT.items() if k not in SUSPECT_WEIGHTS}
+    flat = {k: v for k, v in CRAFT_WEIGHTS_FLAT.items() if k not in SUSPECT_WEIGHTS}
+    return pct, flat
 
 
 def suspect_share(contributions):

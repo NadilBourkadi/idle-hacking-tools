@@ -79,6 +79,43 @@ class StatModelTest(unittest.TestCase):
             ihlib.composed_stat_total(b, "accuracy"), 17215.309830158225,
             places=6)
 
+    def test_suspect_free_plan_never_loses_to_the_rescored_raw_plan(self):
+        """The invariant `locks` violated on 8 Aug 2026.
+
+        It priced every base by re-scoring the RAW-optimal plan ex-suspect.
+        That plan spends Stability where raw score is highest, so when a
+        flagged family wins the greedy search the ex-suspect reading measures a
+        contract nobody would run -- and the recommender released
+        `Shielded Analyzer of Puncturing` (best Analyzer base, ex-suspect +70.9
+        once re-planned) to the AT RISK deletion list at +43.4. Re-planning
+        under the disbelieving weights is a MAXIMUM over plans, so it can never
+        be worse than any single plan scored the same way.
+        """
+        sf = ihlib.suspect_free_weights()
+        ladders = ihlib.tier_ladders(FIXTURE)
+        checked = 0
+        for where, _slot, item in ihlib.iter_items(FIXTURE):
+            if where != "inventory" or not (item.get("stability") or 0):
+                continue
+            raw_plan = ihlib.plan_craft(item, ladders)
+            sf_plan = ihlib.plan_craft(item, ladders, weights=sf)
+            self.assertGreaterEqual(
+                ihlib.weighted_score(sf_plan["totals"], sf),
+                ihlib.weighted_score(raw_plan["totals"], sf) - 1e-9,
+                f"{item.get('name')}: re-planning ex-suspect lost to the "
+                f"raw plan re-scored, which is impossible for a maximum")
+            checked += 1
+        self.assertGreater(checked, 0, "fixture exercised no craftable item")
+
+    def test_suspect_free_weights_drop_every_flagged_family(self):
+        pct, flat = ihlib.suspect_free_weights()
+        self.assertTrue(ihlib.SUSPECT_WEIGHTS, "registry emptied by accident")
+        for label in ihlib.SUSPECT_WEIGHTS:
+            self.assertNotIn(label, pct)
+            self.assertNotIn(label, flat)
+        # and it is a copy, not a view onto the live weights
+        self.assertIn("ArmorPen", flat)
+
     def test_one_suspect_registry_feeds_hardware_and_crafts(self):
         """`hardware` kept its own dict and printed the Barrier caveat while
         `potential`/`locks` ranked Barrier at face value (8 Aug 2026)."""
