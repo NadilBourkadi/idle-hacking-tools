@@ -1513,7 +1513,8 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         elif row["locked"] and not in_depth and not contested:
             row["reason"] = _lock_reason(
                 row["raw"], row["ex_suspect"], row["suspect_labels"],
-                row["slot_rank"], row["slot"], per_slot)
+                row["slot_rank"], row["slot"], per_slot,
+                worth=row["keep_worth"])
             unlock.append(row)
         elif row["locked"] and contested:
             row["reason"] = (
@@ -1563,13 +1564,28 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
 
 
 def _lock_reason(raw, ex_suspect, labels, slot_rank=None, slot=None,
-                 per_slot=1):
-    """Why an unlock is safe, in the terms that decide it."""
-    worth = min(raw, ex_suspect)
+                 per_slot=1, worth=None):
+    """Why an unlock is safe, in the terms that decide it.
+
+    `worth` is the caller's `keep_worth`. Passed in rather than re-derived:
+    once `keep_worth` picked up the re-planned reading, re-deriving
+    `min(raw, ex_suspect)` here printed a DIFFERENT number in the reason line
+    from the one in the row header (+18.8 under a headline +33.6, 8 Aug 2026)
+    -- one value with two producers, in the sentence that justifies an
+    irreversible delete.
+    """
+    worth = min(raw, ex_suspect) if worth is None else worth
     if worth > UPGRADE_BAND and slot_rank and slot_rank > per_slot:
+        # NOT "0.92 keepers/day arrive", which this string used until 8 Aug
+        # 2026. That rate counts every band-clearing base and treats them as
+        # interchangeable -- incident #23, the measured constant justified by
+        # the wrong quantity, restated here as the reason to DELETE something.
+        # The quantity `per_slot` is actually sized on is how long a base of
+        # EQUAL quality takes to replace: top-decile ~6.8 days.
         return (f"clears the band ({worth:+.1f}) but is only #{slot_rank} in "
-                f"{slot} — superseded before it would ever be crafted "
-                f"(0.92 keepers/day arrive; median base age at craft 1.2d)")
+                f"{slot}, outside the depth cap of {per_slot} — a base of "
+                f"this quality is replaced about every 6.8 days, which is "
+                f"what the cap is sized on")
     if labels and raw > UPGRADE_BAND >= ex_suspect:
         return (f"raw {raw:+.1f} rests on {'/'.join(labels)} — "
                 f"only {ex_suspect:+.1f} without it")

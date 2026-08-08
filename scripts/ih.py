@@ -345,7 +345,14 @@ def cmd_potential(args):
                 print("            from: " + "  ".join(
                     f"{label} {value:+.1f}" for value, label in parts))
                 bad, labels = ihlib.suspect_share(parts)
-                if labels and abs(bad) > 2:
+                # `bad` is the SUM of the suspect contributions, so a +30
+                # Barrier against a -30 Corrupt cancels to ~0 and an
+                # abs(bad)-only gate goes silent on an item `locks` is
+                # meanwhile pricing on the re-planned reading. Fire on the
+                # gross exposure too (8 Aug 2026 review).
+                gross = sum(abs(v) for v, label in parts
+                            if label in ihlib.SUSPECT_WEIGHTS)
+                if labels and (abs(bad) > 2 or gross > 2):
                     # The ex-suspect number that matters is the value of the
                     # ex-suspect-OPTIMAL plan, not this plan re-scored -- see
                     # ihlib.suspect_free_weights. Re-scoring the raw plan
