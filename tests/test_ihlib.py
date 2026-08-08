@@ -438,6 +438,81 @@ class LockActionsTest(unittest.TestCase):
         self.assertNotIn("Old Shell", names("unlock"))
         self.assertEqual(a["protected"], ["Old Shell"])
 
+    @staticmethod
+    def _scored_item(name, slot, locked, corrupt=0, regen=0):
+        suffixes = []
+        if corrupt:
+            suffixes.append({"name": "of Infection", "tier": 9,
+                             "affix_id": "suffix_corruption",
+                             "effects": [{"resource": "corruption",
+                                          "type": "flat_add",
+                                          "value": corrupt}]})
+        if regen:
+            suffixes.append({"name": "of Mending", "tier": 9,
+                             "affix_id": "suffix_regeneration",
+                             "effects": [{"resource": "regeneration",
+                                          "type": "flat_add", "value": regen}]})
+        return {"name": name, "slot": slot, "decompile_locked": locked,
+                "item_level": 1000, "stability": 25, "prefixes": [],
+                "suffixes": suffixes, "max_normal_affixes": 6,
+                "max_prefixes": 3, "max_suffixes": 3}
+
+    def _run(self, items):
+        cap = {"state": {"equipmentData": {},
+                         "inventoryData": {"max_slots": 100, "items": items},
+                         "homelabInfo": {}}}
+        with mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None):
+            return ihlib.lock_actions(cap)
+
+    def test_unlocked_contested_item_is_locked_not_ignored(self):
+        """The contested guarantee was STATUS-QUO BIASED and so did not hold.
+
+        "An item the two readings disagree about gets NO action, it stays as
+        it is" protects a LOCKED item. For a fresh drop the status quo is
+        UNLOCKED, and under the operating model unlocked means deleted — so
+        an unlocked contested item was destroyed by precisely the flagged
+        weight the rule promises will never decide a decompile. Real loss:
+        `Aligned Analyzer of Breaching`, keep +7.2 vs discard +103.1,
+        decompiled 7 Aug 2026 with no line of output.
+        """
+        a = self._run([self._scored_item("Corrupt Base", "acc1", False,
+                                         corrupt=200)])
+        locked_names = {r["name"] for r in a["lock"]}
+        self.assertIn("Corrupt Base", locked_names,
+                      "an unlocked contested base must be proposed for LOCK, "
+                      "not silently left to the next decompile sweep")
+        self.assertNotIn("Corrupt Base", {r["name"] for r in a["unlock"]})
+
+    def test_band_clearing_base_outside_the_cap_is_surfaced_not_silent(self):
+        """Delta-only output must never hide an impending irreversible loss.
+
+        A band-clearing base that is already unlocked and ranks outside the
+        depth cap generates no lock/unlock delta, so the list said nothing
+        while it was deleted. That silence cost `Untouchable Analyzer of
+        Aiming` (keep +42.5, raw +121.2 — the highest raw base owned).
+        """
+        items = [self._scored_item(f"Regen {i}", "acc1", False, regen=r)
+                 for i, r in enumerate((400, 300, 200, 100), start=1)]
+        a = self._run(items)
+        at_risk = {r["name"] for r in a["at_risk"]}
+        self.assertTrue(at_risk, "band-clearing unlocked surplus must appear "
+                                 "in at_risk so the cap's cost is visible")
+        for row in a["at_risk"]:
+            self.assertGreater(row["slot_rank"], a["per_slot"])
+            self.assertFalse(row["locked"])
+
+    def test_keep_depth_holds_more_than_the_single_best_base(self):
+        """Depth 1 discarded rank-2 bases whose true replacement time was
+        ~7 days while its justification claimed ~1 (the 0.92/day figure
+        counts ALL band-clearing bases as interchangeable; top-decile ones
+        arrive every 6.8 days in the measured slot)."""
+        self.assertGreaterEqual(ihlib.KEEP_DEPTH_PER_SLOT, 2)
+        items = [self._scored_item(f"Regen {i}", "acc1", False, regen=r)
+                 for i, r in enumerate((400, 300), start=1)]
+        a = self._run(items)
+        self.assertEqual({r["name"] for r in a["lock"]},
+                         {"Regen 1", "Regen 2"})
+
 
 class HomelabEtaScheduleTest(unittest.TestCase):
     """The throughput split DECLINES as jobs finish; a fixed divisor

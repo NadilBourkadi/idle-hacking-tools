@@ -1293,8 +1293,23 @@ def cmd_locks(args):
             "item_level": item.get("item_level") or 0,
             "reason": "revert path for the live A/B gate — do not unlock"}))
 
+    def _print_at_risk():
+        """What the depth cap is about to lose, stated rather than implied."""
+        risk = actions.get("at_risk") or []
+        if not risk:
+            return
+        print(f"\n  AT RISK — {len(risk)} band-clearing base(s) are UNLOCKED "
+              f"and outside the depth cap ({actions['per_slot']}/slot), so "
+              f"the next sweep deletes them.")
+        print("  Not a hold recommendation — the cost of the cap, stated. "
+              "Lock any you want kept.")
+        for r in risk:
+            print(f"    {r['name']:44s} keep {r['keep_worth']:+6.1f}  "
+                  f"raw {r['raw']:+6.1f}   #{r['slot_rank']} in {r['slot']}")
+
     if not by_slot:
         print("\n  no lock changes needed — every flag matches its value")
+        _print_at_risk()
         return
     n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
     n_cont = len(actions.get("contested") or [])
@@ -1318,6 +1333,7 @@ def cmd_locks(args):
             print(f"    {action:6s} {r['name']:44s} {worth}  "
                   f"(now: {now})")
             print(f"           {r['reason']}")
+    _print_at_risk()
 
 
 def _audit_inventory_capacity(cap, ctx):

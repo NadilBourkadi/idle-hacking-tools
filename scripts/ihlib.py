@@ -1251,10 +1251,27 @@ def hardware_track_depth_note(definition):
 # Legs 1 and 2 carry the conclusion on their own and are the load-bearing
 # ones; leg 3 only adds a price. A marginal 4th-choice base worth ~+11 score,
 # near-certain to be superseded within days, is not worth a slot at any of
-# these prices. Depth 1 keeps ~6 days of craft supply across eight slots.
-# Raise it only if the arrival rate collapses or craft throughput rises well
-# above one per day.
-KEEP_DEPTH_PER_SLOT = 1
+# these prices.
+#
+# RAISED 1 -> 2 on 7 Aug 2026, because leg 1 was measuring the wrong thing.
+# "0.92 band-clearing keepers/day" counts everything over UPGRADE_BAND and
+# treats those bases as INTERCHANGEABLE. They are not: scoring every base in
+# the archive by arrival date, the Analyzer slot takes in a band-clearing
+# base every 0.9 days but a TOP-DECILE one (keep_worth >= 46.5) only every
+# 6.8 days. Depth 1 therefore discarded rank-2 bases whose true replacement
+# time was ~7 days while the justification claimed ~1.
+#
+# It cost real progress the same day it was written: `Resilient Analyzer of
+# Aiming` (keep +46.5, exactly the top-decile line) and `Untouchable Analyzer
+# of Aiming` (keep +42.5, raw +121.2 -- the highest raw base owned in any
+# slot) were both rank > 1, produced NO output at all because the list is
+# delta-only and they were already unlocked, and were decompiled.
+#
+# Leg 3's price has also collapsed: inventory is 23/102 after that sweep, so
+# holding a second base per slot is currently free. Re-examine if inventory
+# pressure returns -- but note the correct comparison is the replacement time
+# of a base of EQUAL QUALITY, never the raw keeper arrival rate.
+KEEP_DEPTH_PER_SLOT = 2
 
 
 def inventory_pressure(capture):
@@ -1464,12 +1481,40 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                 f"{'/'.join(row['suspect_labels'])}, so it is left locked. "
                 f"Resolved by the PENDING_REFITS unblock, not by guessing")
             contested_rows.append(row)
+        elif contested and not row["locked"]:
+            # "No action on disagreement" was STATUS-QUO BIASED, and for a
+            # fresh drop the status quo is DELETION. An unlocked contested
+            # item was therefore destroyed by exactly the flagged weight this
+            # rule promises will never decide a decompile -- the guarantee
+            # held only for items that happened to be locked already.
+            # `Aligned Analyzer of Breaching` (keep +7.2 vs discard +103.1)
+            # went that way on 7 Aug 2026 with no line of output.
+            # Locking is cheap and reversible; decompiling is neither, so the
+            # tie breaks toward holding until PENDING_REFITS resolves.
+            row["reason"] = (
+                f"CONTESTED and UNLOCKED: raw {row['raw']:+.1f} vs "
+                f"ex-suspect {row['ex_suspect']:+.1f} — the verdict flips on "
+                f"{'/'.join(row['suspect_labels'])}, so it must not be lost "
+                f"to a flagged weight. Lock it until the refit resolves")
+            lock.append(row)
+
+    # Band-clearing bases that the depth cap declines to hold AND that are
+    # already unlocked produce no lock/unlock delta -- correct as a delta, but
+    # under the "unlocked is deleted" operating model it means the list stays
+    # silent while real value is destroyed. On 7 Aug 2026 that silence cost
+    # `Untouchable Analyzer of Aiming` (keep +42.5, raw +121.2). Surfacing
+    # them is not a recommendation to hold; it is the cost of the cap, stated.
+    at_risk = [r for r in candidates
+               if r["slot_rank"] is not None and r["slot_rank"] > per_slot
+               and not r["locked"] and not r["protected"]]
+    at_risk.sort(key=lambda r: -r["keep_worth"])
 
     lock.sort(key=lambda r: -r["worth"])
     unlock.sort(key=lambda r: r["worth"])
     used, cap_slots, free, price = inventory_pressure(capture)
     contested_rows.sort(key=lambda r: -r["discard_worth"])
     return {"lock": lock, "unlock": unlock, "contested": contested_rows,
+            "at_risk": at_risk,
             "protected": sorted(protected),
             "per_slot": per_slot, "inventory_used": used,
             "inventory_cap": cap_slots, "inventory_free": free,
