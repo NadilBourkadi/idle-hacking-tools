@@ -118,14 +118,31 @@ class StatModelTest(unittest.TestCase):
 
     def test_one_suspect_registry_feeds_hardware_and_crafts(self):
         """`hardware` kept its own dict and printed the Barrier caveat while
-        `potential`/`locks` ranked Barrier at face value (8 Aug 2026)."""
-        defn = {"effects": [{"combat_stat": "damage_barrier",
-                             "additive_per_level": 0.01}]}
-        note = ihlib.hardware_track_depth_note(defn)
-        self.assertIsNotNone(note, "hardware lost its depth-suspect warning")
-        self.assertIn("Barrier", note)
-        self.assertIn("Barrier", ihlib.SUSPECT_WEIGHTS,
-                      "the craft-side registry must carry the same finding")
+        `potential`/`locks` ranked Barrier at face value (8 Aug 2026).
+
+        Asserts the STRUCTURAL property — the hardware panel and the craft
+        panels read one registry — rather than any particular membership.
+        The first version of this test pinned "Barrier" by name and went red
+        the same evening when the dedicated pair measured Barrier and it
+        graduated out of the registry, which is a test pinning today's answer
+        instead of the invariant.
+        """
+        suspect_ids = [sid for sid, label in ihlib.STAT_LABELS.items()
+                       if label in ihlib.SUSPECT_WEIGHTS]
+        self.assertTrue(suspect_ids, "no suspect family maps to a game stat")
+        for sid in suspect_ids:
+            note = ihlib.hardware_track_depth_note(
+                {"effects": [{"combat_stat": sid, "additive_per_level": 0.01}]})
+            self.assertIsNotNone(
+                note, f"hardware does not warn on suspect family {sid}")
+            self.assertIn(ihlib.stat_label(sid), note)
+        # ...and a family NOT in the registry must not be warned about, or the
+        # marker means nothing
+        clean = next((sid for sid, label in ihlib.STAT_LABELS.items()
+                      if label not in ihlib.SUSPECT_WEIGHTS), None)
+        self.assertIsNotNone(clean)
+        self.assertIsNone(ihlib.hardware_track_depth_note(
+            {"effects": [{"combat_stat": clean, "additive_per_level": 0.01}]}))
 
     def test_gear_flat_pool_is_the_single_multiplicand_source(self):
         """`hardware_track_value` re-derived this pool inline until 8 Aug 2026.

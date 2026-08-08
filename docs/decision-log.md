@@ -1490,3 +1490,83 @@ holds a single base. **The lesson is about the ASK, not the rule:** a 28-line
 lock list will not be executed in full, so the list must be ranked by what it
 costs to be wrong rather than printed flat. `at_risk` already does this; the
 contested block does not.
+
+## 8 August 2026 (evening) — the Barrier row CLOSES: β measured, weight refit 0.043 → 0.0088
+
+**The 12-run block ran exactly as specified in par.22.** Arms: current loadout
+(A) vs the Daemon swap `Shielded Daemon of Bastion` → `Immortal Daemon of
+Rending` (B), Data Center, 6 runs each, Barrier −49.0 score against −11.9 of
+signed other movement.
+
+| | predicted | |
+|---|---|---|
+| Barrier converts like Regen (β 0.200) | −11.5 streaks | **rejected at 6.6σ** |
+| Barrier converts at ~0 | −1.7 streaks | consistent (1.6σ) |
+| **observed** | **−3.58 ± 1.20** | 3.0σ from zero |
+
+**β_Barrier = 0.041 ± 0.024 streaks per score point**, against Regen's 0.200 —
+**0.20× Regen**, 95% CI [0.06×, 0.44×] once the ±60% relative error is carried
+through. Robust to the one modelling choice it contains: sweeping the assumed β
+of the other families from 0.00 to 0.25 moves the ratio only across 0.37×–0.06×,
+never near parity.
+
+**`CRAFT_WEIGHTS_FLAT["Barrier"]` refit 0.043 → 0.0088 in the same change**, and
+Barrier removed from `SUSPECT_WEIGHTS`. **The 0.043 was not a bad measurement —
+it was a correct measurement of the wrong quantity.** +1 Barrier really is +1.0
+HP/fight of absorption (8,473 depletion rounds, both cohorts, 29 Jul); absorption
+simply does not convert into death-streak depth at Regen's rate. That is the
+whole content of the score→depth programme, and it is now demonstrated rather
+than asserted.
+
+**This is how the per-family conversion gets applied: fold it into the weight.**
+Summed score then stays depth-commensurate and the conversion stays 1.0
+everywhere, which is what the code already assumes. No new machinery.
+
+**The `PENDING_REFITS` Barrier row is CLOSED** — the first row in this register
+ever to close by measurement rather than by being restated. It closed one turn
+after being respecified, which is the point: the previous unblock had asked for
+a quantity that does not exist under the working hypothesis, and no number of
+runs could have satisfied it.
+
+**The register does not go empty — it narrows.** The same programme leaves
+**`CRAFT_WEIGHTS_FLAT["ArmorPen"] = 0.068` suspect**: the only measurement is the
+morning's Analyzer pair, where ArmorPen carries 81% of the delta rather than all
+of it, giving β 0.116–0.132 against Regen's 0.200 (~0.6×). Enough to call 0.068
+wrong, not enough to fit a replacement off one mixed bundle. Entered with the
+par.22 design applied to ArmorPen as its unblock.
+
+**Verdicts that moved, all in the Driver slot** (the equipped `Slippery Driver of
+Armageddon` carries Barrier +1324, so its own baseline fell ~45 points):
+
+| candidate | before | after |
+|---|---|---|
+| `Elusive Driver of Haste` | +11.4 | **+56.6** |
+| `Brutal Driver of Hardening` | +57.0 | **+15.0** |
+| `Ravaging Driver of Annihilation` | +30.4 | **+2.3 sidegrade** |
+
+The two that fell were Barrier-carried; the one that rose is not. **The Driver
+slot is now the largest open craft opportunity and was invisible this morning.**
+
+**Calibration era bumped to `uncapped+floor2+archive+scalefit+betaBarrier`.** The
+refit moves Barrier-carrying projections by far more than `UPGRADE_BAND`, so the
+single `+scalefit` grade must not be pooled with what follows. **The Analyzer
+grade itself is unaffected in substance:** restated under the new weight it reads
+realized **+70.3** against a projection that restates to **~+66.2** — error
+**+4.1**, still inside the interval. Both halves carry the same ~5.2 of Barrier,
+so the error survives the reweighting; that is a property of this craft, not a
+general guarantee.
+
+**A test had to be rewritten, and the reason is worth recording.**
+`test_one_suspect_registry_feeds_hardware_and_crafts` was written this morning
+and went red this evening — not because the code broke, but because it pinned
+`"Barrier"` by name as a member of `SUSPECT_WEIGHTS`, and Barrier legitimately
+graduated out by being measured. The invariant it existed to guard is
+*structural* — the hardware panel and the craft panels read ONE registry — so it
+now drives every suspect family through `STAT_LABELS` and additionally asserts
+that a non-suspect family is NOT warned about. A test that pins today's
+membership fails on success.
+
+**Not run: the Corporate Network extension** (par.22's free +2 runs). The day's
+budget went 20/20 to the two Data Center blocks, so **every β in this workspace
+is still fitted in one zone** and regime-locality remains untested. That is the
+standing caveat on all three figures.
