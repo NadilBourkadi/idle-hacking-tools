@@ -342,7 +342,21 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
     # ~1.04% of the ~530/round output per point -> 0.7 x 1.04 = 0.7. Linear in
     # the FITTED RANGE 16-23 only; above ~25 remains extrapolation.
     "Regen": 0.6, "Corrupt": 1.0, "ArmorPen": 0.068,
-    "Thorns": 0.13, "Barrier": 0.043,
+    # Barrier REFIT 0.043 -> 0.0088 on 8 Aug 2026 by the dedicated CI/CD pair
+    # (open-questions par.22 design, pre-registered predictions). 0.043 was a
+    # correct measurement of the WRONG QUANTITY: +1 Barrier really is +1.0
+    # HP/fight of absorption, but absorption does not convert into death-streak
+    # depth at Regen's rate. Measured depth yield beta = 0.041 +- 0.024 streaks
+    # per score point against Regen's 0.200, i.e. 0.20x, so the score weight is
+    # scaled to match -- 0.043 x 0.20 = 0.0088. This is how the per-family
+    # score->depth conversion gets applied: fold it into the weight, so summed
+    # score stays depth-commensurate and the conversion stays 1.0 everywhere.
+    # CAVEAT, and it is why the register keeps the interval: the pair rejects
+    # "Barrier converts like Regen" at 6.6 sigma but sits only 1.7 sigma off
+    # ZERO -- the 95% CI is 0.06x-0.44x Regen. The point estimate is used
+    # because setting it to 0 would over-commit to the null just as 0.043
+    # over-committed to Regen-parity.
+    "Thorns": 0.13, "Barrier": 0.0088,
 }
 
 # ---------------------------------------------------------------------------
@@ -380,47 +394,28 @@ PENDING_REFITS = [
     # that: at the 7 Aug 2026 161K-chip balance it put 154K (96%) into Packet
     # Shield, the Barrier track, over ECC Memory (Regen) — a ranking that
     # inverts once score is converted to depth.
+    # BARRIER ROW CLOSED 8 Aug 2026 — the 12-run Daemon pair (par.22) measured
+    # beta_Barrier = 0.041 +- 0.024 against Regen's 0.200 and the weight was
+    # refit 0.043 -> 0.0088 in the same change. That is what closing a row
+    # looks like: the conversion is folded INTO the weight, so summed score
+    # stays depth-commensurate and the conversion stays 1.0 everywhere.
+    #
+    # The same programme left ArmorPen suspect, so the register does not go
+    # empty — it narrows to the one family that now has evidence against it.
     {
-        "name": "score -> death-streak depth conversion (per stat family)",
-        "applied": "1.0 for every family (raw score summed across families)",
-        "opened": "2026-08-07",
-        "blocked_on": "Barrier's marginal depth has never been measured "
-                      "against a matched arm; only Regen (~5.0) and now "
-                      "ArmorPen (6-9, open-questions par.21) have figures",
-        # RESPECIFIED 8 Aug 2026. The previous unblock could not be satisfied
-        # by any number of runs, which made this row a permanent parking space
-        # for a known-wrong constant -- the exact thing the anti-deferral rule
-        # exists to stop. Three separate errors, all found by pricing the test
-        # instead of restating it:
-        #
-        # 1. It asked for a CONVERSION (score per streak). If Barrier's effect
-        #    really is ~0 that ratio is division by zero -- unbounded, never
-        #    fittable. Estimate the RECIPROCAL instead: depth yield
-        #    beta = streaks per unit score, which is finite and tight even at
-        #    zero effect. The weight correction is beta_family/beta_reference,
-        #    so beta = 0 +- small IS the answer rather than a failure to get one.
-        # 2. It demanded arms differing ONLY in Barrier. No such pair exists:
-        #    the purest gear swap owned is Daemon Shielded-of-Bastion ->
-        #    Immortal-of-Rending at Barrier -49.0 against 11.9 of signed
-        #    other movement, and the only pure lever (Packet Shield, a
-        #    damage_barrier-only hardware track) costs 7.89K chips against a
-        #    6,095 balance and cannot be sold back outside the monthly reset.
-        #    Perfect isolation is not a precondition -- subtract the other
-        #    families at their own betas and state the model dependence.
-        # 3. The 15-run floor was sized on the OBSERVED effect (~0) rather
-        #    than on the separation between the competing hypotheses. Measured
-        #    per-run SD is 2.02 streaks (df=44, grouped by stat vector), so
-        #    6 runs/arm gives SE 1.17 while the two hypotheses sit 9.8 streaks
-        #    apart on the Daemon lever -- 8 sigma. Power is about the
-        #    difference you need to detect, not the one you happened to see.
-        "unblock": "one 12-run CI/CD block, 6 per arm, on the Daemon lever "
-                   "(Shielded Daemon of Bastion vs Immortal Daemon of "
-                   "Rending, Barrier -49.0 score). Fit beta_Barrier = streaks "
-                   "per unit score after subtracting the -11.9 of other "
-                   "families at their own betas. Barrier converting like "
-                   "Regen predicts -11.5 streaks, converting at zero predicts "
-                   "-1.7; SE is 1.17, so the block separates them at ~8 sigma "
-                   "and CLOSES this row either way",
+        "name": "CRAFT_WEIGHTS_FLAT[ArmorPen] (score -> depth conversion)",
+        "applied": "0.068, i.e. converting at Regen's rate (beta 0.200)",
+        "opened": "2026-08-08",
+        "blocked_on": "the only ArmorPen measurement is the 8 Aug Analyzer "
+                      "craft pair, where ArmorPen carries 81% of the delta "
+                      "rather than all of it — beta reads 0.116-0.132 against "
+                      "Regen's 0.200 (~0.6x), enough to call 0.068 wrong but "
+                      "not enough to fit a replacement off one mixed bundle",
+        "unblock": "a dedicated CI/CD pair on an ArmorPen-only lever, the "
+                   "par.22 design applied to ArmorPen: 6 runs/arm, fit beta "
+                   "after subtracting the other families. Cheap now that the "
+                   "method is established — it shares a control arm with any "
+                   "other pair run the same day (open-questions par.21)",
     },
 ]
 
@@ -2653,7 +2648,15 @@ PREDICTIONS_PATH = DATA_ROOT / "predictions.jsonl"
 # pooling new grades into it would launder a fixed defect into the new
 # numbers. Their REALIZED values are unaffected (realized scores read the
 # item's actual affix values, never the law) and stay comparable.
-CURRENT_MODEL = "uncapped+floor2+archive+scalefit"
+# Bumped again 8 Aug 2026 by the Barrier depth-yield refit (0.043 -> 0.0088).
+# It moves any Barrier-carrying projection by far more than UPGRADE_BAND -- the
+# equipped Driver's own baseline fell ~45 points, which flipped two Driver
+# candidates -- so the single `+scalefit` grade (Analyzer, projected +71.4 /
+# realized +75.5) stays tagged to its own era and must not be pooled with what
+# follows. Its VERDICT is unaffected: projection and realized both carry the
+# same ~5.2 of Barrier, so the error stays +4.1 and in-interval under either
+# weight. That is a property of this particular craft, not a general one.
+CURRENT_MODEL = "uncapped+floor2+archive+scalefit+betaBarrier"
 
 
 def prediction_records(path=PREDICTIONS_PATH):
@@ -2777,18 +2780,16 @@ SUSPECT_WEIGHTS = {
     # a Δ that is now sound.
     "MaxHP": "still UNMEASURED — pure attrition buffer, and the profiler's "
              "full-HP single fights cannot see it (needs CI/CD Pipeline)",
-    # Barrier ADDED to this registry 8 Aug 2026. The finding is older -- it is
-    # the open PENDING_REFITS row (score -> death-streak depth per family) and
-    # was already printed by `hardware` -- but it lived in a SECOND dict that
-    # only the hardware panel read, so `potential`, `locks` and `contract` rank
-    # Barrier-carried score at full face value while `hardware` warns about it.
-    # Decision-bearing when merged: Brutal Driver of Hardening reads +57.0 raw
-    # and ~-1.2 ex-suspect (58.2 of it is Barrier), i.e. the headline upgrade
-    # of the Driver slot is entirely one unconverted family.
-    "Barrier": ">=23 score/streak vs Regen's ~5.0 — a +44.0-score "
-               "Barrier-carried craft read ~0 depth TWICE (sim -0.58+-1.03, "
-               "live ~+1.9+-2), so this score has not been shown to buy "
-               "survival at all. par.15",
+    # Barrier ADDED 8 Aug 2026 morning, REMOVED the same evening once the
+    # dedicated pair measured it (beta = 0.041 +- 0.024 vs Regen's 0.200) and
+    # the weight was refit 0.043 -> 0.0088. A stale suspect flag is as
+    # misleading as a stale weight -- the same reason Acc came out on 29 Jul
+    # and Regen on 6 Aug. Barrier-carried deltas are now SMALL rather than
+    # SUSPECT, which is a different statement and the honest one: the weight
+    # is measured, and `potential`/`locks` should stop discounting a Δ that no
+    # longer rests on a guess. The residual uncertainty (95% CI 0.06x-0.44x
+    # Regen) lives in the assumptions register, where an interval belongs,
+    # rather than as a binary zeroing here.
     # Regen REMOVED 6 Aug 2026: magnitude measured on the CI/CD pair at
     # +3.69 +- 0.72 streaks per +31 item-flat (5-sigma, confounds net
     # negative, matches the Shell live close at 0.119 streaks/point). A
