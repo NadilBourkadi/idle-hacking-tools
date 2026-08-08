@@ -658,6 +658,24 @@ class LockActionsTest(unittest.TestCase):
                       "not silently left to the next decompile sweep")
         self.assertNotIn("Corrupt Base", {r["name"] for r in a["unlock"]})
 
+    def test_no_item_appears_under_two_opposite_headings(self):
+        """One item told to LOCK and simultaneously listed as about to be
+        deleted by the cap. The 7 Aug review caught this shape once already in
+        this function; it came back on 8 Aug through the CONTESTED path,
+        because `at_risk` filtered on rank and lock flag but not on contested.
+        Live symptom: `Intangible Analyzer of Evasion` and `Leviathan's
+        Firewall of Vitality` printed under both headings in one advisory."""
+        # several unlocked contested bases in ONE slot, so ranks run past the
+        # depth cap and the at-risk branch is reachable
+        items = [self._scored_item(f"Corrupt Base {i}", "acc1", False,
+                                   corrupt=200 - 10 * i) for i in range(5)]
+        a = self._run(items)
+        buckets = {k: {r["name"] for r in (a.get(k) or [])}
+                   for k in ("lock", "unlock", "contested", "at_risk")}
+        self.assertEqual(buckets["lock"] & buckets["at_risk"], set())
+        self.assertEqual(buckets["lock"] & buckets["unlock"], set())
+        self.assertEqual(buckets["unlock"] & buckets["at_risk"], set())
+
     def test_band_clearing_base_outside_the_cap_is_surfaced_not_silent(self):
         """Delta-only output must never hide an impending irreversible loss.
 

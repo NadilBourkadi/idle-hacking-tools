@@ -1546,9 +1546,18 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     # silent while real value is destroyed. On 7 Aug 2026 that silence cost
     # `Untouchable Analyzer of Aiming` (keep +42.5, raw +121.2). Surfacing
     # them is not a recommendation to hold; it is the cost of the cap, stated.
+    # CONTESTED rows are excluded: they are already on the `lock` list, and
+    # listing them here too printed one item under two opposite headings --
+    # "LOCK it" and "the cap is about to delete it" (Intangible Analyzer of
+    # Evasion and Leviathan's Firewall of Vitality did exactly that on 8 Aug
+    # 2026). That is the one-verdict-two-recommendations shape the 7 Aug
+    # review already caught once in this same function. The hold wins: it is
+    # cheap and reversible, and the cap must not release something whose
+    # verdict turns on a flagged weight.
     at_risk = [r for r in candidates
                if r["slot_rank"] is not None and r["slot_rank"] > per_slot
-               and not r["locked"] and not r["protected"]]
+               and not r["locked"] and not r["protected"]
+               and not is_contested(r["raw"], r["ex_suspect"])]
     at_risk.sort(key=lambda r: -r["keep_worth"])
 
     lock.sort(key=lambda r: -r["worth"])
