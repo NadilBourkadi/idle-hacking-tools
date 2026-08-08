@@ -533,3 +533,31 @@ than half the delta) — if Thorns carries unpriced kill-speed value the weight
 is low, and if the rounds effect is something else entirely it is unaffected.
 Do not re-weight on one observation. Discriminant: a CI/CD pair differing only
 in Thorns at matched depth, reading rounds/fight rather than streak depth.
+
+## par.20 — Does the gear-flat homelab addend scale with the pool, or with hardware alone? (opened 8 Aug 2026)
+
+`composed_stat_total`'s gear-flat branch was corrected on 8 Aug 2026 to
+`(equipment_flat + homelab) × (1 + equipment_pct + hardware)` after the `MODEL`
+self-check caught it at +0.35% on corruption (`mechanics.md` §13). The
+correction is exact on the one observation available, but **corruption is the
+only gear-flat stat that has ever carried a non-zero `homelab` across 159
+captures, and its `equipment_pct` is 0** — so the data cannot separate
+
+- `(flat + homelab) × (1 + equipment_pct + hardware)`  ← what is implemented, and
+- `flat × (1 + equipment_pct + hardware) + homelab × (1 + hardware)`
+
+which differ by under 0.01 corruption today and would only diverge if a
+gear-flat stat ever picks up an `equipment_pct` term. Low stakes, recorded so
+the regime is not forgotten if it stops being low.
+
+**The bigger claim wanting a second observation** is the size, not the form:
+the reading says the game credits the raw fraction as a flat addend, so
+"Increases Corruption by 0.5% per level" delivers **+0.005**, ~90× less than
+the description. If that is right, every gear-flat homelab upgrade is worth
+buying for progress points and for nothing else.
+
+**Discriminant, already queued as an action:** Malware Sandbox L2. It predicts a
+corruption total of **90.3639**; the pool reading predicts **91.00**; a
+description-faithful reading (0.5%/level of the realized stat) predicts ~90.80.
+The next capture after that purchase settles it, and `validate_stat_totals`
+re-checks it automatically on every capture, so a wrong form cannot stay quiet.

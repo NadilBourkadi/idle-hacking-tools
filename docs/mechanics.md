@@ -432,7 +432,7 @@ additive pool** (open-questions §13 resolved). Four families:
 |---|---|---|
 | **Scaling** | max_hp, defense, accuracy, evasion, **attack_damage**, **post_combat_heal** | `(base + level + equipment_flat) × (1 + equipment_pct + hardware + homelab)` |
 | **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + equipment_pct + hardware + homelab` (no scaling term) |
-| **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `equipment_flat × (1 + equipment_pct + hardware + homelab)` |
+| **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `(equipment_flat + homelab) × (1 + equipment_pct + hardware)` — note the homelab term is an **addend, not a pool member**, unlike every other family |
 | **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache) × (1 + homelab_mult)` — the `homelab_mult` term appeared 31 Jul 2026 when Container Runtime L1 ("×1.01, multiplicative" per its own description) first populated it; confirmed formula-level, all four gathering stats reproduce to <1e-9 with it and sit +0.52% off without it |
 
 **Family membership is not guessable from the stat name.** `attack_damage` was
@@ -482,7 +482,20 @@ different ones re-tests the form automatically via `validate_stat_totals`.
   crit_damage) cost the same per level as the 0.005 tracks and deliver one
   fifth of the pool.
 - Homelab combat upgrades are +0.01 pool per level ≈ **+0.5% of the realized
-  stat** — inside the noise of a 10-death A/B.
+  stat** — inside the noise of a 10-death A/B. **This holds for the scaling and
+  direct families only.** On a **gear-flat** stat the same homelab percentage
+  is credited as a raw addend: Malware Sandbox L1, "Increases Corruption by
+  0.5% per level", delivers `+0.005` corruption, not +0.5% of 90.4 (+0.45) —
+  about **90× smaller than the description implies**, and almost certainly a
+  game-side bug. `(65 + 0.005) × 1.39 = 90.35695` reproduces the game exactly;
+  `65 × 1.395 = 90.675` does not. Found 8 Aug 2026 by the `MODEL` self-check,
+  the same detector that caught `homelab_mult`. **Consequence for planning: buy
+  a gear-flat homelab upgrade for its progress points, never for its stat.**
+  REGIME — one observation (corruption is the only gear-flat stat that has ever
+  carried a non-zero homelab in 159 captures) and `equipment_pct` is 0 there, so
+  whether the addend is scaled by the pool or by hardware alone is not yet
+  separable; they differ by <0.01 corruption. **Forward test: Malware Sandbox L2
+  predicts a corruption total of 90.3639, against 91.00 under the pool reading.**
 - **Hardware shop chip cost**: `cost(L) = 27.97 × L^1.177` for combat tracks,
   `10.97 × L^1.082` for economy tracks (fit spread 1.001 across six and four
   tracks). Cumulative over the whole build predicts 1,012,105 chips against the

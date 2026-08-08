@@ -47,6 +47,45 @@ class StatModelTest(unittest.TestCase):
         moved = ihlib.composed_stat_total(b, stat, d_equipment_pct=0.10)
         self.assertGreater(moved, base)
 
+    def test_gear_flat_homelab_is_an_addend_not_a_pool_term(self):
+        """Ground truth from the 8 Aug 2026 07:40 capture, where Malware
+        Sandbox L1 put a non-zero homelab on a gear-flat stat for the first
+        time in 159 captures. The suite was green with `flat * pool` (which
+        gives 90.675) because no fixture exercised the case -- audit's MODEL
+        self-check caught it, not the tests. Numbers below are the game's own,
+        not re-derived from the model."""
+        b = {"base": 0, "level": 0, "equipment_flat": 65, "equipment_pct": 0,
+             "hardware": 0.39, "homelab": 0.005, "homelab_flat": 0,
+             "syndicate": 0, "total": 90.35695}
+        self.assertAlmostEqual(
+            ihlib.composed_stat_total(b, "corruption"), 90.35695, places=9)
+        # the pool reading, explicitly ruled out
+        self.assertNotAlmostEqual(
+            ihlib.composed_stat_total(b, "corruption"), 90.675, places=3)
+        # a homelab delta moves the addend, not the multiplier: Malware
+        # Sandbox L2 predicts (65 + 0.01) * 1.39, NOT 65 * 1.40
+        self.assertAlmostEqual(
+            ihlib.composed_stat_total(b, "corruption", d_homelab=0.005),
+            90.3639, places=9)
+
+    def test_scaling_homelab_stays_in_the_pool(self):
+        """The other half of the same finding: the families genuinely differ,
+        so fixing gear-flat must not be generalised to scaling stats."""
+        b = {"base": 100, "level": 7356, "equipment_flat": 0,
+             "equipment_pct": 0.678920309838818, "hardware": 0.5,
+             "homelab": 0.13, "homelab_flat": 0, "syndicate": 0,
+             "total": 17215.309830158225}
+        self.assertAlmostEqual(
+            ihlib.composed_stat_total(b, "accuracy"), 17215.309830158225,
+            places=6)
+
+    def test_gear_flat_pool_is_the_single_multiplicand_source(self):
+        """`hardware_track_value` re-derived this pool inline until 8 Aug 2026.
+        Two producers of one number is how a fix lands in one caller only."""
+        b = {"equipment_pct": 0.0, "hardware": 0.39, "homelab": 0.005}
+        self.assertAlmostEqual(ihlib.gear_flat_pool(b), 1.39, places=9)
+        self.assertAlmostEqual(ihlib.stat_pool(b), 1.395, places=9)
+
 
 class ContractSimulationTest(unittest.TestCase):
     """Guards the deepen-scale bug (30-31 Jul 2026): `simulate_contract`
