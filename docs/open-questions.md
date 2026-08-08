@@ -561,3 +561,33 @@ corruption total of **90.3639**; the pool reading predicts **91.00**; a
 description-faithful reading (0.5%/level of the realized stat) predicts ~90.80.
 The next capture after that purchase settles it, and `validate_stat_totals`
 re-checks it automatically on every capture, so a wrong form cannot stay quiet.
+
+## par.21 — Is `CRAFT_WEIGHTS_FLAT["ArmorPen"]` ~35% too high relative to Regen? (opened 8 Aug 2026)
+
+The 8 Aug Analyzer pair (`decision-log.md`) is the second family-level
+score→depth measurement in the archive. The bundle moved **+75.5 raw score
+(+69.6 ex-suspect) for +9.95 ± 1.54 death streaks** — **7.6 score/streak raw,
+7.0 ex-suspect** — against Regen's fitted **~5.0** and Barrier's **≥23**.
+
+ArmorPen carries **81%** of that delta (+61.1 of +75.5), so if the remaining
+terms convert at anything between Regen's rate and Barrier's, ArmorPen's own
+conversion brackets to roughly **6–9 score/streak**. Needing ~1.5× more score
+per streak than Regen means the 0.068 weight is **over**-valued relative to it
+by something like a third.
+
+**Deliberately NOT refitted.** One mixed bundle is not a fit, and the two worst
+constants this workspace has shipped (`CRAFT_WEIGHTS_FLAT["Barrier"]`,
+`CRAFT_WEIGHTS_PCT["Acc"]`) both came from confident numbers derived off thin
+evidence. The observation is recorded so the next pair can extend it rather than
+rediscover it.
+
+**Discriminant:** a CI/CD pair differing ONLY in ArmorPen at matched depth, the
+same design par.15 specifies for Barrier. Cheap to bundle — the two pairs share
+a control arm, so a 15-run Barrier block plus one extra ArmorPen arm settles
+both families in a single day's budget.
+
+**Second, free reading already available:** re-run the same two Analyzer arms in
+Corporate Network. The zones differ by ~30 streaks for this build, so if the
+conversion is regime-local the two zones will disagree, and if it is a property
+of the stat they will not. That is one extra pair of runs and it tests whether
+any of these conversions generalise outside the regime they were fitted in.
