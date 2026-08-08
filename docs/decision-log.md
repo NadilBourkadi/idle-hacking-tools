@@ -1406,3 +1406,87 @@ Suite 59 → 62. Note that the suite was green through all three defects: the
 fixture carried no gear-flat homelab term, no test compared the two suspect
 registries, and none exercised planning under disbelief. *"The tests pass" is a
 fact, "verified" is a claim* — again.
+
+## 8 August 2026 (later) — Analyzer craft graded, and the first ArmorPen score→depth datum
+
+**Craft executed and equipped: `Shielded Analyzer of Puncturing` → `Shielded
+Analyzer of Disintegration`** (ilvl 4913, Stability 0/28). Both contracted
+phases landed exactly as written — of Puncturing T8→**T1** (ArmorPen 71 → 898)
+and of Swiftness T7→**T1** (Eva +33.49%, AtkSpd +31.62%) — despite the contract
+pricing P(all phases complete) at only 34.7%. The open Augment slot filled with
+a Vital T9 prefix (MaxHP +1%, credits +5%), worth ~+0.5 and, per the planner's
+own convention, projected at zero.
+
+**Realized +75.5 against projected +71.4 (p10 63.1, p90 80.1) — error +4.1,
+INSIDE the interval.** This is the first graded craft under the current planner
+(`uncapped+floor2+archive+scalefit`); every other era row describes a model that
+no longer exists. One grade is not a calibration, but it is the first evidence
+that the interval means anything: era coverage 1/1. Note the direction — the
+14-of-18 historical tendency to over-realize held again, but by +4.1 rather than
+the +15 to +24 biases of the previous eras, which is what the archive-wide ladder
+refit was supposed to do.
+
+**Sim A/B, 8 runs, Data Center, single-slot isolation: +9.95 ± 1.54 death
+streaks (6.5σ).** Arm A (old `Targeted Analyzer of Light Speed`) 230.35 ± 1.44
+over 4 runs; arm B (the new Analyzer) 240.30 ± 0.55 over 4. Regeneration,
+Corruption, Thorns, CritDamage and Defense are matched to the last digit across
+arms; only the Analyzer slot moved. **95% CI [+6.9, +13.0].**
+
+**FOURTH sim-vs-live agreement pair, and the cleanest yet on the absolute
+scale.** The live ledger carries a `zone_change` boundary at 07:09 (Corporate
+Network → Data Center, streak cut short at 71), and the four Data Center deaths
+that follow it all precede the equip: 229, 229, 223, 228 — **mean 227.25**. The
+sim's arm A, the same loadout in the same zone, read **230.35**: agreement to
+**−1.4%**. Same-zone, same-day, immediately-adjacent baseline; that is a better
+control than any previous pair had.
+
+**Pre-registered forward test.** Sim arm B says the post-equip Data Center mean
+should settle near **240 (237–243)**. There is exactly **one** post-equip death
+so far — 251 at 08:39, against the 227.25 pre-equip baseline — which is
+directionally consistent and evidentially worth nothing at n=1 (arm B's own run
+range is 220–252). Do not read the craft off it. Bank ~20 deaths before grading.
+**Do not compare any of this to the 222.0 figure from `shell-ab-2026-08-07`:**
+that was corporate_network, which is running ~257 for this build against Data
+Center's ~227. The zones are 30 streaks apart and the eras are not comparable.
+
+**A second family now has a measured score→depth conversion.** The bundle moved
++75.5 raw score (+69.6 ex-suspect) and bought +9.95 streaks, i.e. **7.6 score
+per streak raw, 7.0 ex-suspect**. ArmorPen carries 81% of that delta, so its own
+conversion brackets to roughly **6–9 score/streak**, against Regen's fitted ~5.0
+and Barrier's ≥23. Consequences:
+
+- It **corroborates the `PENDING_REFITS` row without unblocking it.** The families
+  are confirmed not to convert at 1.0 each — that is now measured twice, not
+  once — but this pair does not isolate Barrier (Barrier moved +244 flat, 8.8%
+  of the delta), so the named unblock still requires the dedicated 15-run pair.
+- It puts `CRAFT_WEIGHTS_FLAT["ArmorPen"] = 0.068` under suspicion in the
+  **over**-valued direction: needing ~1.5× more score per streak than Regen
+  implies the weight is ~35% high relative to it. **Not refitted** — one mixed
+  bundle is not a fit, and refitting a measured constant off a single
+  observation is how the archive got its worst rows. Entered in
+  `open-questions.md` par.21 with its discriminant.
+
+**Mechanism worth noting: an offensive stat bought survival.** CritChance fell
+**52.6%** (0.162 → 0.077) and depth still rose ~10, while ArmorPen rose 1166%.
+The plain reading is the fight-shortening channel — the same one that makes
+AtkSpd a mitigation stat (`assumptions`, AtkSpd row) — rather than anything
+new. It is consistent with the 22 July law that tempo does not move the death
+ceiling: ArmorPen is not tempo, it is damage that lands through mitigation.
+
+**Scarce spends this session:** 209,482 chips (ECC Memory L201→L215; levels held
+1,645 → 1,659), ~440M credits across the homelab queue, 1 Stabilizer and the
+craft's Version-Upgrade credits. Hackcoin **untouched at 66**.
+
+**Lock sweep outcome — the recommender held.** Inventory went 80 → 21 and every
+one of the 21 survivors is locked. All eight high-value bases named in the
+advisory came through: `Intangible Firewall of Restoration` (+72.4),
+`Resilient Firewall of Regeneration`, `Aegisbound Payload of Pestilence`,
+`Immortal Shell of Thorns`, `Elusive Driver of Haste`, `Ravaging Driver of
+Annihilation`, `Bulwarked Router of Thorns`, `Immortal Daemon of Rending`. The
+losses were the CONTESTED tail — chiefly the ten Daemons — which the advisory
+itself flagged as a questionable ask. Their raw scores were all negative and
+they were defensible only if Barrier/MaxHP are worthless; the Daemon slot now
+holds a single base. **The lesson is about the ASK, not the rule:** a 28-line
+lock list will not be executed in full, so the list must be ranked by what it
+costs to be wrong rather than printed flat. `at_risk` already does this; the
+contested block does not.
