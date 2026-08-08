@@ -163,6 +163,13 @@ attribution is a cheap one.
 7. **Log actions** — decision-log entries now due (equipment changes, scarce
    spends, confirmed mechanics to move out of open-questions).
 
+8. **Code changes shipped** — if the session touched `scripts/`, `tools/` or
+   `tests/`, the branch is **pushed and a PR is open** before the advisory is
+   written. Not "ready to push". Every commit independently green, `make ci`
+   passing, `/code-review` findings fixed, CI polled after pushing. State the
+   PR link and any judgement call you want overruled. Merge — and only
+   merge — waits for the player (`CLAUDE.md` git rules).
+
 Lead with the decision; state confidence (directional vs formula-level) on
 anything heuristic. Ask for a fresh capture instead of guessing when a
 decision depends on state the capture doesn't show.
