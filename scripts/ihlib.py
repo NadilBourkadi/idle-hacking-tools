@@ -1990,6 +1990,47 @@ def _chk_tier_steps(cap):
             f"{TIER_STEP_SHALLOW:.3f}/{TIER_STEP_DEEP:.3f}")
 
 
+_AFFIX_OBS_CACHE = {}
+
+
+def _affix_range_observations():
+    """{(affix_id, resource, type, tier): {ilvl: midpoint}} over the archive.
+
+    Keyed by ilvl rather than appended per capture, so an affix owned on ONE
+    item contributes ONE observation however many captures it survived in.
+    Appending per capture silently weighted the fit by item longevity.
+    """
+    paths = tuple(sorted(str(p) for p in capture_paths()))
+    if paths in _AFFIX_OBS_CACHE:
+        return _AFFIX_OBS_CACHE[paths]
+    groups = {}
+    for path in paths:
+        try:
+            cap = json.loads(Path(path).read_text())
+        except (OSError, ValueError):
+            continue
+        for _, _, item in iter_items(cap):
+            for side in ("prefixes", "suffixes"):
+                for affix in item.get(side) or []:
+                    ilvl = (affix.get("item_level")
+                            or item.get("item_level") or 0)
+                    tier = affix.get("tier")
+                    if not ilvl or tier is None:
+                        continue
+                    for e in affix.get("effects") or []:
+                        # value_min may legitimately be 0, so test presence.
+                        if e.get("value_max") is None or e.get("value_min") is None:
+                            continue
+                        key = (affix.get("affix_id"), e.get("resource"),
+                               e.get("type"), tier)
+                        mid = (e["value_min"] + e["value_max"]) / 2
+                        groups.setdefault(key, {})[ilvl] = mid
+    while len(_AFFIX_OBS_CACHE) >= 4:
+        _AFFIX_OBS_CACHE.pop(next(iter(_AFFIX_OBS_CACHE)))
+    _AFFIX_OBS_CACHE[paths] = groups
+    return groups
+
+
 def _chk_affix_scaling(cap):
     """Predict each affix's game-stated midpoint from the OTHER item levels.
 
@@ -1997,55 +2038,67 @@ def _chk_affix_scaling(cap):
     affix/tier group in this capture that also appears at a different ilvl
     somewhere in the archive, normalise the other observations, re-multiply
     by this item's scale, and compare against the value_min/value_max
-    midpoint the GAME declares here. Drift shows up as a signed error that
-    grows with ilvl, which is exactly how the old flat law hid -- it was
-    accurate in the middle of its range and 19% low at the top.
+    midpoint the GAME declares here.
+
+    REPORTS PER EFFECT TYPE, AND ON THE TOP-ILVL QUARTILE. The first version
+    pooled flat and percent into one median and gated on |median| < 5%, which
+    **did not catch the defect it was written for**: percent observations
+    outnumber flat ~5:1 and were already accurate, and the flat law's error
+    was a TAIL -- accurate mid-range, 19% low at the top. Reinstating the
+    broken law made that version print OK at -0.0% median. A drifting law
+    shows up as error that GROWS WITH ILVL, so the tail is the whole signal
+    and pooling two laws over it is how the signal was lost.
     """
-    groups = {}
-    for path in capture_paths():
-        try:
-            other = json.loads(Path(path).read_text())
-        except (OSError, ValueError):
-            continue
-        for _, _, item in iter_items(other):
-            for side in ("prefixes", "suffixes"):
-                for affix in item.get(side) or []:
-                    ilvl = affix.get("item_level") or item.get("item_level") or 0
-                    for e in affix.get("effects") or []:
-                        if not e.get("value_max") or not ilvl:
-                            continue
-                        key = (affix.get("affix_id"), e.get("resource"),
-                               e.get("type"), affix["tier"])
-                        mid = (e["value_min"] + e["value_max"]) / 2
-                        groups.setdefault(key, []).append((ilvl, mid))
-    errors = []
+    groups = _affix_range_observations()
+    per_type = {"flat_add": [], "mult_add": []}
     for _, _, item in iter_items(cap):
         for side in ("prefixes", "suffixes"):
             for affix in item.get(side) or []:
                 ilvl = affix.get("item_level") or item.get("item_level") or 0
+                tier = affix.get("tier")
+                if not ilvl or tier is None:
+                    continue
                 for e in affix.get("effects") or []:
-                    if not e.get("value_max") or not ilvl:
+                    if e.get("value_max") is None or e.get("value_min") is None:
                         continue
+                    etype = e.get("type")
                     key = (affix.get("affix_id"), e.get("resource"),
-                           e.get("type"), affix["tier"])
-                    rows = [(i, m) for i, m in groups.get(key, []) if i != ilvl]
-                    if len(rows) < 4:
+                           etype, tier)
+                    rows = [(i, m) for i, m in groups.get(key, {}).items()
+                            if i != ilvl]
+                    # distinct ITEM LEVELS, which is what "predict from other
+                    # levels" needs -- a count of observations let one item
+                    # seen in six captures pass as six pieces of evidence.
+                    if len(rows) < 3:
                         continue
-                    scale = (scale_flat_value if e["type"] == "flat_add"
+                    scale = (scale_flat_value if etype == "flat_add"
                              else scale_percent_value)
                     pred = (statistics.median([m / scale(i) for i, m in rows])
                             * scale(ilvl))
                     truth = (e["value_min"] + e["value_max"]) / 2
-                    if truth:
-                        errors.append(pred / truth - 1.0)
-    if len(errors) < 8:
-        return ("SKIP", "too few cross-ilvl affix observations to check")
-    med = statistics.median(errors)
-    worst = max(errors, key=abs)
-    status = "OK" if abs(med) < 0.05 else "DRIFT"
-    return (status, f"predicts the game's own affix midpoints from OTHER "
-                    f"item levels to {med:+.1%} median "
-                    f"(worst {worst:+.1%}, n={len(errors)})")
+                    if truth and etype in per_type:
+                        per_type[etype].append((ilvl, pred / truth - 1.0))
+    parts, status = [], "SKIP"
+    for etype, label in (("flat_add", "flat"), ("mult_add", "pct")):
+        rows = sorted(per_type[etype])
+        if len(rows) < 8:
+            parts.append(f"{label} n={len(rows)} (too few)")
+            continue
+        errs = [e for _i, e in rows]
+        med = statistics.median(errs)
+        # Top-ilvl quartile: where an ilvl-dependent law fails first, and
+        # where every craft base we care about now sits.
+        tail = [e for _i, e in rows[max(1, len(rows) * 3 // 4):]]
+        tail_med = statistics.median(tail) if tail else 0.0
+        bad = abs(med) >= 0.05 or abs(tail_med) >= 0.08
+        if bad:
+            status = "DRIFT"
+        elif status != "DRIFT":
+            status = "OK"
+        parts.append(f"{label} {med:+.1%} median / {tail_med:+.1%} top-ilvl "
+                     f"quartile (n={len(rows)})")
+    return (status, "predicts the game's own affix midpoints from OTHER "
+                    "item levels: " + "; ".join(parts))
 
 
 def _chk_hardware_curve(cap):

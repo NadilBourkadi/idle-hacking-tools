@@ -369,6 +369,64 @@ class CicdBudgetMessageTest(unittest.TestCase):
                         f"negative count in: {note}")
 
 
+class AffixScalingCheckTest(unittest.TestCase):
+    """The live check must catch the defect it was written for.
+
+    Its first version pooled flat and percent affixes into one median and
+    gated on |median| < 5%. Percent observations outnumber flat ~5:1 and were
+    already accurate, and the flat law's error was a TAIL — accurate
+    mid-range, 19% low at the top — so reinstating the known-broken law made
+    the check print OK at -0.0% median (7 Aug 2026 review finding). A check
+    that cannot fail on the bug it guards is worse than none: it launders the
+    bug as validated.
+    """
+
+    def _archive(self):
+        """One flat affix observed across a wide ilvl span, truth = linear."""
+        obs = {}
+        for tier in (1, 5, 9):
+            key = ("suffix_regeneration", "regeneration", "flat_add", tier)
+            obs[key] = {ilvl: (ilvl + 250) / 1021 * (100.0 / tier)
+                        for ilvl in (400, 900, 1600, 2400, 3200, 4200)}
+        return obs
+
+    def _capture_at(self, ilvl, tier=1):
+        mid = (ilvl + 250) / 1021 * (100.0 / tier)
+        return {"state": {"equipmentData": {}, "inventoryData": {"items": [{
+            "name": "Probe", "slot": "acc1", "item_level": ilvl,
+            "prefixes": [], "suffixes": [{
+                "name": "of Mending", "tier": tier,
+                "affix_id": "suffix_regeneration",
+                "effects": [{"resource": "regeneration", "type": "flat_add",
+                             "value": mid, "value_min": mid * 0.9,
+                             "value_max": mid * 1.1}]}]}]}}}
+
+    def _run(self, law):
+        caps = [self._capture_at(i, t) for i in (900, 2400, 4200)
+                for t in (1, 5, 9)]
+        merged = {"state": {"equipmentData": {}, "inventoryData": {"items": [
+            it for c in caps
+            for it in c["state"]["inventoryData"]["items"]]}}}
+        with mock.patch.object(ihlib, "_affix_range_observations",
+                               return_value=self._archive()), \
+             mock.patch.object(ihlib, "scale_flat_value", law):
+            return ihlib._chk_affix_scaling(merged)
+
+    def test_correct_law_passes(self):
+        status, detail = self._run(lambda i: (i + 250) / 1021)
+        self.assertEqual(status, "OK", detail)
+
+    def test_the_old_broken_flat_law_is_flagged(self):
+        status, detail = self._run(lambda i: ((i + 100) / 1021) ** 0.7849)
+        self.assertEqual(status, "DRIFT", detail)
+        self.assertIn("flat", detail)
+
+    def test_flat_and_percent_are_reported_separately(self):
+        _s, detail = self._run(lambda i: (i + 250) / 1021)
+        self.assertIn("flat", detail)
+        self.assertIn("pct", detail)
+
+
 class LockActionsTest(unittest.TestCase):
     """Guards the 7 Aug decompile-lock rules. Decompiling is IRREVERSIBLE, so
     every one of these encodes a way the first versions got it wrong."""

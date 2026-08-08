@@ -1305,11 +1305,20 @@ def cmd_locks(args):
         risk = actions.get("at_risk") or []
         if not risk:
             return
-        print(f"\n  AT RISK — {len(risk)} band-clearing base(s) are UNLOCKED "
-              f"and outside the depth cap ({actions['per_slot']}/slot), so "
-              f"the next sweep deletes them.")
-        print("  Not a hold recommendation — the cost of the cap, stated. "
-              "Lock any you want kept.")
+        # Framing must MATCH the unlock lines above, which release
+        # cap-surplus bases with "clears the band but is only #N in slot".
+        # Saying "lock any you want kept" here while telling the player to
+        # decompile an identically-ranked locked base is one verdict with two
+        # opposite recommendations, decided by a flag rather than by value
+        # (7 Aug 2026 review). Same verdict; the only difference is that a
+        # locked one needs a click and an unlocked one does not.
+        print(f"\n  AT RISK — {len(risk)} band-clearing base(s) sit outside "
+              f"the depth cap ({actions['per_slot']}/slot) and are already "
+              f"UNLOCKED, so the next sweep deletes them without appearing "
+              f"in the list above.")
+        print("  Same verdict as the UNLOCK lines: the cap releases these. "
+              "Listed only so the loss is\n  visible rather than silent — "
+              "re-lock one if you disagree with the cap.")
         for r in risk:
             print(f"    {r['name']:44s} keep {r['keep_worth']:+6.1f}  "
                   f"raw {r['raw']:+6.1f}   #{r['slot_rank']} in {r['slot']}")
@@ -1618,9 +1627,9 @@ def cmd_ab(args):
         # Same experiment-supplied label as the full readout below. This
         # printer kept the hardcoded "post-VLAN" through the first pass of
         # the fix -- one defect, two printers, and only one was corrected.
-        seg_label = exp.get("segment_label") or "declared"
-        print(detail + (f" | {status['deaths_after_segment']} deaths post-"
-                        f"{seg_label}" if status["deaths_after_segment"]
+        seg_label = exp.get("segment_label") or "the declared"
+        print(detail + (f" | {status['deaths_after_segment']} deaths after "
+                        f"{seg_label} boundary" if status["deaths_after_segment"]
                         else ""))
         if n >= target:
             print("TARGET REACHED — run the keep/revert decision")
