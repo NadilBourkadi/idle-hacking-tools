@@ -709,7 +709,34 @@ ROUTER_AB_2026_08_09 = {
 }
 
 
-ACTIVE_EXPERIMENT = ROUTER_AB_2026_08_09
+ROUTER_AB_2026_08_09["concluded"] = (
+    "KEEP -- 9 Aug 2026, TRUNCATED AT n=9 OF A PRE-DECLARED 12. Truncated "
+    "deliberately, by the Firewall craft being equipped rather than held back "
+    "for the remaining 3 deaths: progression outranks measurement and the "
+    "window had already answered the question. Recording the n it reached and "
+    "WHY, rather than reporting 12, is the whole of the discipline here. "
+    "Mean 255.2 over 9 deaths vs a 244.0 gate (baseline 238.7), delta +16.5. "
+    "Excluding the one equip-boundary straddler -- a streak begun ~6 min "
+    "before the equip and therefore fought on the old Router -- reads 257.1 "
+    "over 8 (+18.4); that is DISCLOSURE, not the declared metric, and the "
+    "verdict does not turn on it. "
+    "CONTAMINATION: the declared ECC Memory L217->L227 segment covers all 9 "
+    "deaths, so the window measures Router+ECC as a bundle; cadence and zone "
+    "held (data_center throughout), hit rate 71.8% vs a 72.2% baseline, i.e. "
+    "flat as expected for a craft that barely moves Accuracy. "
+    "PREDICTION (1) RESOLVED, and it is the point of the window: the CI/CD "
+    "pair predicted +14.33 +- 1.97 and live delivered +16.5 -- agreement "
+    "inside ~1.1 sigma, the FOURTH sim-vs-live agreeing pair. The score model "
+    "predicted +21.1 and the Regen law +19.6, so BOTH over-predict live while "
+    "the sim does not. That is the 28 Jul diminishing-returns amendment "
+    "getting its first forward test, and it passed. "
+    "PREDICTIONS (2)-(4): realized prg/round and the Defense cut are readable "
+    "in the mechanism table; the MaxHP bound (43,988 -> 48,118 inside a "
+    "Regen-positive bundle) is a bound only, and MaxHP remains PROBE-GONE. "
+    "Revert path Aggressive Router of the Undying RELEASED."
+)
+
+ACTIVE_EXPERIMENT = None
 
 
 # ---------------------------------------------------------------------------

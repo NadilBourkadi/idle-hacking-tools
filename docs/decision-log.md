@@ -1715,3 +1715,56 @@ max 25, against a #1 bottleneck of attrition) and **DNS Sinkhole** (−0.5%/leve
 enemy accuracy, max 50); **L15 gates Rate Limiter** (−1%/level enemy attack
 speed, max 200) and **Route Planner**, which fixes the six idle contracts
 earning nothing. So the fix is a tolerance, not a switch. Incidents #28–#30.
+
+## 9 August 2026 (afternoon) — a deferral I dressed up as free, and the largest craft on record
+
+**PROCESS CORRECTION, and it is the most important entry here.** I recommended
+crafting the Firewall immediately but **holding the equip** until
+`router-ab-2026-08-09` reached its pre-declared 12 deaths, on the explicit
+reasoning that *crafting is not equipping, so nothing is being deferred*. That
+is false and it directly contradicts the standing rule. The player overruled it,
+equipped, and was right.
+
+**Equipping is the action.** A craft sitting in the inventory has delivered
+nothing. The reasoning I used is worth recording precisely because it sounded
+costless: it named a real distinction (craft ≠ equip) and used it to hide the
+fact that the deferred half was the entire benefit. `CLAUDE.md` now carries the
+rule with that exact tell — *any "do X now and Y later, at no cost" where Y is
+the part that changes the game state*.
+
+**`router-ab-2026-08-09` CLOSED KEEP, TRUNCATED at n=9 of 12** — truncated by
+the equip, deliberately, and recorded as such rather than reported as if it ran
+to target. Mean **255.2 vs a 244.0 gate** (baseline 238.7), **+16.5**. The one
+equip-boundary straddler excluded reads 257.1 (+18.4); disclosure only, and the
+verdict does not turn on it.
+
+**Prediction (1) resolved, and it was the point of the window.** The CI/CD pair
+predicted **+14.33 ± 1.97**; live delivered **+16.5** — agreement inside ~1.1σ,
+the **fourth** agreeing sim-vs-live pair. The score model predicted +21.1 and the
+Regen law +19.6, so **both over-predict live while the sim does not**. That is
+the 28 Jul diminishing-returns amendment getting its first forward test, and it
+passed.
+
+**Crafted + equipped: `Intangible Firewall of Restoration` →
+`Intangible Firewall of the Undying`. Realized +175.0 against a projected
++112.8 (p10 84.8, p90 126.4) — ABOVE p90**, and the largest craft delta on
+record. All three contracted phases hit T1 exactly. Note the display names all
+changed (`of Restoration` → `of the Undying`, `of Sundering` → `of Annulment`,
+`of Contagion` → `of Zero-Day`); they are the same `affix_id` families, which is
+why phases are referenced by id. An unplanned `prefix_gatherxp_attack` T6→T5
+rode along and is worth only **+0.92**, so this is a genuine model miss, not
+unmodelled scope. `simulate_contract`'s p90 has now been breached; its p10 still
+never has. Era coverage 1/2, bias **+44.1**.
+
+**The raw score badly over-predicts this one, and the disbelieving score does
+not.** The follow-up CI/CD pair read **+15.4 ± 5.97** (n=3 vs n=2 — wide, and
+run post-equip, so corroboration rather than a decision input). Raw realized
++175.0 implies +35.0 streaks at β_Regen; the ex-suspect realized **+98.6**
+implies **+19.7**, which sits ~0.7σ from the observation while the raw reading
+sits 3.3σ away. Corruption is now at **198.8 against a verified-linear range of
+~72 — 2.8× past it** — so this is `SUSPECT_WEIGHTS` doing exactly the job it
+exists for, confirmed forward rather than argued. **Quote the ex-suspect number
+for anything Corrupt-carrying at this stat level.**
+
+**Loadout after both crafts:** Def 106.97% → 76.55% is the real cost paid, against
+AtkDmg +106.96%, AtkSpd +78.28%, Eva +102.15%, ArmorPen 975 → 1,568, Regen 1,178.
