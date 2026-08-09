@@ -1644,3 +1644,74 @@ refund tracks cumulative spend (3,261,083 chips of levels held against a
 ~3.24M refund preview, `reset_preview_loss` all zeros), so hardware chips are
 **recoverable**, which is what makes buying into an open question tolerable at
 all.
+
+## 9 August 2026 (evening) — ArmorPen resolved, the inventory hold bounded, and the homelab ranking corrected
+
+**`CRAFT_WEIGHTS_FLAT["ArmorPen"]` 0.068 → 0.045. `PENDING_REFITS` is empty.**
+The dedicated 12-run block read **−11.22 ± 1.76 streaks**; pooled with the 8 Aug
+craft pair it fits **0.045 ± 0.006**, the two pairs agreeing at 0.99σ with the
+applied 0.068 3.58σ outside. Arms were identified from `player_combat_stats` and
+matched the designed lever to a relative error of 0.0005.
+
+**The finding worth keeping is the one that was already written down.** The
+29 Jul damage-law fit — a separate instrument — priced ArmorPen at 0.044–0.051,
+and the `assumptions` row said exactly that while the applied value read 0.068.
+That value entered on 31 Jul inside a large multi-purpose commit with no
+supporting fit. For nine days the register contradicted its own applied number
+and nothing compared the two. "Two things that should agree, disagreeing" is the
+workspace's own detector, and here both halves were sitting in one table.
+
+**Craft graded: `Intangible Router of Vitality` → `Intangible Router of the
+Colossus`, realized +105.4 vs projected +79.5** (p10 43.0, p90 115.8) — **inside
+the interval**, the first grade under `uncapped+floor2+archive+scalefit+betaBarrier`.
+Both contracted T8→T1 suffix phases landed exactly; the third went T9→T5 against
+a contracted T9→T8. The CI/CD pair read **+14.33 ± 1.97** and the equip is live
+under `router-ab-2026-08-09`.
+
+**`deepen_search` could only ever move one phase**, so multi-phase plans were
+structurally unreachable — the shape the player has now beaten twice, logged
+31 Jul as "noted, not yet re-engineered". Now greedy rounds. **Honest scope: it
+does not explain the +25.9 error.** Once reachable, the executed T1/T1/T5 plan
+models at +79.6 against the contracted T1/T1/T8's +79.5, so that error was
+variance inside a correctly-stated interval — and the fixed search is what
+proved it. The first draft of the docstring claimed otherwise and was corrected
+by its own tool within minutes.
+
+**Inventory hold bounded, at the player's direction.** `KEEP_DEPTH_PER_SLOT`
+2 → 1, and CONTESTED items now respect the depth cap at their *optimistic* rank.
+Contested items previously ignored rank entirely, so the hold was unbounded — it
+ran until a flagged weight resolved, and for MaxHP `audit` now reports
+**PROBE-GONE**: nothing owned can measure it, so that hold had no end condition
+at all. Managed set ~30 → ~11. The constant's provenance is downgraded
+**measured → asserted**, which is the honest label: the 7 Aug derivation priced
+only the benefit side (6.8-day replacement of an equal-quality base) and the
+player supplied the cost side — manual lock effort at ~1 craft/day, and holdings
+occupying inventory at 102/102, which blocks the fresh drops that are what make
+a held rank-2 base worthless. The 7 Aug incident that argued for depth 2 was
+depth 1 **plus silence**; the AT RISK block closed that, so depth 1 now is not
+depth 1 then.
+
+**An undeclared gate had put the revert path on the decompile list.**
+`Aggressive Router of the Undying` was queued for decompile while its
+replacement was live and unmeasured — the 7 Aug incident exactly, recurring
+because no experiment had been declared yet. Declaring `router-ab-2026-08-09`
+restored the hold. `cmd_ab` also raised `KeyError` on a declaration without
+`baseline_hits`, taking the whole readout with it for one optional line.
+
+**Homelab ranking corrected — raised by the player, and the numbers are worse
+than the intuition.** The queue ranked purely on progress points. Top job was
+Malware Sandbox at 297 pts/h, worth **0.005** score (its "+0.5% Corruption" is a
+raw-fraction addend on a gear-flat stat, incident #26). Mechanical Keyboard, at
+261 pts/h — **12% fewer points** — is worth **0.700**, i.e. **140×**. Four more
+queued jobs bought basic resources that are purchasable at ~2 cr/unit against a
+67.8B balance. **The entire eight-job in-flight queue carried ~0.005 score of
+combat value.** Hardware %, homelab % and equipment % share one additive pool, so
+these were always comparable and were simply never compared.
+
+Points are not worthless — **L14 gates Overclock Controller** (paid x2–x5 build
+speed, bought with the abundant currency, multiplying the one throughput that is
+genuinely fixed), **Thermal Budget** (+1%/level of Max HP as post-combat heal,
+max 25, against a #1 bottleneck of attrition) and **DNS Sinkhole** (−0.5%/level
+enemy accuracy, max 50); **L15 gates Rate Limiter** (−1%/level enemy attack
+speed, max 200) and **Route Planner**, which fixes the six idle contracts
+earning nothing. So the fix is a tolerance, not a switch. Incidents #28–#30.
