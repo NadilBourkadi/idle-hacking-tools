@@ -711,17 +711,55 @@ class LockActionsTest(unittest.TestCase):
             self.assertGreater(row["slot_rank"], a["per_slot"])
             self.assertFalse(row["locked"])
 
-    def test_keep_depth_holds_more_than_the_single_best_base(self):
-        """Depth 1 discarded rank-2 bases whose true replacement time was
-        ~7 days while its justification claimed ~1 (the 0.92/day figure
-        counts ALL band-clearing bases as interchangeable; top-decile ones
-        arrive every 6.8 days in the measured slot)."""
-        self.assertGreaterEqual(ihlib.KEEP_DEPTH_PER_SLOT, 2)
+    def test_surplus_is_never_lost_silently_at_any_depth(self):
+        """The 7 Aug incident was depth-1 *plus silence*, not depth 1.
+
+        Four bases were lost because a cap-surplus base generates no
+        lock/unlock delta, so the list said nothing while they were deleted.
+        The fix that mattered was the AT RISK block; the depth bump to 2 was
+        the other half and it priced only ONE side — how long a base of equal
+        quality takes to replace (~6.8 days top-decile).
+
+        The player overrode it to 1 on 9 Aug 2026 on the side the derivation
+        never had: holding costs manual lock management, and it costs slots at
+        102/102 which suppresses the fresh drops that obsolete the held bases
+        in the first place, against a craft rate of about one a day.
+
+        So this test no longer pins the NUMBER — pinning today's answer is
+        what made the Barrier membership test go red on success. It pins the
+        invariant that survives any depth: whatever the cap is, everything it
+        releases is visible.
+        """
         items = [self._scored_item(f"Regen {i}", "acc1", False, regen=r)
-                 for i, r in enumerate((400, 300), start=1)]
+                 for i, r in enumerate((400, 300, 200), start=1)]
         a = self._run(items)
-        self.assertEqual({r["name"] for r in a["lock"]},
-                         {"Regen 1", "Regen 2"})
+        held = {r["name"] for r in a["lock"]}
+        self.assertEqual(len(held), ihlib.KEEP_DEPTH_PER_SLOT)
+        surplus = {r["name"] for r in a["at_risk"]}
+        self.assertEqual(
+            held | surplus, {"Regen 1", "Regen 2", "Regen 3"},
+            "every band-clearing base must be either held or shown AT RISK — "
+            "a base in neither list is deleted with no line of output")
+
+    def test_contested_hold_respects_the_depth_cap(self):
+        """A contested base outside the cap protects nothing and costs a slot.
+
+        Until 9 Aug 2026 contested items ignored slot rank entirely, so the
+        hold was unbounded — it lasted until the flagged weight resolved, and
+        for MaxHP no instrument to resolve it is even owned. The disagreement
+        only matters if WINNING it would make the item a keeper, so the cap is
+        applied at the item's best case (`discard_worth`), never the disputed
+        one.
+        """
+        # Corrupt-carried bases: raw and ex-suspect straddle the band, so all
+        # three are contested. Only the best may be held.
+        items = [self._scored_item(f"Corrupt {i}", "acc1", True, corrupt=c)
+                 for i, c in enumerate((900, 600, 300), start=1)]
+        a = self._run(items)
+        self.assertLessEqual(len(a["contested"]), ihlib.KEEP_DEPTH_PER_SLOT)
+        for row in a["contested"]:
+            self.assertLessEqual(row["optimistic_rank"],
+                                 ihlib.KEEP_DEPTH_PER_SLOT)
 
 
 class HomelabEtaScheduleTest(unittest.TestCase):
@@ -751,6 +789,44 @@ class HomelabEtaScheduleTest(unittest.TestCase):
 
     def test_empty_job_list(self):
         self.assertEqual(ihlib.homelab_job_eta_hours(self.INFO, []), {})
+
+
+class DeepenSearchTest(unittest.TestCase):
+    """`deepen_search` could only ever push ONE phase (9 Aug 2026).
+
+    It rebuilt every candidate from `plan_craft`'s plan and changed a single
+    index, so a plan with two phases pushed was unreachable -- and the player
+    beat it that way twice before the shape was noticed.
+    """
+
+    def _fixture(self):
+        item = FIXTURE["state"]["inventoryData"]["items"][0]
+        return item, ihlib.tier_ladders(FIXTURE)
+
+    def test_multi_phase_deepenings_are_reachable(self):
+        item, ladders = self._fixture()
+        plan = ihlib.plan_craft(item, ladders)
+        phases = [(label, target)
+                  for _uid, label, _from, target, _att, _m in plan["steps"]]
+        if len(phases) < 2:
+            self.skipTest("fixture base plans fewer than two phases")
+        out = ihlib.deepen_search(item, ladders, phases, trials=200)
+        deepened = [sum(1 for (n, t), (bn, bt) in zip(cand, phases, strict=True) if t < bt)
+                    for cand, _sim in out]
+        self.assertTrue(
+            any(d >= 2 for d in deepened),
+            "no candidate pushes two phases at once — the search is still "
+            "single-index and the plans that beat it stay unreachable")
+
+    def test_the_unmodified_plan_is_always_offered(self):
+        """Deepening must never REMOVE the shallow option: over-committing is
+        bounded-downside, not free, and the caller compares against it."""
+        item, ladders = self._fixture()
+        plan = ihlib.plan_craft(item, ladders)
+        phases = [(label, target)
+                  for _uid, label, _from, target, _att, _m in plan["steps"]]
+        out = ihlib.deepen_search(item, ladders, phases, trials=200)
+        self.assertIn(tuple(phases), {tuple(c) for c, _ in out})
 
 
 class RevertPathProtectionTest(unittest.TestCase):

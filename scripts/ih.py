@@ -1724,19 +1724,29 @@ def cmd_ab(args):
     pre_all = status["pre_death_streaks"]
     post = status["post_death_streaks"]
     ph, pm = status["post_hits"]
-    bh, bm = exp["baseline_hits"]
+    # A declaration missing `baseline_hits` used to raise KeyError here and
+    # take the whole readout with it -- the gate, the mechanism table and the
+    # contamination checks -- for a field that only feeds ONE contamination
+    # line. Same lesson as `run_audit`: a sweep exists to surface problems, so
+    # it must degrade to "this check is blind" rather than to a traceback.
+    bh, bm = exp.get("baseline_hits") or (0, 0)
     pre_mean = sum(pre) / len(pre) if pre else 0
     post_mean = sum(post) / len(post) if post else 0
-    base_hit = bh / (bh + bm) * 100
+    base_hit = bh / (bh + bm) * 100 if bh + bm else None
     post_hit = ph / (ph + pm) * 100 if ph + pm else None
     n, target = len(post), exp["target_deaths"]
     if args.brief:
         depth = (f"deaths {n}/{target}: mean {post_mean:.1f} vs {pre_mean:.1f} "
                  f"({post_mean - pre_mean:+.1f})" if post else
                  f"deaths 0/{target}")
-        hit = (f"hit {post_hit:.1f}% (n={ph + pm}) vs baseline {base_hit:.1f}%"
-               if post_hit is not None else
-               "hit-rate: NO round data — enable Detailed Logs (Hacking panel)!")
+        if post_hit is None:
+            hit = "hit-rate: NO round data — enable Detailed Logs (Hacking panel)!"
+        elif base_hit is None:
+            hit = (f"hit {post_hit:.1f}% (n={ph + pm}) vs NO baseline — the "
+                   f"declaration omits `baseline_hits`")
+        else:
+            hit = (f"hit {post_hit:.1f}% (n={ph + pm}) vs baseline "
+                   f"{base_hit:.1f}%")
         detail = (f"{status['detailed_fight_count']}/{status['post_fight_count']}"
                   " fights have round detail")
         print(f"A/B {exp['item']}")
@@ -1768,9 +1778,12 @@ def cmd_ab(args):
         label = status["experiment"].get("segment_label") or "the declared"
         print(f"  ({status['deaths_after_segment']} of them after {label} "
               f"segment boundary — analyse separately)")
-    if post_hit is not None:
-        print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) vs old-Payload "
-              f"deep-streak baseline {base_hit:.1f}% ({bh}h/{bm}m)")
+    if post_hit is not None and base_hit is not None:
+        print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) vs same-loadout "
+              f"baseline {base_hit:.1f}% ({bh}h/{bm}m)")
+    elif post_hit is not None:
+        print(f"  hit rate: {post_hit:.1f}% ({ph}h/{pm}m) — NO baseline, the "
+              f"declaration omits `baseline_hits`, so this is uncheckable")
     else:
         print("  hit rate: no post-equip round data — enable Detailed Logs "
               "in the Hacking panel")
