@@ -20,6 +20,7 @@ __all__ = [
     "FIREWALL_AB_2026_07_28", "PAYLOAD_AB_2026_07_30",
     "FIREWALL_AB_2026_07_31", "SHELL_AB_2026_07_31", "DRIVER_AB_2026_08_03",
     "ROUTER_AB_2026_08_06", "SHELL_AB_2026_08_07", "ACTIVE_EXPERIMENT",
+    "RESERVED_PROBES",
 ]
 
 PAYLOAD_AB_2026_07_23 = {
@@ -637,3 +638,67 @@ SHELL_AB_2026_08_07["concluded"] = (
 # resolves and its realized stat line is known -- declaring a baseline from
 # the treatment side is the error SHELL_AB_2026_08_07 documents avoiding.
 ACTIVE_EXPERIMENT = None
+
+
+# ---------------------------------------------------------------------------
+# Reserved probe arms: gear held as INSTRUMENTS, not as craft bases.
+#
+# A measurement that needs a paired CI/CD block needs a gear swap that moves
+# ONE family and little else. Such an item is worthless to `plan_craft` by
+# construction -- it is chosen for what it ISOLATES, not for what it scores --
+# so value-based lock advice will always rank it for decompile. That is the
+# same structural blind spot `protected_revert_items` exists to close for A/B
+# revert paths, and it had been left open for probe arms.
+#
+# It cost five instruments. Until 9 Aug 2026 the reservation lived as prose in
+# docs/candidate-status.md ("five items are reserved CI/CD probe arms --
+# Pinpoint Kernel of Rejuvenation, Assault Kernel of Penetration, Guided
+# Kernel of Restoration, Prolific Driver of Isolation, Slippery Driver of
+# Sandboxing"). Nothing read that sentence: not `lock_actions`, not `audit`.
+# By 9 Aug every one of the five was gone from the inventory, the MaxHP probe
+# among them -- and MaxHP is still ASSERTED, still the largest unpriced term,
+# and still waiting on exactly the block those arms were held for.
+#
+# So the reservation is declared by FAMILY, never by item name. A name list
+# rots the moment the inventory turns over, which is precisely how the first
+# five were lost; a family is a standing question, and `ihlib.probe_levers`
+# re-picks the best owned lever for it against every fresh capture. The
+# workspace rule this obeys is "a model fitted on currently-owned state rots
+# when the inventory turns over" -- so do not put item names here.
+#
+# Fields: `family` is a CRAFT_WEIGHTS key. `arms` is how many levers to hold
+# (2 gives the block a spare when a drop displaces the best one mid-day).
+# `concluded` retires the row without deleting the record, exactly as the
+# experiment declarations do.
+RESERVED_PROBES = [
+    {
+        "family": "ArmorPen",
+        "arms": 2,
+        "reason": "the one KNOWN-WRONG constant in PENDING_REFITS: "
+                  "CRAFT_WEIGHTS_FLAT[ArmorPen] applies 0.068 (Regen's beta "
+                  "0.200) against a measured 0.116-0.132 off the 8 Aug "
+                  "Analyzer pair. Every potential/contract/hardware verdict "
+                  "prints a banner until it resolves, and six CONTESTED items "
+                  "hold inventory waiting on it",
+        "unblock": "the par.22 design applied to ArmorPen (open-questions "
+                   "par.21): one 12-run CI/CD block, 6 runs/arm, arms "
+                   "differing in ArmorPen with the other families subtracted "
+                   "at their own betas",
+        "concluded": None,
+    },
+    {
+        "family": "MaxHP",
+        "arms": 2,
+        "reason": "CRAFT_WEIGHTS_PCT[MaxHP] = 0.5 is ASSERTED and has NEVER "
+                  "been validated -- the largest unpriced term in the model. "
+                  "The Software Profiler cannot see it (full-HP single "
+                  "fights), so the CI/CD Pipeline is the only instrument that "
+                  "can. Bracketed from both signs by the 31 Jul / 1 Aug "
+                  "mitigation-compensated trades, but never fitted",
+        "unblock": "a CI/CD pair on a MaxHP-carrying lever at matched "
+                   "mitigation, read as beta (streaks per score point) per "
+                   "par.22 -- the reparameterization that made the Barrier "
+                   "row finally answerable",
+        "concluded": None,
+    },
+]

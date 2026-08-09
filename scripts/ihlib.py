@@ -1405,6 +1405,111 @@ def protected_revert_items():
     return {name}
 
 
+def _family_scores(totals):
+    """Per-family score contribution of one item's stat totals."""
+    out = {}
+    for stat, (pct, flat) in totals.items():
+        value = (pct * 100 * CRAFT_WEIGHTS_PCT.get(stat, 0.0)
+                 + flat * CRAFT_WEIGHTS_FLAT.get(stat, 0.0))
+        if value:
+            out[stat] = value
+    return out
+
+
+PROBE_MIN_PURITY = 1.0
+# Below 1.0 the swap moves the OTHER families more than the one being
+# measured, so par.22's "subtract the other families at their own betas" step
+# is no longer a correction to the estimate -- it IS the estimate, and the fit
+# reports other families' betas wearing the target's name. Its purest usable
+# Barrier lever sat at 4.1 (-49.0 against 11.9 signed). Admitting anything
+# lower is worse than admitting nothing: the first version of `probe_levers`
+# had no floor and duly reserved a MaxHP "arm" moving +18.2 MaxHP against
+# -112.5 of signed other movement, which would have held inventory at 102/102
+# to protect an instrument that could not have measured anything.
+
+
+def probe_levers(capture, family, top=3, min_move=8.0,
+                 min_purity=PROBE_MIN_PURITY):
+    """Owned swaps ranked by how PURELY they move one stat family.
+
+    A CI/CD pair measures a family by swapping in an item that moves it and
+    as little else as possible; par.22 established that perfect isolation is
+    neither available nor needed, provided the other families are subtracted
+    at their own betas -- so the quantity to maximise is the RATIO of the
+    target family's movement to everything else's, not the target movement
+    alone. Its purest recorded Barrier lever moved -49.0 score against 11.9
+    of signed other movement, and that was decisive at 6 runs per arm.
+
+    Purity is computed against SIGNED other movement, matching par.22. Signed
+    is the honest denominator because opposing families partly cancel in the
+    depth reading; `other_abs` is returned alongside so a caller can see how
+    much cancellation the signed figure is relying on.
+
+    Returns rows sorted by purity, each with the swap's per-family deltas so
+    the subtraction step can be written straight from the output.
+    """
+    equipped = {SLOT_DISPLAY.get(slot, slot): item
+                for slot, item in (capture["state"].get("equipmentData")
+                                   or {}).items()}
+    rows = []
+    for where, slot, item in iter_items(capture):
+        if where != "inventory" or slot not in equipped:
+            continue
+        cand = _family_scores(item_stat_totals(item))
+        base = _family_scores(item_stat_totals(equipped[slot]))
+        delta = {k: cand.get(k, 0.0) - base.get(k, 0.0)
+                 for k in set(cand) | set(base)}
+        move = delta.get(family, 0.0)
+        if abs(move) < min_move:
+            continue
+        other = sum(v for k, v in delta.items() if k != family)
+        other_abs = sum(abs(v) for k, v in delta.items() if k != family)
+        if abs(move) < min_purity * abs(other):
+            continue
+        rows.append({
+            "name": item.get("name") or "?",
+            "slot": slot,
+            "family": family,
+            "move": move,
+            "other": other,
+            "other_abs": other_abs,
+            # A perfectly isolated lever divides by zero; cap rather than
+            # returning inf so the ranking stays sortable and printable.
+            "purity": min(abs(move) / max(abs(other), 1e-9), 999.0),
+            "deltas": delta,
+            "locked": bool(item.get("decompile_locked")),
+        })
+    rows.sort(key=lambda r: -r["purity"])
+    return rows[:top] if top else rows
+
+
+def reserved_probes():
+    """Live probe reservations (concluded rows dropped)."""
+    return [p for p in (RESERVED_PROBES or [])  # noqa: F405 -- star-import
+            if not p.get("concluded")]
+
+
+def reserved_probe_holds(capture):
+    """{item name -> reservation} for gear held as a measuring INSTRUMENT.
+
+    Resolved against the capture every call, never from a stored name list.
+    The five arms lost before 9 Aug 2026 were lost because the reservation
+    was a sentence naming items; when the inventory turned over the sentence
+    kept naming items that no longer existed, and the arms that replaced them
+    were never protected.
+
+    A reservation with NO owned lever is not an error here -- it is a finding,
+    and `_audit_reserved_probes` is what reports it. This function's contract
+    is only "what must not be decompiled today".
+    """
+    holds = {}
+    for probe in reserved_probes():
+        for row in probe_levers(capture, probe["family"],
+                                top=probe.get("arms", 1)):
+            holds.setdefault(row["name"], {"probe": probe, "lever": row})
+    return holds
+
+
 def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     """Daily lock/unlock ACTION list: {"lock": [...], "unlock": [...]}.
 
@@ -1436,6 +1541,11 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     preserve = stability_preserve_chance(capture)
     protected = protected_revert_items()
     protected_lc = {p.lower() for p in protected}
+    # Instruments are held on the same footing as revert paths and for the
+    # same reason: both are worthless to `plan_craft` BY CONSTRUCTION, so a
+    # value ranking always sorts them into the discard pile.
+    probe_holds = reserved_probe_holds(capture)
+    probe_lc = {name.lower(): hold for name, hold in probe_holds.items()}
     equipped = (capture["state"].get("equipmentData") or {})
     base, eq_totals = {}, {}
     for slot, item in equipped.items():
@@ -1499,6 +1609,7 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                "item_level": item.get("item_level") or 0}
         row["locked"] = bool(item.get("decompile_locked"))
         row["protected"] = name.lower() in protected_lc
+        row["probe"] = probe_lc.get(name.lower())
         candidates.append(row)
 
     # THREE outcomes, not two. Rank on the CONSERVATIVE reading among items
@@ -1528,6 +1639,23 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
             if not row["locked"]:
                 row["reason"] = ("revert path for the live A/B gate and "
                                  "currently UNLOCKED — lock it now")
+                lock.append(row)
+            continue
+        if row["probe"]:
+            # Same rule as a revert path, different reason: this item is the
+            # INSTRUMENT for a named measurement, and its craft score is
+            # irrelevant to why it is held. Never unlocked; surfaced as a LOCK
+            # action while unlocked, because a probe arm sitting unlocked is
+            # exactly how the previous five were lost.
+            probe = row["probe"]["probe"]
+            lever = row["probe"]["lever"]
+            if not row["locked"]:
+                row["reason"] = (
+                    f"RESERVED {probe['family']} probe arm (purity "
+                    f"{lever['purity']:.1f}, moves {lever['move']:+.1f} "
+                    f"{probe['family']} against {lever['other']:+.1f} signed "
+                    f"other) and currently UNLOCKED — lock it now. Held as an "
+                    f"instrument, not a craft base: {probe['unblock']}")
                 lock.append(row)
             continue
         if in_depth and not row["locked"]:
@@ -1579,9 +1707,13 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     # review already caught once in this same function. The hold wins: it is
     # cheap and reversible, and the cap must not release something whose
     # verdict turns on a flagged weight.
+    # Reserved probe arms are excluded for the same reason as CONTESTED rows:
+    # an unlocked one is already a LOCK action above, and printing it here too
+    # would put one item under both "lock it now" and "the cap is about to
+    # delete it" -- the exact double-heading defect fixed on 8 Aug 2026.
     at_risk = [r for r in candidates
                if r["slot_rank"] is not None and r["slot_rank"] > per_slot
-               and not r["locked"] and not r["protected"]
+               and not r["locked"] and not r["protected"] and not r["probe"]
                and not is_contested(r["raw"], r["ex_suspect"])]
     at_risk.sort(key=lambda r: -r["keep_worth"])
 
@@ -1592,6 +1724,7 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     return {"lock": lock, "unlock": unlock, "contested": contested_rows,
             "at_risk": at_risk,
             "protected": sorted(protected),
+            "probe_holds": probe_holds,
             "per_slot": per_slot, "inventory_used": used,
             "inventory_cap": cap_slots, "inventory_free": free,
             "slot_price_hc": price}
@@ -2521,6 +2654,26 @@ def assumptions():
          "only prices it and has collapsed at 23/102; max_slots is soft "
          "anyway -- seven 5 Aug captures held 103 against a max of 102",
          "7 Aug 2026 (re-derived)", None),
+        ("PROBE_MIN_PURITY", PROBE_MIN_PURITY, "asserted",
+         "admission floor for a reserved CI/CD probe arm: |target family "
+         "score move| / |signed other move|. Decides which items are held as "
+         "INSTRUMENTS and therefore exempted from decompile, so it spends "
+         "inventory (10 hc/slot at 102/102) and it gates whether a "
+         "measurement can run at all. Set to 1.0 by ARGUMENT, not by "
+         "measurement: below 1.0 par.22's 'subtract the other families at "
+         "their own betas' step is larger than the signal it corrects, so "
+         "the fit reports other families' betas under the target's name. The "
+         "only calibration point is par.22's purest Barrier lever at 4.1 "
+         "(-49.0 against 11.9 signed), which was decisive at 6 runs/arm -- "
+         "one point, well above the floor, so the floor itself is untested "
+         "and the region 1.0-4.0 is unvalidated. EXERCISE IT: the 9 Aug "
+         "ArmorPen block runs a purity-6.6 arm; if its beta lands with the "
+         "SE par.22 predicts, that is a second point and the floor can be "
+         "fitted rather than argued. Note the signed denominator relies on "
+         "cancellation -- `other_abs` is returned so a caller can see how "
+         "much (the top 9 Aug ArmorPen arm cancels 61.8 abs down to 6.6 "
+         "signed, the second only 27.8 down to 9.2)",
+         "9 Aug 2026 (asserted at introduction)", None),
         ("plan_craft tier_cap default", 1, "measured",
          "was 3 and untested, which excluded the two best steps on the "
          "ladder; gain per expected Stability point peaks at T3->T2",
