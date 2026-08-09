@@ -586,6 +586,30 @@ same design par.15 specifies for Barrier. Cheap to bundle — the two pairs shar
 a control arm, so a 15-run Barrier block plus one extra ArmorPen arm settles
 both families in a single day's budget.
 
+**Lever identified 9 Aug 2026, and it is better than par.22's Barrier one.**
+`ihlib.probe_levers` ranks owned swaps by purity (target-family score movement
+over *signed* other movement). The Analyzer slot supplies two clean arms
+against the equipped `Shielded Analyzer of Disintegration`:
+
+| arm | ΔArmorPen | signed other | abs other | purity |
+|---|---:|---:|---:|---:|
+| `Resilient Analyzer of Decay` | −61.1 | −6.6 | 61.8 | 9.3 |
+| `Targeted Analyzer of Light Speed` | −61.1 | −9.2 | 27.8 | 6.6 |
+
+**Run Light Speed as the primary arm despite its lower purity.** Decay's
+signed −6.6 is 61.8 of absolute movement very nearly cancelling, so its
+subtraction step depends on several families' βs all being right at once;
+Light Speed cancels 27.8 → 9.2 and carries far less model dependence. Purity
+ranks on the signed figure because that is what par.22 used, but the
+cancellation is the thing to check before trusting it — which is why
+`probe_levers` returns `other_abs` alongside.
+
+**Power, in par.22's framing.** At β_ArmorPen = 0.200 (converting like Regen)
+the swap predicts ≈ **−14.0** streaks; at par.21's reading β ≈ 0.13, ≈ **−9.7**.
+Separation ~4.3 streaks against SE 1.17 at 6 runs/arm — **~3.7σ**, decisive on
+a 12-run block. Both arms are now held by `RESERVED_PROBES`; before the fix
+Light Speed was position 5 on the decompile list.
+
 **Second, free reading already available:** re-run the same two Analyzer arms in
 Corporate Network. The zones differ by ~30 streaks for this build, so if the
 conversion is regime-local the two zones will disagree, and if it is a property
