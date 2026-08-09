@@ -4481,6 +4481,32 @@ def experiment_status(experiment=None):
     segment_ms = exp.get("segment_ms")
     segmented = ([e for e in post_deaths if e["ended_at_ms"] >= segment_ms]
                  if segment_ms else [])
+    # EQUIP-BOUNDARY STRADDLERS. A death is classified post-equip on
+    # `ended_at_ms` alone, but a death ENDS a streak that may have been fought
+    # almost entirely on the old gear. The first post-equip death therefore
+    # nearly always measures the item being replaced, and this has been true
+    # of every experiment in this workspace: `boundary_fight_id` splits
+    # FIGHTS and nothing ever split DEATHS.
+    #
+    # Found 9 Aug 2026 mid-flight on router-ab-2026-08-09, whose first
+    # post-equip death (streak 240, ended 10:20Z) began ~10:00Z against a
+    # 10:06Z equip -- every fight in it ran on the old Router.
+    #
+    # This is NOT applied to the declared metric, deliberately. Changing what
+    # a pre-registered rule measures after seeing the numbers is the failure
+    # CLAUDE.md forbids outright, and the direction here happens to flatter
+    # the result. It is DISCLOSED instead: the caller prints both readings and
+    # the pre-registered one governs. The bias is toward the pre-equip level,
+    # i.e. conservative for a KEEP and anti-conservative for a REVERT, so it
+    # is worth stating in both directions.
+    #
+    # Start time is estimated as ended_at - streak * cadence, which ignores
+    # `streak_skipped_fights` and uses an era-local cadence, so it is a flag
+    # rather than a measurement. It only ever needs to be right about the
+    # first death or two.
+    straddlers = [e for e in post_deaths
+                  if e["ended_at_ms"] - (e.get("streak_ended") or 0)
+                  * FIGHT_CADENCE_S * 1000 < exp["equip_ms"]]
     recent_ms = exp.get("baseline_recent_ms", 0)
     return {
         "experiment": exp,
@@ -4490,6 +4516,9 @@ def experiment_status(experiment=None):
         "post_death_streaks": [e["streak_ended"] for e in post_deaths],
         "post_deaths": post_deaths,
         "deaths_after_segment": len(segmented),
+        "straddler_streaks": [e["streak_ended"] for e in straddlers],
+        "post_death_streaks_clean": [e["streak_ended"] for e in post_deaths
+                                     if e not in straddlers],
         "post_fight_count": len(post_fights),
         "detailed_fight_count": len(detailed),
         "post_hits": (ph, pm),

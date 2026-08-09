@@ -856,6 +856,57 @@ class RevertPathProtectionTest(unittest.TestCase):
         ihlib.protected_revert_items()
 
 
+class EquipBoundaryStraddleTest(unittest.TestCase):
+    """A death is classified post-equip on when it ENDED, but it ends a
+    streak that may have been fought entirely on the old item.
+
+    Found 9 Aug 2026 mid-flight: router-ab-2026-08-09's first post-equip
+    death (streak 240, ended 10:20Z) began ~10:00Z against a 10:06Z equip.
+    True of every experiment here -- `boundary_fight_id` split FIGHTS and
+    nothing split DEATHS.
+    """
+
+    EQUIP = 1_000_000_000_000
+
+    def _status(self, deaths):
+        exp = {"name": "t-ab", "item": "X", "slot": "Shell",
+               "equip_ms": self.EQUIP, "baseline_deaths": [100],
+               "target_deaths": 4, "keep_rule": "k", "segment_ms": None,
+               "baseline_hits": (10, 1), "baseline_recent_ms": 0}
+        records = [{"kind": "death", "death": d} for d in deaths]
+        with mock.patch.object(ihlib, "stream_records", return_value=records), \
+             mock.patch.object(ihlib, "capture_paths", return_value=[]):
+            return ihlib.experiment_status(exp)
+
+    def test_streak_begun_before_the_equip_is_flagged(self):
+        cadence_ms = ihlib.FIGHT_CADENCE_S * 1000
+        st = self._status([
+            # ends 1 min after equip having fought 200 fights -> began well before
+            {"ended_at_ms": self.EQUIP + 60_000, "streak_ended": 200},
+            # begins comfortably after the equip
+            {"ended_at_ms": self.EQUIP + int(500 * cadence_ms),
+             "streak_ended": 100},
+        ])
+        self.assertEqual(st["straddler_streaks"], [200])
+        self.assertEqual(st["post_death_streaks_clean"], [100])
+
+    def test_the_declared_metric_is_untouched(self):
+        """The disclosure must never silently become the measurement."""
+        st = self._status([
+            {"ended_at_ms": self.EQUIP + 60_000, "streak_ended": 200},
+            {"ended_at_ms": self.EQUIP + 9_000_000, "streak_ended": 100},
+        ])
+        self.assertEqual(st["post_death_streaks"], [200, 100])
+
+    def test_no_straddlers_when_every_streak_starts_after_equip(self):
+        cadence_ms = ihlib.FIGHT_CADENCE_S * 1000
+        st = self._status([
+            {"ended_at_ms": self.EQUIP + int(400 * cadence_ms),
+             "streak_ended": 50},
+        ])
+        self.assertEqual(st["straddler_streaks"], [])
+
+
 class ReservedProbeArmTest(unittest.TestCase):
     """Guards gear held as an INSTRUMENT rather than as a craft base.
 

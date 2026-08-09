@@ -1782,6 +1782,22 @@ def cmd_ab(args):
               f"mean {all_mean:.1f})")
     print(f"  post-equip deaths ({n}/{target}): {post}  mean {post_mean:.1f}"
           f"  delta {post_mean - pre_mean:+.1f}")
+    straddle = status.get("straddler_streaks") or []
+    if straddle:
+        # DISCLOSED, never substituted. The declared metric is every
+        # post-equip death and it stays that way -- re-specifying a
+        # pre-registered rule after seeing the numbers is the one thing
+        # CLAUDE.md rules out flatly, and here the change would flatter
+        # the result. Both readings are printed so the reader can see
+        # whether the verdict depends on the difference.
+        clean = status.get("post_death_streaks_clean") or []
+        clean_mean = sum(clean) / len(clean) if clean else 0.0
+        print(f"  ({len(straddle)} of those streak(s) BEGAN before the "
+              f"equip and were fought on the old item: {straddle}. "
+              f"Excluding them reads {clean_mean:.1f} "
+              f"({clean_mean - pre_mean:+.1f}) over {len(clean)} — this "
+              f"is NOT the declared metric, it is the size of a known "
+              f"bias toward the pre-equip level)")
     if status["deaths_after_segment"]:
         # Label comes from the experiment's own declaration. It was hardcoded
         # to "VLAN +1% Def" -- one July experiment's boundary -- so every
