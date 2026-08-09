@@ -562,7 +562,25 @@ description-faithful reading (0.5%/level of the realized stat) predicts ~90.80.
 The next capture after that purchase settles it, and `validate_stat_totals`
 re-checks it automatically on every capture, so a wrong form cannot stay quiet.
 
-## par.21 — Is `CRAFT_WEIGHTS_FLAT["ArmorPen"]` ~35% too high relative to Regen? (opened 8 Aug 2026)
+## par.21 — Is `CRAFT_WEIGHTS_FLAT["ArmorPen"]` ~35% too high relative to Regen? — **RESOLVED 9 August 2026: yes, ~34%. Refit 0.068 -> 0.045.**
+
+The 12-run block below was run and read **-11.22 ± 1.76 streaks**. Pooled with
+the 8 Aug craft pair the weight fits **0.045 ± 0.006**: the two pairs agree at
+0.99σ and the applied 0.068 sits **3.58σ** outside. β_ArmorPen = 0.132
+streaks/score-pt against Regen's 0.200.
+
+**The independent corroboration matters more than the fit.** The 29 Jul
+damage-law measurement — a different instrument entirely, `dmg = Atk*K/(K+Def-AP)`
+— priced ArmorPen at **0.044–0.051**, and said so in the `assumptions` register
+while the applied value read 0.068. Nothing read the two together for nine days.
+
+**Still open:** both depth pairs ran in Data Center at our ArmorPen ~1,029, and
+the damage law is convex, so value per point rises as ArmorPen approaches enemy
+Defense. The fit is regime-local. The Corporate Network extension below is still
+unrun and is still the cheapest test of whether any β generalises across zones.
+
+### Original statement (8 Aug 2026)
+
 
 The 8 Aug Analyzer pair (`decision-log.md`) is the second family-level
 score→depth measurement in the archive. The bundle moved **+75.5 raw score
