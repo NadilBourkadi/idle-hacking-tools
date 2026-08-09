@@ -1510,8 +1510,9 @@ def _audit_decompile_locks(cap, ctx):
         flags.append(("LOCKS", f"{len(rows)} item(s) are CONTESTED — raw and "
                                f"ex-suspect disagree, so they stay locked and "
                                f"no decompile is advised. They hold inventory "
-                               f"until the flagged weight resolves (see "
-                               f"PENDING_REFITS): "
+                               f"until the flagged family is measured (see "
+                               f"SUSPECT_WEIGHTS — and note PROBE-GONE above "
+                               f"if no instrument for it is owned): "
                       + "; ".join(f"{r['name']} [{r['slot']}] raw "
                                   f"{r['raw']:+.1f} / ex {r['ex_suspect']:+.1f}"
                                   for r in rows[:4])
