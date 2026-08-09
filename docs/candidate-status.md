@@ -1,91 +1,90 @@
-# Candidate and Craft Status — 7 August 2026 (morning update)
+# Candidate and Craft Status — 9 August 2026
 
-**CRAFTED + EQUIPPED 7 Aug ~08:59Z: Assault Shell of the Shadow, realized +63.09** (score 148.79 vs equipped Bastion 85.7) vs projected +52.96 — **the first grade INSIDE p10–p90 this era** (n=8, bias +16.8, verdicts held 8/8, coverage 4/8). Augment landed **Omniscient T1** (Acc +9.12%, gathering +64.26%); `watchdog_matrix` T9→**T1** (*of Perpetuity*, MaxHP +24.95% / Regen +115); `regeneration` T9→**T3** (*of the Phoenix*, Regen +87). **CI/CD pair read +20.20 ± 1.32 streaks on a clean pre-ECC block** — the Regen law's second forward test (predicted +18.2 from Regen alone). Live gate **`shell-ab-2026-08-07` HOT**: baseline 199.8/25, KEEP ≥ 197.8 / REVERT ≤ 194.8 over 24 deaths. **Revert path: Shielded Shell of Bastion — the one live decompile lock.**
+**This page holds only what the tool cannot compute.** Everything per-item —
+ceilings, keep/discard verdicts, lock deltas, which bases are at risk — is
+generated from the latest capture by `ih.py potential`, `ih.py locks` and
+`ih.py brief`. Do not read a number off this page and do not add one.
 
-_(original approval, for the record)_ **CRAFT APPROVED 7 Aug: Assault Shell of the Shadow [Shell], deepened contract** — Augment[prefix] first, then `of Mending [suffix_regeneration]` T9→T1, then `of Mending [suffix_watchdog_matrix]` T9→T1 absorbing the remainder. **mean +52.96 / p10 +27.98 / p90 +76.85 / P(Δ>+5) 91.8%**; calibration row recorded (8th under uncapped+floor2+archive). Loadout: **Regen +33.2%, Def +4.5%, Eva +5.8%** for **MaxHP −8.3%, Barrier −18.0%, Thorns −39.7%**. Note the base carries **two affixes both displayed "of Mending"** — the collision that produced the 7 Aug contract-simulator defect (see decision-log); always reference them by `affix_id` when writing phases. **Equip decision is SIM-FIRST (§9.4): 8-run paired CI/CD tranche, crafted-Shell arm vs current, before equipping.**
-
-**`router-ab-2026-08-06` CLOSED KEEP 7 Aug** (mean 199.8 over 24 deaths vs gate ≥187.2, **+10.0**; bundle — all 24 deaths fall after the VLAN +1% Def boundary). The Regen-law forward test predicted +5.4→+7.5 and the window delivered +10.0. **Titanic Router of the Undying RELEASED.** The one live decompile lock is now **Shielded Shell of Bastion** (revert path for the hot Shell gate).
-
-
-> **Every ceiling number below the main-set table is stale and has been left in place only as history.** Two things invalidated them on 28 July: `COMPILE_FLOOR` moved 8 → 2 (every projection rises ~11–13 points, which is more than `UPGRADE_BAND` itself, so past *rankings* changed, not just scores), and the inventory went 9 → 45 items on a large drop. **Regenerate with `python3 scripts/ih.py potential` — do not read a number off this page.**
->
-> Read `ih.py potential`'s new `from:` decomposition line, not just the score: two of the three top-ranked candidates on 28 July were artifacts of a Corruption weight fitted on n=1 and extrapolated 2.3× past its observed range, and an Accuracy weight measured as saturated.
+That rule is not tidiness. Until 9 Aug 2026 this file hand-maintained a
+candidate table, a "next craft" verdict, a live-decompile-lock line and a list
+of five reserved CI/CD probe arms. On 9 Aug **every single item named in those
+sections was checked against the capture and none of them existed any more** —
+the inventory had turned over completely. The page still read as current, and
+the `/advise` protocol reads it for "holds/locks". A hand-kept list of owned
+items is a model fitted on currently-owned state, and it rots exactly as
+`CLAUDE.md` says such models do.
 
 ## Main set (all eight slots)
 
-| Slot | Item | Origin |
-|---|---|---|
-| Payload | **Vital Payload of Extinction** | crafted 30 Jul (realized **+64.7**, scale-corrected grade), A/B **closed KEEP 31 Jul** (+14.8 streaks, bundle) — revert path Bastioned Payload of Perfect Strike **released** |
-| Firewall | **Predatory Firewall of Immortality** | crafted 31 Jul (realized +36.8, first in-interval craft), **A/B closed KEEP 31 Jul evening** (167.6 over 34 deaths, +12.5) — revert path Resilient Firewall of Perpetuity **released** |
-| Shell | **Assault Shell of the Shadow** (crafted + equipped 7 Aug, realized **+63.09**; sim pair +20.2 ± 1.32; gate hot) | crafted + equipped 31 Jul ~20:10Z (realized **+44.2** vs projected +35.5 — second consecutive in-interval grade), **A/B closed KEEP 1 Aug (mean 173.5 over 25 deaths vs gate 165.6, +5.8; all four predictions graded)** — revert path Citadel Shell of the Phoenix **released**. The Corrupt monsters (Analyzer +69.9, Kernel +63.0) stay **held for the CI/CD Pipeline** (homelab 12, 65 pts away 1 Aug) — their Δs rest on Corruption ~2× past the verified stat ~72 |
-| Analyzer | Targeted Analyzer of Light Speed | crafted 27 Jul (+24.9), A/B KEEP |
-| Driver | **Slippery Driver of Armageddon** | crafted 5 Aug (realized **+44.0** at the p90 edge — third consecutive in-interval grade), equipped 5 Aug 22:01Z. **`driver-ab-2026-08-03` CLOSED KEEP 6 Aug evening** (mean 189.2 over 47 deaths vs gate ≥172.2, +12.6 — a bundle: the sim decomposition puts the craft's own depth share at ~+1.9 ± 2, the rest hardware/procs/VLAN; first sim-vs-live agreement pair, `simulator-protocol.md` §9.3) — revert path Aegisbound Driver of Cataclysm **released** |
-| Router | **Aggressive Router of the Undying** | crafted 6 Aug (realized **+44.9** vs projected +28.7), equipped 6 Aug 19:49Z, **A/B closed KEEP 7 Aug (+10.0 over 24 deaths)** — revert path Titanic Router of the Undying **released** |
-| Daemon | Shielded Daemon of Bastion | crafted 29 Jul (realized **+131.5**, best on record) |
-| Kernel | Assault Kernel of Blight | crafted 29 Jul (realized +37.4) |
+Query it: `python3 scripts/ih.py loadout`. All eight slots are contract crafts.
+Slot history lives in `decision-log.md`; grades in `ih.py calibration`.
 
-**All eight slots are now contract crafts** (Kernel and Daemon fell 29 Jul).
+## Standing holds — reasoning the tool does not encode
 
-## Next craft — RESOLVED (both former contenders crafted 29 Jul; Vital Payload of Striking approved 30 Jul — see decision-log)
+These are *arguments*, not items. Each names a condition, so it can be
+discharged rather than quietly inherited.
 
-### (historical) Next craft — two contenders, deliberately held
+- **Sustain-anchor guardrail (`mechanics.md` §21).** Firewall / Router / Kernel
+  replacements must preserve the *function* of the current sustain anchors, not
+  merely improve item level or score. Regeneration is this build's measured win
+  condition (net drain per round went negative on the 27 Jul package, and the
+  Regen law has now passed three out-of-sample forward tests), so a candidate
+  that clears `UPGRADE_BAND` while spending Regen is still a hold. `potential`
+  prints the `from:` decomposition precisely so this is checkable at a glance —
+  read it before accepting a headline score in these three slots.
+- **Corruption-carried candidates are extrapolation past ~72.** `Corrupt` is
+  linear to a verified stat level of ~72 (30 Jul, paired profiler arms) and
+  every large Corrupt ceiling on the current board sits well past it. This is
+  why `SUSPECT_WEIGHTS` exists and why `locks` decides on the weaker of the raw
+  and ex-suspect readings.
+- **Reserved probe arms are declared in code, never here.** See below.
 
-Scores below are post-`COMPILE_FLOOR`-fix and "adjusted" strips the Corruption and Accuracy weights that `ih.py assumptions` flags as unreliable:
+## Reserved CI/CD probe arms
 
-| candidate | raw Δ | adjusted Δ | case |
-|---|---:|---:|---|
-| Untouchable Payload of Lightning | +18.7 | **+19.9** | *gains* when adjusted — its −10.5 Accuracy penalty is fake. AtkSpd +19.0, AtkDmg +7.8. The output answer |
-| Assault Kernel of Corruption | +26.0 | +7.6 | Def +9.1 with **no sustain cost** — the only candidate that spends nothing. The mitigation answer |
+**Declared in `scripts/experiments.py::RESERVED_PROBES`, by stat FAMILY, and
+resolved against every fresh capture by `ihlib.probe_levers`.** `ih.py audit`
+reports two findings against them: `PROBE-LOOSE` (an arm exists but is
+unlocked, one sweep from deletion) and `PROBE-GONE` (no owned item is a pure
+enough lever, so the measurement cannot run until a drop arrives).
+`ih.py locks` prints the held arms with their purity and never offers one for
+decompile.
 
-Rejected on the sustain guardrail regardless of score: **Targeted Router of Immortality** (+14.1, but Regen −20.9% at loadout) and **Deadeye Kernel of Containment** (Regen −14.7%).
+A probe arm is chosen for what it **isolates**, so `plan_craft` scores it as
+junk by construction and value-based lock advice sorts it straight into the
+discard pile. That is the same blind spot `protected_revert_items` closes for
+A/B revert paths, and it was open for instruments until 9 Aug 2026 — which is
+how the previous five arms (`Pinpoint Kernel of Rejuvenation`,
+`Assault Kernel of Penetration`, `Guided Kernel of Restoration`,
+`Prolific Driver of Isolation`, `Slippery Driver of Sandboxing`) were lost
+while this page still listed them as reserved.
 
-**Held on purpose.** The Firewall's +34% regen may have moved the bottleneck from attrition to closing tank matchups, which changes *which* of the two is correct — the one case where sequencing is justified. Read `firewall-ab-2026-07-28` first.
+Live reservations as of 9 Aug 2026 — read the current state off `ih.py audit`,
+not off this list:
 
-## Inventory — all 9 items, ranked by ceiling delta vs equipped
+- **ArmorPen** — the one `PENDING_REFITS` row. Two arms held.
+- **MaxHP** — asserted at 0.5, never validated, the largest unpriced term in
+  the model. Currently **`PROBE-GONE`**: nothing owned clears the purity floor,
+  so this measurement is waiting on a drop, not on a decision.
 
-Regenerate with `python3 scripts/ih.py potential`. Figures below are from the
-21:07Z capture on **archive-wide tier ladders** (`crafting.md` §12.1.1, 58
-captures / 582 tier observations), with the Snapshot Backups 10% Stability
-preserve modelled. Three sidegrades were decompiled between 19:54Z and 20:57Z,
-which is why the inventory is 9, not 12 — and one of them
-(`Elusive Kernel of Regeneration`) held the only `suffix_adaptive_shell` T7
-observation owned, which is what made the archive fix necessary. The `was`
-column is the single-capture number and is **not** comparable.
+## Decompile protocol
 
-| Δ | was | Slot | Item | ilvl | Stab | Status |
-|---|---|---|---|---|---|---|
-| **+9.8** | +4.6 | Firewall | Bastioned Firewall of Infection | 1032 | 28 | best ceiling, and now the best-*supported* one — `of Recovery` is observed at T1/2/3/6/7/8/9 archive-wide. Held on the sustain guardrail, see caveat |
-| **+8.9** | +8.5 | Daemon | Sighted Daemon of the Storm | 1382 | 29 | craft base — locked. Nearest miss; low +8.4 |
-| **+6.7** | +8.3 | Kernel | Elusive Kernel of Spikes | 1474 | 24 | craft base — locked, see caveat |
-| — | — | Driver | Warmongering Driver of Extinction | 731 | 0 | **RELEASED 31 Jul** — this lock was stale: `driver-ab-2026-07-27` closed KEEP on 28 Jul (+6.4 streaks); the lock line was never updated |
-| −8.6 | — | Payload | Targeted Payload of Perfect Strike | 1126 | 0 | spent alternate, releasable |
-| −10.3 | — | Payload | Enduring Payload of Armageddon | 749 | 0 | Payload revert path (A/B concluded KEEP) — releasable |
-| −22.6 | — | Shell | Overclocked Shell of the Monolith | 628 | 0 | Shell revert path (A/B concluded KEEP) — releasable |
-| −24.9 | — | Analyzer | **Aligned Analyzer of Light Speed** | 406 | 0 | **RELEASED 31 Jul** — the 27 Jul bundle read out KEEP the same day; three gear generations and +48 baseline streaks later, a revert to an ilvl-406 item is not a live option and the lock no longer served its purpose |
-| −38.7 | — | Router | **Aligned Router of the Undying** | 445 | 0 | **RELEASED 31 Jul** — same reasoning; its T1 ladder observations are preserved in the capture archive |
+**`ih.py locks` is the authority.** It prints deltas only — items whose flag
+disagrees with their value — plus the `AT RISK` block (band-clearing bases
+outside the depth cap that are already unlocked and will go silently).
 
-**Before decompiling anything, check it is not a sole ladder anchor.** `Elusive Kernel of Regeneration` was released on 27 July as a +1.7 sidegrade and took the only `suffix_adaptive_shell` T7 observation with it (`crafting.md` §12.1.1). The archive fix means this can no longer *lose* an observation — every past capture still counts — but an item carrying a tier no capture has ever recorded is still worth one capture before it goes.
-
-## Next craft: none approved — the Driver failed re-verification
-
-**Aegisbound Driver of Execution is +3.8, not +14.1** (51.3 vs equipped 47.4, archive ladders). Its entire case was CritDmg reaching **+81.21%** at T1 — extrapolated five tiers at 1.4×/tier from a *single* observed point (`suffix_critdamage` T6, on the item itself). On the corrected region-aware ladder the same plan projects **+53.67%**, and the verdict drops into the sidegrade band. Corrected loadout effect of the full craft: crit damage 1.509 → 2.046 and crit factor 1.160 → 1.266 (**+9.1% damage**, not +22%), bought with **Accuracy −4.35%** and crit chance 0.315 → 0.254 — against a build whose #2 bottleneck is hit reliability.
-
-The mechanism it was chosen for is still real: the 27 July zone readout found a **damage floor in tank matchups** (three Corporate deaths from ≥79% starting HP against 19–23K HP Trojan Wall / Rootkit enemies, losing not to burst but to fights the build could not close), and crit damage still has no gear contribution at all. Only the size of the fix changed, and it is no longer large enough to clear the band.
-
-**Approved next action on this item: one measured step, not the chase.** Run `of Execution` T6→T5 alone (60% per attempt, cap 3, ~1.6 Stability of 26) and recapture. `value_min`/`value_max` are the tier's full range, so one *successful* promotion reveals the exact T5 midpoint and pins this family's deep step, which currently spans 1.15–1.42 across observed families — worth ±10 score on this verdict. Continue to the full contract only if the realized T5 midpoint implies a step ≥ ~1.33 (displayed CritDmg ≳ 19.3%).
-
-Note the line is at a **99% roll** (0.1667 of 0.1231–0.1670), so the step is worth little as a stat — expected ~+1.7pp CritDmg, and a bottom-of-range T5 roll would be a small downgrade (`crafting.md` §12.2). It is bought for the measurement.
-
-## Holds and caveats
-
-- **Bastioned Firewall of Infection (+9.8)** is the highest ceiling owned and, on archive-wide ladders, the best-evidenced — `suffix_adaptive_shell` is observed at T1/T2/T3/T6/T7/T8/T9, so `of Recovery` T8→T1 plans almost entirely inside measured data. **Still held, on the sustain-anchor guardrail** — and now quantified rather than asserted. At loadout level the swap buys **Def +7.1% and Eva +4.3%** with **MaxHP −7.9% (14,956 → 13,778) and Regen −5.4% (379.4 → 358.9)**. Regeneration is this build's measured win condition: −5.4% of realized regen is ≈ **−12.5 `prg`/round against a measured net drain of −2.8/round**, so the craft flips net drain positive and hands back the +20.5 death streaks the 27 July package bought. ECC Memory L93→L99 covers only about a third of that loss (+2.05%). Directional on the regen → realized-`prg` proportionality, but the sign is not in doubt. Revisit when a Firewall base appears that does not spend Regen and MaxHP, or once the Hacking Simulator can measure it instead of arguing it.
-- **Elusive Kernel of Spikes (+6.7)** projects MaxHP +38.47% but strips the Kernel's Defense and buys only +7 net Regen. At loadout level: **MaxHP +22.5% (14,956 → 18,325), Def −4.5% (1,090.7 → 1,041.5), Regen +2.8%, Acc −0.7%, AtkSpd −1.2%, Thorns 6 → 17.** This is close to the exact trade the 21 July Kernel A/B ran and **rejected** — the Defense loss is slightly *worse* (−4.5% vs −3.65% realized) and the Regen gain slightly *smaller* (+2.8% vs +4.2%); only the Max HP side is bigger, and Max HP is a buffer, not mitigation or recovery. **Craft the Firewall before any Kernel** — it puts Defense back first.
-- **Sighted Daemon of the Storm (+8.9, low +8.4)** has no sustain cost and is the best-supported *direction* on the board: at loadout level **Eva +8.9% and Acc +3.2%** (bottleneck #2) for AtkSpd −8.7%, which the 22 July law says should not move the death ceiling. Held only because the ceiling discounts to ~+3.9 under a §10.1 contract. **Strongest candidate if one craft has to run before the Hacking Simulator lands** — but note the cost is worse than it first looked. −8.7% attack speed is **not** an income cost (fight cadence is a fixed 4.872 s/fight, invariant — see `mechanics.md` §14): it is a **depth** cost, because attack speed pays in rounds per fight and fewer rounds means fewer enemy attacks per fight. Giving up 8.7% AtkSpd buys evasion by spending attrition resistance, which is the opposite of what this build needs.
-- **ONE live decompile lock as of 6 Aug ~19:50Z: Titanic Router of the Undying** — revert path for the hot `router-ab-2026-08-06`; release when it closes. (Aegisbound Driver of Cataclysm was released earlier the same evening when `driver-ab-2026-08-03` closed KEEP.)
-- All other revert paths released (31 Jul – 1 Aug closes): Citadel Shell of the Phoenix, Resilient Firewall of Perpetuity, Bastioned Payload, the Aligned items, Warmongering Driver — tier observations persist in the capture archive; decompile freely. The 31 Jul clear-out (keep 19 band-clearers + 1 lock, decompile 71) is in the decision-log.
-
-## Safe to decompile now
-
-**Everything below the ±5 band — there are no live locks.** The inventory turned over again on 5–6 Aug (large drop influx) — regenerate the keep-list with `python3 scripts/ih.py potential --top 99` before a clear-out, per the 31 Jul precedent: keep band-clearing craft bases, decompile the rest. Archive-wide ladders mean no decompile can move a verdict. Exception worth a few days: **five items are reserved CI/CD probe arms — Pinpoint Kernel of Rejuvenation, Assault Kernel of Penetration, Guided Kernel of Restoration (Regen/MaxHP pairs), Prolific Driver of Isolation and Slippery Driver of Sandboxing (Barrier-at-depth pair, §15)** — keep them until their blocks have run.
-
-**Do not reuse any static safe-decompile list** (including the pre-27-July ones). They were built against inventories that no longer exist.
+- The operating model is that **anything not locked is regularly decompiled and
+  lost**, so a missing lock is an irreversible loss and drift in either
+  direction costs progress.
+- Keep value is the **weaker** of raw Δ and Δ-ex-suspect; a discard needs
+  **both** readings to agree. An item they disagree about is held, not ignored.
+- Hold depth is `KEEP_DEPTH_PER_SLOT` bases per slot, sized on how long a base
+  of **equal quality** takes to replace (~6.8 days top-decile), never on the
+  rate at which any band-clearing base arrives.
+- **Before decompiling, check the item is not a sole ladder anchor.** Since the
+  archive-wide ladder fix (`crafting.md` §12.1.1) a decompile can no longer
+  *lose* an observation — every past capture still counts — but an item
+  carrying a tier no capture has ever recorded is still worth one capture
+  before it goes.
+- **Never reuse a static safe-decompile list**, including any that appear in
+  the git history of this file. They were built against inventories that no
+  longer exist; that is the failure this page was rewritten to stop.
