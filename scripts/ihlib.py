@@ -1873,6 +1873,63 @@ def homelab_job_hours(info, ticks, active_jobs=1):
     return max(ticks, 0) * tick_s * max(active_jobs, 1) / speed / 3600.0
 
 
+HOMELAB_PTS_TOLERANCE = 0.15
+# How much progress-point RATE to trade for a real stat when filling a slot.
+# Ranking on points alone was defensible only while every purchasable was
+# equally useless as a stat; on 9 Aug 2026 the player pointed out it had
+# stopped being. The top-ranked job that day was Malware Sandbox at 297
+# pts/h, whose "+0.5% Corruption per level" is credited as a RAW FRACTION
+# addend on a gear-flat stat (incident #26) and is therefore worth 0.005
+# score. Mechanical Keyboard, at 261 pts/h -- 12% less -- is worth 0.700, or
+# 140x. Four more queued jobs bought basic resources, which are purchasable at
+# ~2 cr/unit against a 67.8B credit balance and are worth zero.
+#
+# Points are NOT worthless: they buy install gates, and L14/L15 gate
+# genuinely strong things. So the rule is not "ignore points" but "do not pay
+# 140x of stat for 12% of gate speed". Within this tolerance of the best
+# point rate, stat value decides; outside it, points still do.
+#
+# ASSERTED. The honest exchange rate is points -> depth via the gate, and
+# nothing has measured that. 0.15 is chosen to span the observed spread of
+# available jobs (297 down to 260 pts/h is 12%) so the choice is made across
+# the real menu rather than inside an arbitrary slice of it. TO MEASURE:
+# time a gate arrival at each ranking and compare against the stat delta
+# banked on the way.
+
+
+def homelab_upgrade_score(upgrade_def):
+    """Combat-score value of ONE level, on the CRAFT_WEIGHTS scale.
+
+    Directly comparable to a gear affix and to `hardware_track_value`,
+    because hardware %, homelab % and equipment % share ONE additive pool
+    (mechanics.md §13). Non-combat effects score 0 -- deliberately, not by
+    omission: resource and gather-XP upgrades pay in currencies that are
+    purchasable at ~2 cr/unit, so their combat value really is zero and the
+    ranking should say so rather than leave them unscored and ambiguous.
+    """
+    effects = upgrade_def.get("effects") or []
+    total = 0.0
+    for eff in effects:
+        stat = eff.get("combat_stat")
+        if not stat:
+            continue
+        add = eff.get("additive") or 0.0
+        label = stat_label(stat)
+        # Gear-flat is defined here EXACTLY as `composed_stat_total` defines
+        # it -- by exclusion from the scaling/direct sets -- rather than by a
+        # second hand-listed set. Two lists of the same membership is how the
+        # Barrier finding ended up in one registry and not the other
+        # (incident #24), and this one would drift the moment a stat family
+        # is reclassified.
+        if stat in SCALING_STATS or stat in DIRECT_STATS:
+            total += add * 100 * CRAFT_WEIGHTS_PCT.get(label, 0.0)
+        else:
+            # incident #26: the homelab term on a gear-flat stat is credited
+            # as the raw fraction, ~90x less than the description implies.
+            total += add * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
+    return total
+
+
 def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     """Concrete jobs to put in free build slots / queue places, best first.
 
@@ -1924,6 +1981,7 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             "points": nxt.get("progress_points", 0),
             "hours": homelab_job_hours(info, nxt.get("duration_ticks") or 0),
             "cost": cost, "description": d.get("description") or "",
+            "score": homelab_upgrade_score(d),
         })
     for r in out:
         r["pts_per_hour"] = r["points"] / r["hours"] if r["hours"] else 0.0
@@ -1931,7 +1989,13 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
     # is not the only thing a slot buys -- see HOMELAB_PTS_TOLERANCE. Jobs
     # within the tolerance of the best point rate are re-ranked by the stat
     # they actually deliver; the rest keep the point ordering.
-    out.sort(key=lambda r: (-r["pts_per_hour"], -r["hours"]))
+    best = max((r["pts_per_hour"] for r in out), default=0.0)
+    cutoff = best * (1.0 - HOMELAB_PTS_TOLERANCE)
+    for r in out:
+        r["near_best"] = r["pts_per_hour"] >= cutoff
+        r["score_per_level"] = r["score"]
+    out.sort(key=lambda r: (not r["near_best"], -r["score"],
+                            -r["pts_per_hour"], -r["hours"]))
     return out[:limit]
 
 
@@ -2766,6 +2830,27 @@ def assumptions():
          "often a rank-2 base is actually the one crafted. If it is near "
          "zero the cap is right at 1 on evidence rather than on preference",
          "9 Aug 2026 (player override; benefit side measured 7 Aug)", None),
+        ("HOMELAB_PTS_TOLERANCE", HOMELAB_PTS_TOLERANCE, "asserted",
+         "how much homelab progress-point RATE to trade for a real combat "
+         "stat when filling a build slot. Introduced 9 Aug 2026 after the "
+         "player challenged a queue that was ranking purely on points: the "
+         "top job was Malware Sandbox at 297 pts/h, worth 0.005 score "
+         "(its '+0.5% Corruption' is credited as a raw-fraction addend on a "
+         "gear-flat stat, incident #26), while Mechanical Keyboard at 261 "
+         "pts/h -- 12% fewer points -- is worth 0.700, i.e. 140x. Four more "
+         "queued jobs bought basic resources, purchasable at ~2 cr/unit "
+         "against a 67.8B balance, i.e. worth zero. Within this tolerance of "
+         "the best point rate, stat value decides; outside it points still "
+         "do. NOT a measured exchange rate -- the honest one is points -> "
+         "depth via the install gate and nothing has measured it. 0.15 is "
+         "sized to span the observed menu (297 down to 260 pts/h) so the "
+         "choice is made across the real spread rather than inside an "
+         "arbitrary slice. TO MEASURE: time a gate arrival under each "
+         "ranking against the stat banked on the way. Note points are NOT "
+         "worthless -- L14 gates Overclock Controller, Thermal Budget and "
+         "DNS Sinkhole and L15 gates Rate Limiter and Route Planner, which "
+         "is why this is a tolerance and not a switch",
+         "9 Aug 2026 (asserted at introduction)", None),
         ("PROBE_MIN_MOVE", PROBE_MIN_MOVE, "asserted",
          "minimum target-family score movement for a swap to be admitted as "
          "a probe arm. Gates which measurements can run at all, so it is a "

@@ -470,8 +470,13 @@ def cmd_homelab(args):
             print("    nothing affordable left un-queued")
 
     print("\n  purchasable now (gate <= level, install present, below max),")
-    print("  by progress points per slot-hour (slot time, not cost, is the")
-    print("  binding constraint on progress while credits are plentiful):")
+    print("  ranked the way QUEUE ranks: progress points per slot-hour, but")
+    print("  jobs within HOMELAB_PTS_TOLERANCE of the best rate are ordered")
+    print("  by the STAT they deliver. `score` is on the CRAFT_WEIGHTS scale,")
+    print("  directly comparable to a gear affix and to `ih.py hardware` --")
+    print("  hardware %, homelab % and equipment % share one pool (§13).")
+    print("  score 0.000 is a real answer, not a missing one: resource and")
+    print("  gather-XP upgrades pay in currencies bought at ~2 cr/unit.")
     rows = []
     for u in ihlib.iter_homelab_upgrades(homelab, definitions):
         gate = u["def"].get("unlock_level", 0)
@@ -480,7 +485,11 @@ def cmd_homelab(args):
         hours = ihlib.homelab_job_hours(info, u["next"].get("duration_ticks") or 0)
         pts = u["next"].get("progress_points", 0)
         rows.append((pts / hours if hours else 0, hours, u))
-    for pts_hr, hours, u in sorted(rows, key=lambda r: -r[0]):
+    best_rate = max((r[0] for r in rows), default=0.0)
+    cutoff = best_rate * (1.0 - ihlib.HOMELAB_PTS_TOLERANCE)
+    rows.sort(key=lambda r: (r[0] < cutoff,
+                             -ihlib.homelab_upgrade_score(r[2]["def"]), -r[0]))
+    for pts_hr, hours, u in rows:
         d, nxt = u["def"], u["next"]
         section = install_names.get(u["install"], u["install"])
         queued = "  [QUEUED]" if d["type"] in queued_targets else ""
@@ -489,6 +498,7 @@ def cmd_homelab(args):
         print(f"    {d.get('name'):26s} L{u['level']}{maxed:<5} "
               f"+{nxt.get('progress_points', 0):>3}pts "
               f"{est}{hours:4.1f}h  {pts_hr:5.0f}pts/h  "
+              f"score {ihlib.homelab_upgrade_score(d):5.3f}  "
               f"{est}{ihlib.format_cost(nxt.get('cost'))}{queued}")
         print(f"        [{section}]  {(d.get('description') or '')[:80]}")
     upcoming = sorted({u["def"].get("unlock_level", 0)
