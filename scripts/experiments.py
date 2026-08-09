@@ -19,7 +19,8 @@ __all__ = [
     "PAYLOAD_AB_2026_07_23", "SHELL_AB_2026_07_23", "DRIVER_AB_2026_07_27",
     "FIREWALL_AB_2026_07_28", "PAYLOAD_AB_2026_07_30",
     "FIREWALL_AB_2026_07_31", "SHELL_AB_2026_07_31", "DRIVER_AB_2026_08_03",
-    "ROUTER_AB_2026_08_06", "SHELL_AB_2026_08_07", "ACTIVE_EXPERIMENT",
+    "ROUTER_AB_2026_08_06", "SHELL_AB_2026_08_07", "ROUTER_AB_2026_08_09",
+    "ACTIVE_EXPERIMENT",
     "RESERVED_PROBES",
 ]
 
@@ -637,7 +638,78 @@ SHELL_AB_2026_08_07["concluded"] = (
 # Bastioned Kernel of Mending craft, and cannot be written until the craft
 # resolves and its realized stat line is known -- declaring a baseline from
 # the treatment side is the error SHELL_AB_2026_08_07 documents avoiding.
-ACTIVE_EXPERIMENT = None
+ROUTER_AB_2026_08_09 = {
+    "name": "router-ab-2026-08-09",
+    "item": "Intangible Router of the Colossus",
+    "slot": "Router",
+    "revert_item": "Aggressive Router of the Undying",
+    # crafted from Intangible Router of Vitality and equipped between the
+    # 10:04:29Z and 10:08:23Z captures
+    "equip_ms": 1786270000000,          # 2026-08-09T10:06:40Z
+    # Baseline is deliberately TIGHT. The 213-death same-loadout window since
+    # the 7 Aug Shell equip spans two zones and max_hp 29,688-43,988 -- a 48%
+    # span, which `cohort_summary` flags as straddling a gear change. Narrowed
+    # to 9 Aug, data_center only, max_hp 43,480-43,873 (a 0.9% span), which is
+    # one continuous session on one loadout.
+    "baseline_deaths": [246, 242, 236, 231, 241, 240, 217, 239, 248, 247],
+    "baseline_recent_ms": 1786248000000,   # 2026-08-09T04:00Z
+    # Contamination reference only -- this craft barely touches Accuracy
+    # (+1.70pp at loadout, +0.36 score), so hit rate is a check, not a
+    # treatment metric. Pooled over the 720 streamed fights 09:07Z-10:06Z:
+    # the auto-stream was OFF from 08-08 11:06Z to 08-09 09:07Z, so no
+    # streamed fight exists for most of the baseline death window and this
+    # is the nearest same-loadout coverage there is. It sits entirely on the
+    # POST-ECC side of the declared segment. `pm` flags first-attack misses
+    # only (data-dictionary.md), so 72.20% is the biased first-attack rate
+    # and is comparable only against the same statistic.
+    "baseline_hits": (31026, 11949),
+    # ECC Memory L217 -> L227 (~164K chips) landed between the 09:06Z and
+    # 10:04Z captures, i.e. INSIDE the pre-equip window. The three deaths at
+    # 09:23 / 09:42 / 10:01 (240, 237, 243, mean 240.0) may carry it and are
+    # excluded from `baseline_deaths` above rather than silently pooled.
+    # Declared BEFORE any post-equip death was scored.
+    "segment_ms": 1786259179000,        # 2026-08-09T09:06:19Z
+    "segment_label": "the ECC Memory L217->L227 buy (~+2% Regen)",
+    "target_deaths": 12,
+    # Predicted +14.33 +- 1.97 by the 6-run CI/CD pair run 10:08Z (3/arm,
+    # arms identified from player_combat_stats: Regen 1964.2 -> 2316.5,
+    # MaxHP 43,988 -> 48,118, Def 3914.5 -> 3801.7). Baseline sd is 8.7, so
+    # 12 deaths give SE ~2.5 and resolve that effect at ~5.7 sigma.
+    "keep_rule": "KEEP if mean death streak >= 244.0 (baseline 238.7 + 5.3, "
+                 "~2 SE) over 12 deaths; REVERT if mean <= 234.0. "
+                 "Contamination: cadence within ~2% of the era value, zone "
+                 "stays data_center, and the declared ECC segment is read "
+                 "separately if it lands on the wrong side.",
+    "predictions": [
+        "(1) THE HEADLINE DISAGREEMENT, pre-registered because it is the most "
+        "informative thing in this window: the score model predicts +21.1 "
+        "streaks (total +105.4 score at beta_Regen 0.200) and the Regen law "
+        "alone predicts +19.6 (+165 item-flat x 0.119), but the CI/CD pair "
+        "measured only +14.33 +- 1.97. The model over-predicts the sim by "
+        "~7 streaks, ~3.5 SE. If live lands near 253 the sim is wrong; if it "
+        "lands near 258 the model is right and the sim under-reads; if it "
+        "lands near 253 the two agree and the SCORE MODEL is over-predicting "
+        "at this Regen level -- which is what the 28 Jul diminishing-returns "
+        "amendment predicts and has never been tested forward.",
+        "(2) Regen realization: composed Regen 1964.2 -> 2316.5 (+17.9%). "
+        "Realized prg/round at streak >=60 should rise from the 445.2 "
+        "measured at the Shell close toward ~500, LESS than proportional if "
+        "the depth-dependent overheal cap is real.",
+        "(3) Defense fell 3914.5 -> 3801.7 (-2.9%), the first mitigation cut "
+        "since the Shell craft. Damage taken per round at matched streak "
+        "band should rise ~1-3%. If it rises materially more, the linear Def "
+        "weight is under-penalizing mitigation loss.",
+        "(4) FREE MaxHP BOUND, and currently the only one obtainable: MaxHP "
+        "rose 43,988 -> 48,118 (+9.4%) inside a Regen-positive bundle. "
+        "MaxHP is ASSERTED at 0.5, never validated, and `audit` reports "
+        "PROBE-GONE -- no owned item is a pure enough lever to measure it. "
+        "So this window is a bound, not a fit, and it is bracketed the same "
+        "way the 31 Jul / 1 Aug pair bracketed it.",
+    ],
+}
+
+
+ACTIVE_EXPERIMENT = ROUTER_AB_2026_08_09
 
 
 # ---------------------------------------------------------------------------
@@ -674,6 +746,11 @@ RESERVED_PROBES = [
     {
         "family": "ArmorPen",
         "arms": 2,
+        "concluded": "RESOLVED 9 Aug 2026 — the 12-run Analyzer pair read "
+                     "-11.22 +- 1.76 streaks and, pooled with the 8 Aug craft "
+                     "pair, fit 0.045 +- 0.006 against an applied 0.068 "
+                     "(3.6 sigma). Weight refit and the PENDING_REFITS row "
+                     "closed in the same session. Arms released.",
         "reason": "the one KNOWN-WRONG constant in PENDING_REFITS: "
                   "CRAFT_WEIGHTS_FLAT[ArmorPen] applies 0.068 (Regen's beta "
                   "0.200) against a measured 0.116-0.132 off the 8 Aug "
@@ -684,8 +761,7 @@ RESERVED_PROBES = [
                    "par.21): one 12-run CI/CD block, 6 runs/arm, arms "
                    "differing in ArmorPen with the other families subtracted "
                    "at their own betas",
-        "concluded": None,
-    },
+        },
     {
         "family": "MaxHP",
         "arms": 2,

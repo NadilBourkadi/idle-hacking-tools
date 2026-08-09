@@ -341,7 +341,7 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
     # stat at 16.2-22.9 it is a stable 4.88-5.82 damage/round per point, i.e.
     # ~1.04% of the ~530/round output per point -> 0.7 x 1.04 = 0.7. Linear in
     # the FITTED RANGE 16-23 only; above ~25 remains extrapolation.
-    "Regen": 0.6, "Corrupt": 1.0, "ArmorPen": 0.068,
+    "Regen": 0.6, "Corrupt": 1.0, "ArmorPen": 0.045,
     # Barrier REFIT 0.043 -> 0.0088 on 8 Aug 2026 by the dedicated CI/CD pair
     # (open-questions par.22 design, pre-registered predictions). 0.043 was a
     # correct measurement of the WRONG QUANTITY: +1 Barrier really is +1.0
@@ -384,41 +384,22 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 # Striking, realized +64.7 vs projected +80.6) -- and both bands were
 # re-derived to +/-16 the same session. See the bands' own provenance rows.
 PENDING_REFITS = [
-    # The weights are per-stat SCORE. Turning score into DEATH-STREAK DEPTH
-    # needs a per-family conversion, and the two families measured so far
-    # differ by ~4.6x: Regen ~5.0 score/streak (CI/CD pair, 6 Aug 2026) vs
-    # Barrier >=23 score/streak (open-questions.md par.15 — a +44.0-score,
-    # Barrier-carried Driver craft read -0.58 +- 1.03 simulated streaks AND
-    # ~+1.9 +- 2 live). Any ranking that sums score ACROSS families therefore
-    # over-weights Barrier-carried options, and `hardware_plan` does exactly
-    # that: at the 7 Aug 2026 161K-chip balance it put 154K (96%) into Packet
-    # Shield, the Barrier track, over ECC Memory (Regen) — a ranking that
-    # inverts once score is converted to depth.
-    # BARRIER ROW CLOSED 8 Aug 2026 — the 12-run Daemon pair (par.22) measured
-    # beta_Barrier = 0.041 +- 0.024 against Regen's 0.200 and the weight was
-    # refit 0.043 -> 0.0088 in the same change. That is what closing a row
-    # looks like: the conversion is folded INTO the weight, so summed score
-    # stays depth-commensurate and the conversion stays 1.0 everywhere.
+    # EMPTY, and that is the intended steady state -- a row here means the
+    # numbers this tool prints are already known to be false.
     #
-    # The same programme left ArmorPen suspect, so the register does not go
-    # empty — it narrows to the one family that now has evidence against it.
-    {
-        "name": "CRAFT_WEIGHTS_FLAT[ArmorPen] (score -> depth conversion)",
-        "applied": "0.068, i.e. converting at Regen's rate (beta 0.200)",
-        "opened": "2026-08-08",
-        "blocked_on": "the only ArmorPen measurement is the 8 Aug Analyzer "
-                      "craft pair, where ArmorPen carries 81% of the delta "
-                      "rather than all of it — beta reads 0.116-0.132 against "
-                      "Regen's 0.200 (~0.6x), enough to call 0.068 wrong but "
-                      "not enough to fit a replacement off one mixed bundle",
-        "unblock": "a dedicated CI/CD pair on an ArmorPen-only lever, the "
-                   "par.22 design applied to ArmorPen: 6 runs/arm, fit beta "
-                   "after subtracting the other families. Cheap now that the "
-                   "method is established — it shares a control arm with any "
-                   "other pair run the same day (open-questions par.21)",
-    },
+    # BARRIER ROW CLOSED 8 Aug 2026: the 12-run Daemon pair (par.22) measured
+    # beta_Barrier = 0.041 +- 0.024 against Regen's 0.200 and the weight was
+    # refit 0.043 -> 0.0088 in the same change.
+    #
+    # ARMORPEN ROW CLOSED 9 Aug 2026: the 12-run Analyzer pair par.21 asked
+    # for read -11.22 +- 1.76 streaks, and pooling it with the 8 Aug craft
+    # pair fits 0.045 +- 0.006 against an applied 0.068 -- 3.6 sigma. Refit in
+    # the same session the block landed.
+    #
+    # Both closures fold the conversion INTO the weight rather than carrying a
+    # separate per-family score->depth factor, so summed score stays
+    # depth-commensurate and the conversion stays 1.0 everywhere.
 ]
-
 
 def cohort_summary(rows, label="cohort", ms_key="seen_ms", item=None):
     """Print a cohort's OWN boundaries before any statistic is computed from it.
@@ -1180,21 +1161,70 @@ def deepen_search(item, ladders, phases, floor=COMPILE_FLOOR, preserve=0.0,
     value for 0.7 of p10 and an identical worst case**. The player had already
     beaten the contract this way twice before it was modelled.
 
-    Returns [(phases, sim)] ranked by mean, best first.
+    ONE-PHASE-AT-A-TIME WAS THE BUG, and it took two beatings to see. Until
+    9 Aug 2026 this searched only single-phase deepenings of `plan_craft`'s
+    plan -- `cand[i] = ...`, one index, from the base plan every time. So the
+    deepest thing it could ever propose was "the contract, with one phase
+    pushed". The player has now beaten it twice by pushing MORE THAN ONE:
+    31 Jul (Shell, Vital prefix T9->T4 against a contracted T8) and 9 Aug
+    (Router, `of Vitality` T9->T5 on top of two phases already at T1).
+
+    HONEST SCOPE, because the first draft of this docstring overclaimed and
+    the fixed search immediately refuted it: the 9 Aug Router realized +105.4
+    against a +79.5 projection, and it is TEMPTING to call that the blind
+    spot. It is not. Once reachable, the executed T1/T1/T5 plan models at
+    mean +79.6 -- indistinguishable from the contracted T1/T1/T8's +79.5. So
+    that error was variance inside a correctly-stated interval, and this fix
+    does not explain it. What the fix buys is that the plan the player
+    actually ran is now PROPOSABLE rather than only reachable by hand.
+
+    That is the "repeated successful deviation is a defect report" rule
+    firing, and on 31 Jul it was logged as "noted, not yet re-engineered".
+    It is now engineered: GREEDY ROUNDS. Each round applies the best single
+    deepening found and searches again FROM THERE, so multi-phase plans are
+    reachable, at O(rounds x phases x depths) sims rather than the
+    cross-product's exponential blowup. Rounds stop when no deepening
+    improves the mean, so a plan already at its best costs one extra round.
+
+    Returns [(phases, sim)] ranked by mean, best first -- every plan visited
+    across every round, so the caller still sees the shallow options.
     """
-    base = [(name, tier) for name, tier in phases]
-    seen, out = set(), []
-    for i in range(len(base)):
-        for deeper in range(0, max_deepen + 1):
-            cand = list(base)
-            cand[i] = (base[i][0], max(1, base[i][1] - deeper))
-            key = tuple(cand)
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append((cand, simulate_contract(item, ladders, cand, floor=floor,
-                                                preserve=preserve, trials=trials,
-                                                **kw)))
+    def sim_of(cand):
+        return simulate_contract(item, ladders, cand, floor=floor,
+                                 preserve=preserve, trials=trials, **kw)
+
+    current = [(name, tier) for name, tier in phases]
+    # The shallow plan must always be offered: deepening is bounded-downside,
+    # not free, and the caller compares against it.
+    seen, out = {tuple(current)}, [(list(current), sim_of(current))]
+    for _round in range(max(1, len(current))):
+        # Each round advances to the best STRICTLY DEEPER candidate, even if
+        # its mean is no better. Stopping on "no single push improves the
+        # mean" (the first version) converged after one round on any plan
+        # whose next push is flat, which is the common case -- and that is
+        # precisely the single-index behaviour this function was rewritten to
+        # escape. Exploring further is free: every plan visited is returned
+        # ranked by mean, so a worse candidate cannot displace a better one,
+        # it only costs sims. That asymmetry is the same one the docstring
+        # gives for deepening at all -- bounded cost, unbounded upside.
+        best_gain, best_cand = None, None
+        for i in range(len(current)):
+            for deeper in range(1, max_deepen + 1):
+                cand = list(current)
+                cand[i] = (current[i][0], max(1, current[i][1] - deeper))
+                if tuple(cand) == tuple(current):
+                    continue        # already at T1, nothing deeper to try
+                key = tuple(cand)
+                if key in seen:
+                    continue
+                seen.add(key)
+                sim = sim_of(cand)
+                out.append((cand, sim))
+                if best_gain is None or sim["mean"] > best_gain:
+                    best_gain, best_cand = sim["mean"], cand
+        if best_cand is None:
+            break                   # every phase bottomed out at T1
+        current = best_cand
     out.sort(key=lambda r: -r[1]["mean"])
     return out
 
@@ -1306,11 +1336,27 @@ def hardware_track_depth_note(definition):
 # slot) were both rank > 1, produced NO output at all because the list is
 # delta-only and they were already unlocked, and were decompiled.
 #
-# Leg 3's price has also collapsed: inventory is 23/102 after that sweep, so
-# holding a second base per slot is currently free. Re-examine if inventory
-# pressure returns -- but note the correct comparison is the replacement time
-# of a base of EQUAL QUALITY, never the raw keeper arrival rate.
-KEEP_DEPTH_PER_SLOT = 2
+# LOWERED 2 -> 1 on 9 Aug 2026, by the player, on a cost the 7 Aug derivation
+# never had. That derivation priced only the BENEFIT side (how long a base of
+# equal quality takes to replace) and assumed leg 3's price had "collapsed"
+# because inventory was 23/102. Inventory is now 102/102, and two further
+# costs are real:
+#
+#   - every hold is MANUAL. Locking and unlocking ~30 items by hand, daily,
+#     against a craft rate of about one per day, is most of the effort this
+#     tooling exists to remove.
+#   - holding suppresses the drops that obsolete the holdings. A full
+#     inventory blocks fresh drops, and fresh drops are what make a held
+#     rank-2 base worthless -- so depth partly pays for itself in the wrong
+#     direction.
+#
+# The 6.8-day replacement figure is NOT retracted; it is simply no longer the
+# only term. What made depth 1 dangerous in the first place was not the depth,
+# it was the SILENCE -- a cap-surplus base produced no line of output. The AT
+# RISK block (7 Aug) fixed that, so depth 1 today is a different proposition
+# from depth 1 then. Escalate to 2 only for a slot where a specific craft is
+# planned against a specific runner-up.
+KEEP_DEPTH_PER_SLOT = 1
 
 
 def inventory_pressure(capture):
@@ -1643,10 +1689,34 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     for row in candidates:
         row.setdefault("slot_rank", None)
 
+    # A SECOND ranking, on the OPTIMISTIC reading, used only to cap the
+    # contested hold. Until 9 Aug 2026 a contested item was held regardless of
+    # where it ranked in its slot, so the hold was unbounded: it lasted until
+    # the flagged weight resolved, and for MaxHP no instrument to resolve it
+    # is even owned. That is what put ~30 items under manual management when
+    # the player crafts about one a day.
+    #
+    # The disagreement only MATTERS if winning it would make the item a
+    # keeper. A base that is rank 6 in its slot even under the reading that
+    # flatters it is not being kept either way, so holding it protects
+    # nothing and costs a slot at 102/102. Ranked on `discard_worth`
+    # (= max(raw, ex_suspect)) so the cap is applied at the item's best case,
+    # never at the disputed one.
+    optimistic = [r for r in candidates if r["discard_worth"] > UPGRADE_BAND]
+    optimistic.sort(key=lambda r: -r["discard_worth"])
+    orank = {}
+    for row in optimistic:
+        orank[row["slot"]] = orank.get(row["slot"], 0) + 1
+        row["optimistic_rank"] = orank[row["slot"]]
+    for row in candidates:
+        row.setdefault("optimistic_rank", None)
+
     for row in candidates:
         real_keeper = row["slot_rank"] is not None
         in_depth = real_keeper and row["slot_rank"] <= per_slot
-        contested = is_contested(row["raw"], row["ex_suspect"])
+        contested = (is_contested(row["raw"], row["ex_suspect"])
+                     and row["optimistic_rank"] is not None
+                     and row["optimistic_rank"] <= per_slot)
         if row["protected"]:
             # Held for the GATE, never discarded -- but an UNLOCKED revert path
             # is one sweep from deletion, so it must surface as a LOCK action.
@@ -1690,7 +1760,9 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                 f"CONTESTED: raw {row['raw']:+.1f} vs ex-suspect "
                 f"{row['ex_suspect']:+.1f} — the verdict flips on "
                 f"{'/'.join(row['suspect_labels'])}, so it is left locked. "
-                f"Resolved by the PENDING_REFITS unblock, not by guessing")
+                f"Resolved by measuring that family, not by guessing — see "
+                f"SUSPECT_WEIGHTS and `ih.py audit` for whether an instrument "
+                f"for it is even owned")
             contested_rows.append(row)
         elif contested and not row["locked"]:
             # "No action on disagreement" was STATUS-QUO BIASED, and for a
@@ -1759,16 +1831,17 @@ def _lock_reason(raw, ex_suspect, labels, slot_rank=None, slot=None,
     """
     worth = min(raw, ex_suspect) if worth is None else worth
     if worth > UPGRADE_BAND and slot_rank and slot_rank > per_slot:
-        # NOT "0.92 keepers/day arrive", which this string used until 8 Aug
-        # 2026. That rate counts every band-clearing base and treats them as
-        # interchangeable -- incident #23, the measured constant justified by
-        # the wrong quantity, restated here as the reason to DELETE something.
-        # The quantity `per_slot` is actually sized on is how long a base of
-        # EQUAL quality takes to replace: top-decile ~6.8 days.
+        # This string has now been wrong TWICE by naming whichever single
+        # quantity the cap was last argued from -- "0.92 keepers/day" until
+        # 8 Aug, then "replaced every 6.8 days" until 9 Aug, when the cap
+        # moved on a cost neither figure mentions (manual lock effort, and
+        # holdings blocking the drops that obsolete them). So it no longer
+        # asserts a derivation at all: it states the RANK, which is the
+        # actual reason, and points at the constant for the argument.
         return (f"clears the band ({worth:+.1f}) but is only #{slot_rank} in "
-                f"{slot}, outside the depth cap of {per_slot} — a base of "
-                f"this quality is replaced about every 6.8 days, which is "
-                f"what the cap is sized on")
+                f"{slot}, outside the depth cap of {per_slot} — "
+                f"see KEEP_DEPTH_PER_SLOT in `ih.py assumptions` for what "
+                f"the cap trades off")
     if labels and raw > UPGRADE_BAND >= ex_suspect:
         return (f"raw {raw:+.1f} rests on {'/'.join(labels)} — "
                 f"only {ex_suspect:+.1f} without it")
@@ -1854,8 +1927,10 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
         })
     for r in out:
         r["pts_per_hour"] = r["points"] / r["hours"] if r["hours"] else 0.0
-    # points per tick is the scarce-resource ranking; total points only breaks
-    # ties, since a longer job buffers more unattended work at the same rate.
+    # Points per tick is the scarce-resource ranking for GATE progress, but it
+    # is not the only thing a slot buys -- see HOMELAB_PTS_TOLERANCE. Jobs
+    # within the tolerance of the best point rate are re-ranked by the stat
+    # they actually deliver; the rest keep the point ordering.
     out.sort(key=lambda r: (-r["pts_per_hour"], -r["hours"]))
     return out[:limit]
 
@@ -2566,15 +2641,31 @@ def assumptions():
          "hit damage. A +1pp affix is additive on that multiplier and, at a "
          "crit rate of 0.256, moves output only +0.214%", "29 Jul 2026", None),
         ("CRAFT_WEIGHTS_FLAT[ArmorPen]", f["ArmorPen"], "measured",
-         "VALIDATED 29 Jul 2026 -- the inherited guess was right. The damage "
-         "law dmg = Atk*K/(K+Def-AP) with K~205 (fitted independently on both "
-         "directions, K=190.2 outgoing / 219.3 incoming) prices +97 ArmorPen "
-         "(10 -> 107) at +6.1% output vs enemy Defense 1,500 and +7.0% vs "
-         "1,300, i.e. 0.044-0.051 per point on the AtkDmg=0.7 scale against an "
-         "applied 0.05. Fitted range: enemy Defense 743-1,990, our ArmorPen 10. "
-         "Extrapolating to very high ArmorPen is NOT covered -- the law is "
-         "convex, so value per point RISES as ArmorPen approaches enemy "
-         "Defense", "29 Jul 2026", None),
+         "RE-FIT 0.068 -> 0.045 on 9 Aug 2026, and the headline is that TWO "
+         "INDEPENDENT METHODS NOW AGREE. Depth fit: the dedicated 12-run "
+         "CI/CD pair par.21 called for (Analyzer -898 flat ArmorPen against "
+         "-9.2 signed other score) read -11.22 +- 1.76 streaks; pooled with "
+         "the 8 Aug Analyzer craft pair (+9.95 +- 1.54 on +61.1 ArmorPen "
+         "score) it fits 0.045 +- 0.006. The two pairs agree at 0.99 sigma "
+         "and the applied 0.068 sits 3.58 sigma outside. Damage-law fit, "
+         "29 Jul 2026, entirely separate instrument: dmg = Atk*K/(K+Def-AP) "
+         "with K~205 (fitted on both directions, K=190.2 outgoing / 219.3 "
+         "incoming) prices +97 ArmorPen at +6.1% output vs enemy Defense "
+         "1,500 and +7.0% vs 1,300 -- 0.044-0.051 per point on the AtkDmg=0.7 "
+         "scale. 0.045 sits inside that range. Implied beta_ArmorPen = 0.132 "
+         "streaks per score point against Regen's 0.200, i.e. ArmorPen buys "
+         "0.66x the depth per score point; folding that into the weight keeps "
+         "the conversion 1.0 everywhere (the Barrier precedent). "
+         "PROVENANCE WARNING worth keeping: 0.068 entered on 31 Jul 2026 "
+         "inside a large multi-purpose commit, with NO supporting fit, while "
+         "this very row went on describing the 29 Jul measurement that "
+         "supports 0.05 -- the register contradicted its own applied value "
+         "for nine days and nothing read the two together. Fitted range: "
+         "enemy Defense 743-1,990. The damage law is CONVEX, so value per "
+         "point rises as ArmorPen approaches enemy Defense; both depth pairs "
+         "were run at our ArmorPen ~1,029 and both in Data Center, so the "
+         "fit is regime-local in zone",
+         "9 Aug 2026 (re-fit, two methods agreeing)", None),
         ("CRAFT_WEIGHTS_FLAT[Thorns]", f["Thorns"], "measured",
          "RE-FIT 0.05 -> 0.13, 29 Jul 2026 -- the inherited guess was ~2.5x "
          "TOO LOW. Thorns is exact: `ptd` = 72.08 per enemy hit that lands, "
@@ -2653,23 +2744,28 @@ def assumptions():
          "Superseded the retired 0.532/1.208 pm-biased fit. Unregistered "
          "until 7 Aug 2026",
          "29 Jul 2026", None),
-        ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "measured",
+        ("KEEP_DEPTH_PER_SLOT", KEEP_DEPTH_PER_SLOT, "asserted",
          "how many craft bases to hold per slot; decides IRREVERSIBLE "
-         "decompiles. RAISED 1 -> 2 on 7 Aug 2026 because its original "
-         "load-bearing leg measured the WRONG QUANTITY. That leg was "
-         "'band-clearing bases arrive 0.92/day and are crafted young "
-         "(median age 1.2d)', which treats every base over UPGRADE_BAND as "
-         "INTERCHANGEABLE. Scoring every base in the archive by arrival "
-         "date, the Analyzer slot takes in a band-clearing base every 0.9 "
-         "days but a TOP-DECILE one (keep_worth >= 46.5) only every 6.8 -- "
-         "so depth 1 discarded rank-2 bases whose real replacement time was "
-         "~7x what the justification claimed. It cost four bases the day it "
-         "shipped, including the highest-raw base owned (+121.2). The right "
-         "comparison is the replacement time of a base of EQUAL QUALITY, "
-         "never the raw keeper arrival rate. Inventory pressure (10 hc/slot) "
-         "only prices it and has collapsed at 23/102; max_slots is soft "
-         "anyway -- seven 5 Aug captures held 103 against a max of 102",
-         "7 Aug 2026 (re-derived)", None),
+         "decompiles. Provenance DOWNGRADED measured -> asserted on 9 Aug "
+         "2026, which is the honest label: the value is now a trade-off "
+         "between two things only one of which was ever measured. "
+         "MEASURED side (7 Aug): a base of EQUAL quality takes ~6.8 days to "
+         "replace in the measured slot -- top-decile keep_worth >= 46.5 -- "
+         "NOT the 0.92/day at which any band-clearing base arrives, which "
+         "counts them as interchangeable and was the wrong quantity "
+         "(incident #23). That leg argued 1 -> 2 and still does. "
+         "UNMEASURED side (9 Aug, player): holding is MANUAL, and ~30 hand-"
+         "managed locks against a craft rate of ~1/day is most of the effort "
+         "this tooling exists to remove; and holdings occupy inventory at "
+         "102/102, blocking the fresh drops that are what make a held rank-2 "
+         "base worthless. Neither has ever been quantified. Lowered to 1. "
+         "The 7 Aug incident that argued for depth 2 was depth 1 *plus "
+         "silence* -- cap-surplus bases produced no output and four were "
+         "decompiled unnoticed; the AT RISK block closed that, so depth 1 "
+         "now is not depth 1 then. TO MEASURE the missing side: count how "
+         "often a rank-2 base is actually the one crafted. If it is near "
+         "zero the cap is right at 1 on evidence rather than on preference",
+         "9 Aug 2026 (player override; benefit side measured 7 Aug)", None),
         ("PROBE_MIN_MOVE", PROBE_MIN_MOVE, "asserted",
          "minimum target-family score movement for a swap to be admitted as "
          "a probe arm. Gates which measurements can run at all, so it is a "
