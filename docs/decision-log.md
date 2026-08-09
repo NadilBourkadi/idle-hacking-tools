@@ -1570,3 +1570,77 @@ membership fails on success.
 budget went 20/20 to the two Data Center blocks, so **every β in this workspace
 is still fitted in one zone** and regime-locality remains untested. That is the
 standing caveat on all three figures.
+
+## 9 August 2026 — probe arms became a code-level hold; Router craft approved over a larger Firewall
+
+**Craft APPROVED: `Intangible Router of Vitality` [Router]**, deepened and
+ordered — `of Recovery [suffix_regeneration]` T8→T1, then
+`of Recovery [suffix_adaptive_shell]` T8→T1, then `of Vitality` T9→T8.
+**mean +79.5 / p10 +43.0 / p90 +115.8 / P(Δ>+5) 96.9%**; calibration row
+recorded (first grade under `uncapped+floor2+archive+scalefit+betaBarrier`, an
+era with zero graded crafts). `P(all phases complete)` is 27% and deliberately
+ignored — an over-committed plan that runs out of Stability simply stops.
+
+**It was chosen over a much larger headline, and the reason is the guardrail.**
+`Intangible Firewall of Restoration` reads +121.1 at ceiling and its contract
+means +111.4. But 75.1 of that leans on Corrupt/MaxHP, and the ex-suspect
+re-plan that replaces them (+87.6) buys **ArmorPen +44.5% at loadout** — i.e.
+the disbelieving reading rests on the one constant `PENDING_REFITS` says is
+wrong, and wrong *high*. At loadout level the three candidates read:
+
+| candidate | Def | Regen | MaxHP |
+|---|---|---|---|
+| Intangible Firewall of Restoration | −10.4% | +6.6% | −2.0% |
+| Aligned Router of Restoration | −10.7% | +10.8% | −4.4% |
+| **Intangible Router of Vitality** | **−7.0%** | **+13.3%** | **+1.0%** |
+
+The Router-Vitality craft is the only one of the three that spends no sustain
+anchor (`mechanics.md` §21), and it carries **zero suspect exposure** — its
++67.8 is Regen +73.5 against Def −9.1, and Regen is the family with a measured
+β and three out-of-sample forward tests. The Firewall is held, not rejected:
+re-price it after the ArmorPen block below.
+
+**A reservation that had quietly emptied.** `candidate-status.md` named five
+items as reserved CI/CD probe arms. Checking all five against the capture:
+**none of them still exist.** Nothing in the code had ever read that sentence,
+so the reservation could not survive an inventory turnover — and the MaxHP pair
+went with it, while `CRAFT_WEIGHTS_PCT[MaxHP] = 0.5` remains the largest
+ASSERTED term in the model.
+
+It was still live. `Targeted Analyzer of Light Speed` — purity 6.6, the
+second-cleanest ArmorPen lever owned — sat at **position 5 on today's
+UNLOCK+decompile list**, and ArmorPen is the sole `PENDING_REFITS` row whose
+named unblock is a CI/CD pair on exactly such a lever. Found while picking the
+arm for that block, not by reading code.
+
+Fixed in the same session (PR #9): reservations are declared in
+`experiments.py::RESERVED_PROBES` **by stat family, never by item name**, and
+`ihlib.probe_levers` re-picks the best owned lever against every capture — a
+name list is a model fitted on currently-owned state and rots exactly as such
+models do. `lock_actions` now holds instruments on the same footing as A/B
+revert paths (both score as junk *by construction*, which is why value ranking
+always condemns them), and `audit` gained `PROBE-LOOSE` / `PROBE-GONE`.
+**`PROBE-GONE` fires for MaxHP today** — nothing owned clears the purity floor,
+so that measurement now waits on a drop rather than on a decision. Incident #27.
+
+Two review findings on my own diff, fixed before the PR: `top=0` returned every
+lever rather than none (a mis-declared `arms: 0` would have protected the whole
+inventory from decompile), and `min_move` was an unregistered tunable hiding in
+a default argument — `AssumptionsRegistryTest` only inspects module-level
+constants, which is how it passed a green suite. Both `PROBE_MIN_MOVE` and
+`PROBE_MIN_PURITY` are registered **asserted**; the purity floor's only
+calibration point is par.22's Barrier lever at 4.1, so the region 1.0–4.0 is
+unvalidated.
+
+**Hardware: the recommendation branches on the known-wrong weight, so it is
+split rather than hedged.** `hardware_plan` at the 282,370-chip balance puts
+161,591 into ECC Memory (L217→L227) and 117,023 into Exploit Framework
+(L11→L66) — but Exploit Framework *is* the pure `armor_penetration` track, so
+that second line is priced by the constant under refit. Re-running the plan at
+ArmorPen 0.068 / 0.045 / 0.030 moves the Exploit allocation 117K → 55K → 24K
+while **ECC is bought in every case**. So ECC ships today and the remainder
+waits hours, not days, for the block. Separately confirmed: the monthly reset's
+refund tracks cumulative spend (3,261,083 chips of levels held against a
+~3.24M refund preview, `reset_preview_loss` all zeros), so hardware chips are
+**recoverable**, which is what makes buying into an open question tolerable at
+all.

@@ -38,6 +38,7 @@ owns it is not negotiable in that moment. Argue with it afterwards, in writing.
 | 23 | **A measured constant justified by the wrong quantity** — `KEEP_DEPTH_PER_SLOT = 1` | "0.92 band-clearing keepers/day" counts everything over the band and treats those bases as interchangeable. Top-decile bases arrive every 6.8 days, not daily, so depth 1 discarded rank-2 bases whose real replacement time was ~7x its own justification | *Check that the rate you measured is the rate the decision needs* |
 | 24 | **One finding kept in two registries, one of them unread by most callers** — the Barrier score→depth result lived in `DEPTH_SUSPECT_STATS` (hardware only) and not in `SUSPECT_WEIGHTS` (crafts, locks, contracts) | `hardware` printed the caveat while the craft board three sections above it ranked Barrier at face value in the same `brief`. Brutal Driver of Hardening read +57.0 raw / −6.4 ex-suspect; Leviathan's Firewall of Isolation +98.8 → −120.6 | *Build the second opinion*; merge, never synchronise |
 | 25 | **A disbelieved weight was applied to the scoring but not to the PLAN** — `locks` re-scored the raw-optimal craft plan ex-suspect | that plan spends Stability where the flagged family scores highest, so the ex-suspect number priced a contract nobody would run. It released the best Analyzer base owned to the deletion list at +43.4 (true ex-suspect value +70.9) in the same advisory where `potential` called it best in slot | *If you disbelieve a weight, re-optimise under the disbelief — do not just re-score* |
+| 27 | **A by-name hold that lived only in prose** — five items reserved as CI/CD probe arms in `candidate-status.md`, read by no code | `lock_actions` and `audit` had never read that sentence, so the reservation could not survive an inventory turnover. All five arms were gone by 9 Aug, the MaxHP pair among them — and MaxHP is still the largest ASSERTED term in the model, still waiting on the block those arms existed to run. `Targeted Analyzer of Light Speed`, the replacement ArmorPen lever, was at position 5 on the same day's decompile list | *Declare holds in code, by the standing question, never by item name* |
 | 26 | **A stat family's formula assumed from its siblings** — the homelab term put in the pool for gear-flat stats | wrong by +0.35% the moment a gear-flat stat first carried one, in 159 captures. The game credits the raw fraction as a flat addend, so "+0.5% Corruption" delivers +0.005 — ~90× less than the description, and a homelab upgrade recommended for its stat is worth nothing | *Self-validate against the game's own totals* |
 
 ## What the shape of this list says
@@ -52,9 +53,10 @@ checking whether it had ever been measured (#3, #4, #5, #6, #7, #13, #18, #19,
 #21). That is why `ih.py assumptions` runs before any verdict resting on a
 weight, and why the register is the first thing `audit` prints.
 
-**Four are duplication** (#15, #16, #21, #24): the same fact computed, written
+**Five are duplication** (#15, #16, #21, #24, #27): the same fact computed, written
 or registered in two places, drifting apart. Prefer one implementation with two
 callers, and prefer pointing at a command over restating its output. #24 is the
 sharpest form — the two copies never drifted, one was simply never consulted by
 the callers that needed it, so both were individually correct and the advice was
-still wrong.
+still wrong. #27 is the limiting case: the second copy was prose, so there was
+never anything for a caller to consult at all.
