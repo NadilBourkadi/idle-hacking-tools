@@ -780,6 +780,139 @@ class RevertPathProtectionTest(unittest.TestCase):
         ihlib.protected_revert_items()
 
 
+class ReservedProbeArmTest(unittest.TestCase):
+    """Guards gear held as an INSTRUMENT rather than as a craft base.
+
+    A probe arm is chosen for what it ISOLATES, so `plan_craft` scores it as
+    junk by construction and value-based lock advice sorts it into the
+    discard pile. Before 9 Aug 2026 the reservation was a sentence in
+    docs/candidate-status.md naming five items; nothing in the code read it,
+    the inventory turned over, and all five were gone — the MaxHP pair among
+    them, with MaxHP still the largest ASSERTED term in the model.
+    """
+
+    SLOT = "acc1"          # SLOT_DISPLAY maps the equipment keys, not slugs
+
+    @classmethod
+    def _item(cls, name, locked=False, armor_pen=0.0, defense=0.0,
+              slot=None):
+        effects = []
+        if armor_pen:
+            effects.append({"resource": "armor_penetration",
+                            "type": "flat_add", "value": armor_pen})
+        if defense:
+            effects.append({"resource": "defense",
+                            "type": "percent_add", "value": defense})
+        return {"name": name, "slot": slot or cls.SLOT,
+                "decompile_locked": locked, "item_level": 1000,
+                "stability": 25, "max_normal_affixes": 6, "max_prefixes": 3,
+                "max_suffixes": 3, "prefixes": [],
+                "suffixes": [{"name": "of Puncturing", "tier": 9,
+                              "affix_id": "suffix_armor_pen",
+                              "effects": effects}]}
+
+    def _capture(self, inventory, equipped_armor_pen=900.0):
+        return {"state": {
+            "equipmentData": {
+                self.SLOT: self._item("Equipped", True,
+                                      armor_pen=equipped_armor_pen)},
+            "inventoryData": {"max_slots": 100, "items": inventory},
+            "homelabInfo": {}}}
+
+    PROBE = [{"family": "ArmorPen", "arms": 1, "reason": "r",
+              "unblock": "u", "concluded": None}]
+
+    def test_pure_lever_outranks_a_bigger_but_dirtier_one(self):
+        # `Dirty` moves ArmorPen further, but drags Defense with it. par.22
+        # ranks on the RATIO, because the other families have to be
+        # subtracted at their own betas and that subtraction is the error.
+        cap = self._capture([
+            self._item("Clean", True, armor_pen=300.0),
+            self._item("Dirty", True, armor_pen=0.0, defense=0.60)])
+        levers = ihlib.probe_levers(cap, "ArmorPen", top=2)
+        self.assertEqual(levers[0]["name"], "Clean")
+        self.assertGreater(levers[0]["purity"], levers[1]["purity"])
+
+    def test_lever_below_the_purity_floor_is_not_an_arm(self):
+        """The floor is the whole point: a dirty lever is worse than none.
+
+        Without it the first version reserved a MaxHP 'arm' moving +18.2
+        against -112.5 of signed other movement — inventory spent at 102/102
+        to protect something that could not have measured anything.
+        """
+        # ArmorPen moves -40.8 score (600 * 0.068); Defense moves -67.5
+        # (1.5 * 100 * 0.45). Purity 0.60 — the correction outweighs the
+        # signal, so this must not be admitted at any arm count.
+        cap = self._capture([
+            self._item("Filthy", True, armor_pen=300.0, defense=-1.5)])
+        self.assertEqual(ihlib.probe_levers(cap, "ArmorPen"), [])
+
+    def test_reserved_arm_is_never_offered_for_decompile(self):
+        cap = self._capture([self._item("Instrument", True, armor_pen=300.0)])
+        with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE), \
+             mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None):
+            actions = ihlib.lock_actions(cap)
+        self.assertNotIn("Instrument",
+                         {r["name"] for r in actions["unlock"]})
+        self.assertIn("Instrument", actions["probe_holds"])
+
+    def test_unlocked_reserved_arm_surfaces_as_a_lock_action(self):
+        """An unlocked instrument is one sweep from deletion, which is
+        exactly the state the five lost arms passed through unremarked."""
+        cap = self._capture([self._item("Instrument", False, armor_pen=300.0)])
+        with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE), \
+             mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None):
+            actions = ihlib.lock_actions(cap)
+        row = next(r for r in actions["lock"] if r["name"] == "Instrument")
+        self.assertIn("RESERVED ArmorPen probe arm", row["reason"])
+        # and it must NOT also appear under the opposite heading
+        self.assertNotIn("Instrument",
+                         {r["name"] for r in actions["at_risk"]})
+
+    def test_concluded_reservation_holds_nothing(self):
+        cap = self._capture([self._item("Instrument", True, armor_pen=300.0)])
+        done = [dict(self.PROBE[0], concluded="fitted 9 Aug")]
+        with mock.patch.object(ihlib, "RESERVED_PROBES", done):
+            self.assertEqual(ihlib.reserved_probe_holds(cap), {})
+
+    def test_audit_reports_a_reservation_with_no_owned_lever(self):
+        """The finding that went unreported for the five lost arms.
+
+        A reservation whose instrument no longer exists must READ as a loss,
+        not as silence — and must not be papered over by protecting whatever
+        junk ranks highest.
+        """
+        import ih
+        cap = self._capture([self._item("Filthy", True, armor_pen=300.0,
+                                        defense=-1.5)])
+        with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE):
+            kinds = [k for k, _ in ih._audit_reserved_probes(cap, {})]
+        self.assertEqual(kinds, ["PROBE-GONE"])
+
+    def test_audit_reports_an_unlocked_lever(self):
+        import ih
+        cap = self._capture([self._item("Instrument", False, armor_pen=300.0)])
+        with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE):
+            flags = ih._audit_reserved_probes(cap, {})
+        self.assertEqual([k for k, _ in flags], ["PROBE-LOOSE"])
+        self.assertIn("Instrument", flags[0][1])
+
+    def test_audit_is_silent_when_the_arm_is_owned_and_locked(self):
+        import ih
+        cap = self._capture([self._item("Instrument", True, armor_pen=300.0)])
+        with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE):
+            self.assertEqual(ih._audit_reserved_probes(cap, {}), [])
+
+    def test_live_reservations_name_a_family_never_an_item(self):
+        """The root cause was a NAME list: it rots when the inventory turns
+        over, and rotted silently because nothing recomputed it."""
+        for probe in ihlib.RESERVED_PROBES:
+            self.assertIn("family", probe)
+            self.assertNotIn("item", probe)
+            self.assertNotIn("items", probe)
+            self.assertTrue(probe.get("unblock"))
+
+
 class PlanCraftTest(unittest.TestCase):
     def test_budget_and_cap_respected(self):
         item = FIXTURE["state"]["inventoryData"]["items"][0]

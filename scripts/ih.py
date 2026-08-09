@@ -1351,6 +1351,24 @@ def cmd_locks(args):
             "stability": item.get("stability") or 0,
             "item_level": item.get("item_level") or 0,
             "reason": "revert path for the live A/B gate — do not unlock"}))
+    # Instruments are held indefinitely and score as junk, so without a line
+    # here the list silently keeps a -70.9 item locked forever and invites the
+    # player to release it by hand. Only ALREADY-LOCKED ones: an unlocked arm
+    # is a LOCK action above, and printing both is the double-heading defect.
+    for name, hold in (actions.get("probe_holds") or {}).items():
+        lever, probe = hold["lever"], hold["probe"]
+        if not lever["locked"]:
+            continue
+        by_slot.setdefault(lever["slot"], []).append(("HELD", {
+            "name": name, "slot": lever["slot"], "worth": None,
+            "stability": 0, "item_level": 0,
+            "reason": f"RESERVED {probe['family']} probe arm — held as an "
+                      f"INSTRUMENT, not a craft base, so its craft score is "
+                      f"not why it is kept. Purity {lever['purity']:.1f} "
+                      f"({lever['move']:+.1f} {probe['family']} vs "
+                      f"{lever['other']:+.1f} signed other, "
+                      f"{lever['other_abs']:.1f} abs). Releases when: "
+                      f"{probe['unblock']}"}))
 
     def _print_at_risk():
         """What the depth cap is about to lose, stated rather than implied."""
@@ -1492,8 +1510,55 @@ def _audit_decompile_locks(cap, ctx):
     return flags
 
 
+def _audit_reserved_probes(cap, ctx):
+    """Are the instruments for the open measurements still owned, and held?
+
+    Added 9 Aug 2026, after the reservation that lived as prose in
+    docs/candidate-status.md silently emptied out. Five items were named there
+    as reserved CI/CD probe arms; by 9 Aug every one was gone, including the
+    MaxHP pair -- and MaxHP is still the largest ASSERTED term in the model,
+    still waiting on the block those arms existed to run. Nothing flagged it,
+    because nothing in the code had ever read that sentence.
+
+    Two distinct findings, and they need separate wording because the loss is
+    at a different stage:
+      MISSING   -- no owned lever for an open question. The measurement cannot
+                   be run today at any price; it waits on a drop.
+      UNLOCKED  -- a lever exists and is one sweep from deletion. This is the
+                   state the previous five passed through unremarked.
+
+    Reported ABOVE the ordinary lock flags: an instrument is not replaceable
+    from the same slot the way a craft base is, so losing one costs a
+    measurement rather than a few score points.
+    """
+    flags = []
+    for probe in ihlib.reserved_probes():
+        family = probe["family"]
+        levers = ihlib.probe_levers(cap, family, top=probe.get("arms", 1))
+        if not levers:
+            flags.append((
+                "PROBE-GONE",
+                f"{family} probe reserved but NO owned item moves it purely "
+                f"enough to serve as an arm — the measurement cannot run "
+                f"until a lever drops. Why it is held: {probe['reason']}. "
+                f"Needs: {probe['unblock']}"))
+            continue
+        loose = [r for r in levers if not r["locked"]]
+        if loose:
+            flags.append((
+                "PROBE-LOOSE",
+                f"{len(loose)} reserved {family} probe arm(s) are UNLOCKED "
+                f"and one sweep from deletion — lock: "
+                + "; ".join(f"{r['name']} [{r['slot']}] purity {r['purity']:.1f}"
+                            f" ({r['move']:+.1f} {family} vs {r['other']:+.1f}"
+                            f" signed other)" for r in loose)
+                + f". Held as instruments, not craft bases — {probe['unblock']}"))
+    return flags
+
+
 AUDIT_CHECKS = [
     _audit_pending_refits,
+    _audit_reserved_probes,
     _audit_inventory_capacity,
     _audit_decompile_locks,
     _audit_stream_drift,
