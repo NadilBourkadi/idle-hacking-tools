@@ -1428,7 +1428,20 @@ PROBE_MIN_PURITY = 1.0
 # to protect an instrument that could not have measured anything.
 
 
-def probe_levers(capture, family, top=3, min_move=8.0,
+PROBE_MIN_MOVE = 8.0
+# Minimum target-family score movement for a swap to count as a lever at all.
+# It is a decision-bearing threshold, not a display cut-off: it decides which
+# items can serve as instruments and therefore which measurements can run, so
+# CLAUDE.md's "tooling thresholds and defaults are model constants too" rule
+# applies and it is registered. Sized off par.22's power math rather than
+# taste -- at 6 runs/arm the SE on the difference is 1.17 streaks, so
+# separating the live hypotheses needs a few streaks of predicted movement,
+# and at beta ~0.13-0.20 streaks per score point that is ~8 score at the very
+# least. It is a floor on ADMISSION, not a target: today's ArmorPen arms move
+# 61.1, comfortably clear of it.
+
+
+def probe_levers(capture, family, top=3, min_move=PROBE_MIN_MOVE,
                  min_purity=PROBE_MIN_PURITY):
     """Owned swaps ranked by how PURELY they move one stat family.
 
@@ -1480,7 +1493,10 @@ def probe_levers(capture, family, top=3, min_move=8.0,
             "locked": bool(item.get("decompile_locked")),
         })
     rows.sort(key=lambda r: -r["purity"])
-    return rows[:top] if top else rows
+    # `if top` would make top=0 return EVERYTHING, and `arms: 0` in a
+    # reservation would then protect the whole inventory from decompile --
+    # a deadlock at 102/102 dressed as a safety feature.
+    return rows if top is None else rows[:top]
 
 
 def reserved_probes():
@@ -2654,6 +2670,17 @@ def assumptions():
          "only prices it and has collapsed at 23/102; max_slots is soft "
          "anyway -- seven 5 Aug captures held 103 against a max of 102",
          "7 Aug 2026 (re-derived)", None),
+        ("PROBE_MIN_MOVE", PROBE_MIN_MOVE, "asserted",
+         "minimum target-family score movement for a swap to be admitted as "
+         "a probe arm. Gates which measurements can run at all, so it is a "
+         "model constant and not a display cut-off. Derived from par.22's "
+         "power math rather than measured: SE on the difference is 1.17 "
+         "streaks at 6 runs/arm, and at beta 0.13-0.20 streaks per score "
+         "point a few streaks of separation needs ~8 score at minimum. Never "
+         "exercised near its value -- every arm admitted so far moves 61.1, "
+         "~7.6x the floor -- so the binding case is untested and a marginal "
+         "lever has never been run",
+         "9 Aug 2026 (asserted at introduction)", None),
         ("PROBE_MIN_PURITY", PROBE_MIN_PURITY, "asserted",
          "admission floor for a reserved CI/CD probe arm: |target family "
          "score move| / |signed other move|. Decides which items are held as "

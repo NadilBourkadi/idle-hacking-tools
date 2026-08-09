@@ -903,6 +903,16 @@ class ReservedProbeArmTest(unittest.TestCase):
         with mock.patch.object(ihlib, "RESERVED_PROBES", self.PROBE):
             self.assertEqual(ih._audit_reserved_probes(cap, {}), [])
 
+    def test_zero_arms_holds_nothing_rather_than_everything(self):
+        """`rows[:top] if top else rows` made arms=0 return the whole
+        inventory, so a mis-declared reservation would protect every item
+        from decompile — an inventory deadlock dressed as a safety feature."""
+        cap = self._capture([self._item("Instrument", True, armor_pen=300.0)])
+        self.assertEqual(ihlib.probe_levers(cap, "ArmorPen", top=0), [])
+        none_probe = [dict(self.PROBE[0], arms=0)]
+        with mock.patch.object(ihlib, "RESERVED_PROBES", none_probe):
+            self.assertEqual(ihlib.reserved_probe_holds(cap), {})
+
     def test_live_reservations_name_a_family_never_an_item(self):
         """The root cause was a NAME list: it rots when the inventory turns
         over, and rotted silently because nothing recomputed it."""
