@@ -790,6 +790,46 @@ RESERVED_PROBES = [
                    "at their own betas",
         },
     {
+        # The ArmorPen row above concluded on the WEIGHT, which is what it
+        # declared, and released its arms correctly. But par.21 closed with a
+        # second question still open in the same paragraph -- "both depth
+        # pairs ran in Data Center at ArmorPen ~1,029, the damage law is
+        # convex, so the fit is regime-local; the Corporate Network extension
+        # is still unrun and is still the cheapest test of whether any beta
+        # generalises across zones" -- and no reservation ever backed it.
+        # Result on 10 Aug 2026: `locks` listed BOTH arms for decompile
+        # (Targeted Analyzer of Light Speed, Resilient Analyzer of Decay)
+        # while open-questions called them the instrument for the cheapest
+        # open test in the file. Two producers of one answer, disagreeing --
+        # which is how everything here gets found. The arms are the same two;
+        # only the zone changes, so this costs 2 inventory slots at 74/102
+        # and one pair of runs out of a daily budget that expires unused.
+        "family": "ArmorPen",
+        # NAMED, not purity-ranked, because this is a REPLICATION: the beta
+        # being re-tested was fitted on these two arms, so re-running the
+        # ranking answers a different question. On 10 Aug 2026 the top two by
+        # purity had both changed since the first block, and the new leader
+        # (`Uncatchable Analyzer of the Bastion`, signed purity 50.8 off 67.3
+        # of absolute movement) is precisely the near-total-cancellation arm
+        # par.21 argued against running.
+        "items": ["Targeted Analyzer of Light Speed",
+                  "Resilient Analyzer of Decay"],
+        "reason": "every conversion in the model (Regen 0.200, ArmorPen "
+                  "0.132, Barrier ~0) was fitted in Data Center at ArmorPen "
+                  "~1,029, and the damage law dmg = Atk*K/(K+Def-AP) is "
+                  "convex -- value per point RISES as ArmorPen approaches "
+                  "enemy Defense. Nothing has ever tested whether a beta "
+                  "survives a zone change, so every weight in the register is "
+                  "regime-local by default and nobody has priced the regime",
+        "unblock": "re-run the SAME two Analyzer arms in Corporate Network "
+                   "(open-questions par.21, 'second, free reading already "
+                   "available'). The zones differ by ~30 streaks for this "
+                   "build: if the conversion is regime-local the two zones "
+                   "disagree, and if it is a property of the stat they do "
+                   "not. One extra pair of runs",
+        "concluded": None,
+    },
+    {
         "family": "MaxHP",
         "arms": 2,
         "reason": "CRAFT_WEIGHTS_PCT[MaxHP] = 0.5 is ASSERTED and has NEVER "

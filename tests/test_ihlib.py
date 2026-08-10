@@ -1040,14 +1040,69 @@ class ReservedProbeArmTest(unittest.TestCase):
         with mock.patch.object(ihlib, "RESERVED_PROBES", none_probe):
             self.assertEqual(ihlib.reserved_probe_holds(cap), {})
 
-    def test_live_reservations_name_a_family_never_an_item(self):
-        """The root cause was a NAME list: it rots when the inventory turns
-        over, and rotted silently because nothing recomputed it."""
+    def test_every_reservation_declares_a_family_and_an_unblock(self):
+        """Was `..._name_a_family_never_an_item` until 10 Aug 2026, when it
+        went red on a reservation that has to name its arms.
+
+        It pinned "no `items` key", but the root cause of the five lost arms
+        was not naming — it was SILENCE. The reservation lived as prose in a
+        doc, nothing recomputed it, and when the inventory turned over it kept
+        naming ghosts with no flag. A name list resolved against the capture
+        every call, which reports a missing arm as PROBE-GONE, does not have
+        that failure mode.
+
+        And one reservation genuinely cannot be expressed any other way: a
+        REPLICATION re-tests a beta fitted on specific arms, so re-ranking
+        substitutes a different experiment. The invariant is therefore
+        "resolved against the capture, and loud when an arm is gone" — pinned
+        by the two tests below — not "never name anything".
+
+        `item` singular stays forbidden: that was the doc-prose shape, and
+        nothing reads it.
+        """
         for probe in ihlib.RESERVED_PROBES:
             self.assertIn("family", probe)
             self.assertNotIn("item", probe)
-            self.assertNotIn("items", probe)
             self.assertTrue(probe.get("unblock"))
+            if probe.get("items"):
+                self.assertIsInstance(probe["items"], list)
+
+    def test_named_arms_are_held_instead_of_the_purity_ranked_ones(self):
+        """A replication must not be silently re-armed. `Better` outranks
+        `Named` on purity, so a family reservation would hold it — and the
+        block that already ran did not use it."""
+        cap = self._capture([self._item("Named", True, armor_pen=300.0,
+                                        defense=-0.2),
+                             self._item("Better", True, armor_pen=300.0)])
+        named = [dict(self.PROBE[0], items=["Named"], arms=2)]
+        self.assertEqual(
+            ihlib.probe_levers(cap, "ArmorPen", top=1)[0]["name"], "Better")
+        with mock.patch.object(ihlib, "RESERVED_PROBES", named):
+            self.assertEqual(list(ihlib.reserved_probe_holds(cap)), ["Named"])
+
+    def test_a_missing_named_arm_reads_as_a_loss_not_as_silence(self):
+        """The half of the original incident that actually cost the arms."""
+        import ih
+        cap = self._capture([self._item("Better", True, armor_pen=300.0)])
+        named = [dict(self.PROBE[0], items=["Named"], arms=2)]
+        with mock.patch.object(ihlib, "RESERVED_PROBES", named):
+            flags = ih._audit_reserved_probes(cap, {})
+        self.assertEqual([k for k, _ in flags], ["PROBE-GONE"])
+        self.assertIn("Named", flags[0][1])
+        self.assertIn("replicated", flags[0][1])
+
+    def test_an_unlocked_named_arm_surfaces_as_a_lock_action(self):
+        import ih
+        cap = self._capture([self._item("Named", False, armor_pen=300.0)])
+        named = [dict(self.PROBE[0], items=["Named"], arms=2)]
+        with mock.patch.object(ihlib, "RESERVED_PROBES", named), \
+             mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None):
+            flags = ih._audit_reserved_probes(cap, {})
+            actions = ihlib.lock_actions(cap)
+        self.assertEqual([k for k, _ in flags], ["PROBE-LOOSE"])
+        row = next(r for r in actions["lock"] if r["name"] == "Named")
+        self.assertIn("named arm", row["reason"])
+        self.assertNotIn("Named", {r["name"] for r in actions["unlock"]})
 
 
 class PlanCraftTest(unittest.TestCase):
