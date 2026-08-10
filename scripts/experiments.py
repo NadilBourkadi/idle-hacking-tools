@@ -830,6 +830,42 @@ RESERVED_PROBES = [
         "concluded": None,
     },
     {
+        # Opened 10 Aug 2026 the moment PENDING_REFITS re-opened on Barrier.
+        # The 7 Aug block that fitted the weight was censored by the zone's
+        # enemy-level cap (6/6 runs of the low-Barrier arm at or above it,
+        # 0/6 of the high-Barrier arm), so a re-fit is needed and the arm it
+        # needs was on that same evening's decompile list at -51.9. That is
+        # incident #27 and #33 for the third time: a measurement need with no
+        # code-level reservation, and the instrument one click from deletion.
+        "family": "Barrier",
+        # BY FAMILY, not by name: this is a fresh FIT, not a replication, so
+        # a better-ranked substitute answers the same question. (The par.21
+        # row above is named precisely because it is the other case.) The
+        # original arms cannot be reconstructed anyway -- the loadout moved
+        # from Barrier 5,900 / Regen 1,221 to Barrier 1,746 / Regen 1,178.
+        "arms": 2,
+        "reason": "CRAFT_WEIGHTS_FLAT[Barrier] = 0.0088 is back in "
+                  "PENDING_REFITS: beta_Barrier = 0.041 +- 0.024 was fitted "
+                  "on an arm the zone's enemy-level cap had truncated, and "
+                  "the censoring bound on the arm carrying LESS Barrier, so "
+                  "both the beta and the weight are CEILINGS and the true "
+                  "value may be zero. Barrier is carried by four equipped "
+                  "items and by the Packet Shield hardware track, so the "
+                  "ceiling is priced into every craft, lock and chip verdict",
+        "unblock": "a CI/CD pair on the purest owned Barrier lever, read as "
+                   "beta (streaks per score point) per par.22. UNDERPOWERED "
+                   "AND SAY SO: the best lever owned on 10 Aug 2026 is "
+                   "`Guided Driver of Swiftness` at -11.7 Barrier score "
+                   "against -1.5 signed other (purity 7.7, but off 25.4 of "
+                   "ABSOLUTE movement -- heavy cancellation, the caveat "
+                   "PROBE_MIN_PURITY's register row names). Regen-parity "
+                   "predicts -2.3 streaks and beta=0 predicts 0, which is "
+                   "~2 sigma at 6 runs/arm against par.22's 8 -- directional "
+                   "only, and it pools with a later block. A -49-score lever "
+                   "like the original would settle it outright",
+        "concluded": None,
+    },
+    {
         "family": "MaxHP",
         "arms": 2,
         "reason": "CRAFT_WEIGHTS_PCT[MaxHP] = 0.5 is ASSERTED and has NEVER "
