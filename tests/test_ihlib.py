@@ -1369,6 +1369,47 @@ def _hardware_fixture(levels=None):
     return hw
 
 
+class UnmodelledEffectTest(unittest.TestCase):
+    """`homelab_upgrade_score` returned 0.0 for three different reasons and
+    the output asserted only one of them ("resource upgrades really are worth
+    zero"). Thermal Budget delivers `post_combat_heal` -- a stat the game
+    tracks in statsBreakdown -- through an effect key that is not
+    `combat_stat`, so it scored 0.000, sorted last, and was invisible against
+    a stated #1 bottleneck of HP attrition (10 Aug 2026).
+    """
+
+    BREAKDOWN = {"post_combat_heal": {"total": 14655},
+                 "defense": {"total": 3743}, "snippets": {"total": 2.2}}
+
+    def test_a_tracked_but_unpriced_stat_is_reported_not_scored_zero(self):
+        defn = {"effects": [{"post_combat_heal": 0.01}]}
+        self.assertEqual(ihlib.homelab_upgrade_score(defn), 0.0)
+        self.assertEqual(
+            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN),
+            ["post_combat_heal"])
+
+    def test_a_priced_stat_is_not_reported_as_unmodelled(self):
+        defn = {"effects": [{"combat_stat": "defense", "additive": 0.01}]}
+        self.assertGreater(ihlib.homelab_upgrade_score(defn), 0)
+        self.assertEqual(
+            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+
+    def test_a_resource_effect_is_a_real_zero_not_unmodelled(self):
+        """The distinction only means something if it stays narrow: an
+        upgrade paying in a purchasable currency really is worth zero, and
+        must not start reading as 'we could not price it'."""
+        defn = {"effects": [{"resource": "snippets", "multiplier": 0.03}]}
+        self.assertEqual(
+            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+
+    def test_an_effect_the_game_does_not_track_is_not_unmodelled(self):
+        """`enemy_lockup_chance` and friends are game mechanics with no stat
+        line, so they are out of scope here rather than silently in it."""
+        defn = {"effects": [{"enemy_lockup_chance": 0.05}]}
+        self.assertEqual(
+            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+
+
 class HardwarePlanTest(unittest.TestCase):
     """The chip allocator gained a disbelieving reading on 10 Aug 2026.
 

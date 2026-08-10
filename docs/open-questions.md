@@ -695,3 +695,44 @@ zero the weight or scale it, and **closes the `PENDING_REFITS` row either way**.
 ~30 streaks apart for this build, so if β is regime-local they disagree and if it
 is a property of the stat they do not. That tests the one assumption every β in
 this workspace rests on.
+
+## par.23 — What is `post_combat_heal` worth? (opened 10 Aug 2026)
+
+**Nothing prices it, and it is the only stat in that position.** Sweeping every
+homelab effect key against `statsBreakdown`, exactly one names a stat the game
+tracks and `CRAFT_WEIGHTS` does not: `post_combat_heal`. Every value carried
+under the `combat_stat` schema is priced, which is why this stayed invisible —
+the gap is in effects that deliver a stat without using that key at all.
+
+**It is not a rounding error.** `post_combat_heal` sits at **14,655** against a
+Max HP of **52,585** — the build already restores ~28% of its health bar after
+every fight, from player level alone. **Thermal Budget** (Power & Cooling Rack,
+L0/25, +1% of Max HP per level, **~200M credits and zero hackcoin**) would add
++526 per level, or +13,146 at L25 — roughly doubling it.
+
+**Why it matters more than its score suggests.** The standing bottleneck model
+has attrition across long streaks as #1, and `current-state.md` already names
+recovery *systems* rather than more gear regen as the next lever. Post-combat
+healing is the purest form of that: it acts between fights, so unlike gear
+Regen it is not competing with in-fight drain and is not subject to the
+overheal capping that produced the 28 Jul diminishing-returns amendment.
+
+**Do not fix this by inventing a weight.** `CRAFT_WEIGHTS_FLAT["Barrier"]` and
+`CRAFT_WEIGHTS_PCT["Acc"]` were both confident numbers off thin evidence and
+are the two worst constants this workspace has shipped. `ih.py homelab` now
+prints `UNMODELLED[post_combat_heal]` instead of `0.000` and never truncates
+the row out of the QUEUE list.
+
+**Unblock.** A live before/after on Thermal Budget levels, read as beta
+(streaks per point of post-combat heal) per par.22. The CI/CD Pipeline cannot
+run it — it customises gear and zone, not the homelab — and the Software
+Profiler cannot see it either, since it runs single full-HP fights and this
+stat only pays across a streak. So it is a live pre-registered window, and the
+buy is credit-only, which makes it cheap to start and impossible to undo.
+
+**Discriminant before spending 25 levels:** buy L1, and check whether the
+`post_combat_heal` total moves by +526 (1% of Max HP, description-faithful) or
+by +0.01 (the raw-fraction addend that Corruption turned out to be — incident
+#26). `validate_stat_totals` re-checks the composition on every capture, so a
+wrong form cannot stay quiet; but the two readings differ by ~52,000x and only
+one of them is worth a queue slot.

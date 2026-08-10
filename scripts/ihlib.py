@@ -1935,6 +1935,17 @@ def homelab_upgrade_score(upgrade_def):
     omission: resource and gather-XP upgrades pay in currencies that are
     purchasable at ~2 cr/unit, so their combat value really is zero and the
     ranking should say so rather than leave them unscored and ambiguous.
+
+    **That justification does not cover every 0.0 this returns**, which is why
+    `homelab_unmodelled_effects` exists and why callers must print the two
+    apart. An effect can name a stat the GAME tracks and this model has no
+    weight for, and it lands here as a silent zero indistinguishable from a
+    resource upgrade. Found 10 Aug 2026: Thermal Budget (`post_combat_heal`,
+    +1% of Max HP healed after each combat per level, max 25, 200M credits and
+    no hackcoin) scored 0.000 and sorted last -- against a stated #1
+    bottleneck of HP attrition across long streaks, and with
+    `post_combat_heal` sitting in `statsBreakdown` at 14,655 against a Max HP
+    of 52,585. Do not fix that by inventing a weight for it.
     """
     effects = upgrade_def.get("effects") or []
     total = 0.0
@@ -1957,6 +1968,32 @@ def homelab_upgrade_score(upgrade_def):
             # as the raw fraction, ~90x less than the description implies.
             total += add * CRAFT_WEIGHTS_FLAT.get(label, 0.0)
     return total
+
+
+def homelab_unmodelled_effects(upgrade_def, stats_breakdown):
+    """Effect keys naming a stat the GAME tracks but CRAFT_WEIGHTS does not.
+
+    The test is self-validating rather than a hand-kept list: an effect key
+    that appears in `statsBreakdown` is a stat by the game's own reckoning,
+    so if nothing prices it the score is missing, not zero. On the 10 Aug
+    capture exactly one key qualifies across every homelab upgrade --
+    `post_combat_heal` -- and every value under the `combat_stat` schema is
+    priced, which is why this went unnoticed: the gap is in effects that
+    deliver a stat WITHOUT using that key at all.
+
+    Returning the keys rather than a score is deliberate. Pricing them would
+    mean inventing a weight, and the two constants this workspace most
+    regrets both came from a confident number derived off thin evidence.
+    """
+    out = []
+    for eff in upgrade_def.get("effects") or []:
+        for key in eff:
+            if key == "combat_stat" or key not in (stats_breakdown or {}):
+                continue
+            label = stat_label(key)
+            if label not in CRAFT_WEIGHTS_PCT and label not in CRAFT_WEIGHTS_FLAT:
+                out.append(key)
+    return sorted(set(out))
 
 
 def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
@@ -2011,6 +2048,8 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             "hours": homelab_job_hours(info, nxt.get("duration_ticks") or 0),
             "cost": cost, "description": d.get("description") or "",
             "score": homelab_upgrade_score(d),
+            "unmodelled": homelab_unmodelled_effects(
+                d, capture["state"].get("statsBreakdown")),
         })
     for r in out:
         r["pts_per_hour"] = r["points"] / r["hours"] if r["hours"] else 0.0
@@ -2025,7 +2064,15 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
         r["score_per_level"] = r["score"]
     out.sort(key=lambda r: (not r["near_best"], -r["score"],
                             -r["pts_per_hour"], -r["hours"]))
-    return out[:limit]
+    # An unmodelled job must never be dropped by `limit`. It cannot be RANKED
+    # -- nothing prices its stat -- but silently truncating it is the failure
+    # this whole distinction exists to stop: it would sort last on a 0.0 that
+    # only means "unpriced" and then vanish, which reads exactly like "we
+    # considered it and it lost".
+    head = out[:limit]
+    named = {r["name"] for r in head}
+    return head + [r for r in out
+                   if r["unmodelled"] and r["name"] not in named]
 
 
 def homelab_level_threshold(definitions, target_level):

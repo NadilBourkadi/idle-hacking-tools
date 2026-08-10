@@ -466,6 +466,11 @@ def cmd_homelab(args):
                   f"{p['hours']:.1f}h  "
                   f"{ihlib.format_cost(p['cost'])}")
             print(f"        under [{p['section']}]  {p['description'][:70]}")
+            if p["unmodelled"]:
+                print(f"        !! UNMODELLED — carries {', '.join(p['unmodelled'])}, "
+                      f"which nothing in CRAFT_WEIGHTS prices. It is listed "
+                      f"because it\n           cannot be RANKED, not because it "
+                      f"lost: a 0.000 here means unpriced, not worthless.")
         if not picks:
             print("    nothing affordable left un-queued")
 
@@ -475,8 +480,11 @@ def cmd_homelab(args):
     print("  by the STAT they deliver. `score` is on the CRAFT_WEIGHTS scale,")
     print("  directly comparable to a gear affix and to `ih.py hardware` --")
     print("  hardware %, homelab % and equipment % share one pool (§13).")
-    print("  score 0.000 is a real answer, not a missing one: resource and")
-    print("  gather-XP upgrades pay in currencies bought at ~2 cr/unit.")
+    print("  score 0.000 is a real answer for resource and gather-XP")
+    print("  upgrades — they pay in currencies bought at ~2 cr/unit. It is")
+    print("  NOT an answer on rows marked UNMODELLED: those deliver a stat")
+    print("  the game tracks and nothing here prices, so the 0.000 is")
+    print("  missing rather than measured (10 Aug 2026: Thermal Budget).")
     rows = []
     for u in ihlib.iter_homelab_upgrades(homelab, definitions):
         gate = u["def"].get("unlock_level", 0)
@@ -487,6 +495,7 @@ def cmd_homelab(args):
         rows.append((pts / hours if hours else 0, hours, u))
     best_rate = max((r[0] for r in rows), default=0.0)
     cutoff = best_rate * (1.0 - ihlib.HOMELAB_PTS_TOLERANCE)
+    breakdown = cap["state"].get("statsBreakdown")
     rows.sort(key=lambda r: (r[0] < cutoff,
                              -ihlib.homelab_upgrade_score(r[2]["def"]), -r[0]))
     for pts_hr, hours, u in rows:
@@ -498,7 +507,7 @@ def cmd_homelab(args):
         print(f"    {d.get('name'):26s} L{u['level']}{maxed:<5} "
               f"+{nxt.get('progress_points', 0):>3}pts "
               f"{est}{hours:4.1f}h  {pts_hr:5.0f}pts/h  "
-              f"score {ihlib.homelab_upgrade_score(d):5.3f}  "
+              f"score {_homelab_score_cell(d, breakdown)}  "
               f"{est}{ihlib.format_cost(nxt.get('cost'))}{queued}")
         print(f"        [{section}]  {(d.get('description') or '')[:80]}")
     upcoming = sorted({u["def"].get("unlock_level", 0)
@@ -611,6 +620,18 @@ def _print_hardware_plan(hw, stats_breakdown, spendable):
           f"{(gain['refund'].get('hackcoin') or 0)} hackcoin — full value, so "
           "restoring them\n    is a wash, but it is a wash you have to spend "
           "back by hand.")
+
+
+def _homelab_score_cell(defn, stats_breakdown):
+    """The score column: a number, or why there isn't one.
+
+    `0.000` and `UNMODELLED` are different claims and printing both as the
+    former is how Thermal Budget sat at the bottom of this list.
+    """
+    unmodelled = ihlib.homelab_unmodelled_effects(defn, stats_breakdown)
+    if unmodelled:
+        return f"UNMODELLED[{','.join(unmodelled)}]"
+    return f"{ihlib.homelab_upgrade_score(defn):5.3f}"
 
 
 def cmd_hardware(args):
