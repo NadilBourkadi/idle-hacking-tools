@@ -356,6 +356,11 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
     # ZERO -- the 95% CI is 0.06x-0.44x Regen. The point estimate is used
     # because setting it to 0 would over-commit to the null just as 0.043
     # over-committed to Regen-parity.
+    # KNOWN WRONG since 10 Aug 2026 -- see PENDING_REFITS. All six runs of the
+    # pair's LOW-Barrier arm hit the zone's enemy-level cap and all six of the
+    # high-Barrier arm did not, so 0.041 is a CEILING on beta and 0.0088 a
+    # ceiling on this weight. Direction is known, magnitude is not; the number
+    # below is the last measured value, not a believed one.
     "Thorns": 0.13, "Barrier": 0.0088,
 }
 
@@ -384,12 +389,41 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 # Striking, realized +64.7 vs projected +80.6) -- and both bands were
 # re-derived to +/-16 the same session. See the bands' own provenance rows.
 PENDING_REFITS = [
-    # EMPTY, and that is the intended steady state -- a row here means the
-    # numbers this tool prints are already known to be false.
+    {
+        "name": 'CRAFT_WEIGHTS_FLAT["Barrier"]',
+        "applied": 0.0088,
+        "opened": "10 Aug 2026",
+        "blocked_on":
+            "beta_Barrier = 0.041 +- 0.024 was fitted on a CENSORED arm and "
+            "the truncated information cannot be recovered from the banked "
+            "runs. The par.22 pair ran in Corporate Network at an "
+            "enemy-level cap of 5,769: the HIGH-Barrier arm (Bar 5,900.8 / "
+            "Regen 1,221) lost at 4,991-5,129, comfortably clear, while ALL "
+            "SIX runs of the LOW-Barrier arm (Bar 5,153.6 / Regen 1,844.6) "
+            "lost at 5,841-6,106, i.e. AT OR ABOVE the cap. Past the cap the "
+            "enemy stops getting harder, so that arm's 255.2 is a lower "
+            "bound, not a reading. Censoring bound on the arm carrying LESS "
+            "Barrier, so it understates how well low Barrier does and "
+            "therefore OVERSTATES Barrier: 0.041 is a CEILING on beta and "
+            "the applied 0.0088 is a CEILING on the weight. The true value "
+            "may be zero. Found 10 Aug 2026 by a new cap-headroom check in "
+            "`cicd_rows`, on its first run -- never by re-reading the fit",
+        "unblock":
+            "re-run the SAME two par.22 Barrier arms, 6 runs each, in a zone "
+            "whose enemy-level cap clears their loss levels -- `ih.py sims` "
+            "now prints the headroom per zone for the newest pair, and Data "
+            "Center's cap has since risen to 8,177. Read the low-Barrier "
+            "arm's uncensored mean against 255.2; the gap between them is "
+            "the size of the bias. 12 CI/CD runs, no crafting, no equipping",
+    },
+    # A row here means the numbers this tool prints are already known to be
+    # false. Empty is the intended steady state.
     #
     # BARRIER ROW CLOSED 8 Aug 2026: the 12-run Daemon pair (par.22) measured
     # beta_Barrier = 0.041 +- 0.024 against Regen's 0.200 and the weight was
-    # refit 0.043 -> 0.0088 in the same change.
+    # refit 0.043 -> 0.0088 in the same change. RE-OPENED 10 Aug 2026 -- see
+    # the live row above; that pair was censored by the zone's enemy-level
+    # cap and nothing read the two together for three days.
     #
     # ARMORPEN ROW CLOSED 9 Aug 2026: the 12-run Analyzer pair par.21 asked
     # for read -11.22 +- 1.76 streaks, and pooling it with the 8 Aug craft
@@ -2965,10 +2999,12 @@ def assumptions():
          "+-4% around their run mean (Data Center, 10 Aug: 6,534-7,728 "
          "around ~6,995), so a run whose max sits inside 5% of the cap "
          "probably already has simulated streaks touching it. The HARD edge "
-         "(headroom <= 0) is exercised by already-banked runs. The 5% "
-         "WARNING band is the part still untested -- no run yet sits between "
-         "0 and 5% headroom, so whether that margin catches anything is "
-         "unknown. "
+         "(headroom <= 0) is exercised and it bit immediately: on its first "
+         "run this check found 7 already-banked runs censored, six of them "
+         "the low-Barrier arm of the par.22 pair that set "
+         "CRAFT_WEIGHTS_FLAT[Barrier] (see PENDING_REFITS). The 5% WARNING "
+         "band is the part still untested -- no run yet sits between 0 and "
+         "5% headroom, so whether that margin catches anything is unknown. "
          "TO MEASURE: bank a deliberately-censored run (re-run a current "
          "Data Center arm in Corporate Network, cap 7,368 against a loss "
          "max of 7,728) and read how far the arm mean falls against its "
