@@ -549,11 +549,17 @@ def _print_hardware_plan(hw, stats_breakdown, spendable):
                                weights=sf)
     raw_plan = ihlib.hardware_plan(hw, stats_breakdown, spendable, curve=curve)
     buys, raw_buys = _plan_rows(plan), _plan_rows(raw_plan)
+    reset_first = bool(hw.get("can_reset"))
     if buys:
         print(f"\n  SPEND {spendable:,.0f} chips — equal-marginal-value "
               f"allocation, planned under DISBELIEF of the flagged families")
         print("  (chips cannot be sold back outside the monthly reset, so this "
               "ranks on the\n   weaker reading, exactly as `locks` does):")
+        if reset_first:
+            print("  ** this is the plan for NOT resetting. A reset is "
+                  "available and priced below;\n     if you take it, use the "
+                  "re-buy schedule there instead — these two are\n     "
+                  "alternatives, not a sequence. **")
         for name, (level, target, cost) in sorted(buys.items(),
                                                   key=lambda kv: -kv[1][2]):
             print(f"    {name:26s} L{level} -> L{target}  {cost:,.0f} chips")
@@ -581,13 +587,20 @@ def _print_hardware_plan(hw, stats_breakdown, spendable):
     print(f"    reset, spend {gain['budget']:,.0f} chips       -> banked score "
           f"{gain['reset_score']:.1f}")
     shortfall = gain["refund_shortfall"]
+    shortfall = f"{shortfall:+.1%}" if shortfall is not None else "un-modelled"
     print(f"    the game's refund of {gain['refund_chips']:,.0f} chips is "
-          f"{shortfall:+.1%} against the fitted curve's\n    "
-          f"{gain['modelled_refund']:,.0f} for the levels held — that "
-          f"agreement is WHY a reset cannot lose\n    (the worst case is "
-          f"re-buying what you had), and it is the ground truth the whole\n"
-          f"    cost model self-checks on. Only the all-sections option is "
-          f"priced: it dominates\n    every subset.")
+          f"{shortfall} against the fitted curve's\n    "
+          f"{gain['modelled_refund']:,.0f} for the levels held, which is the "
+          f"ground truth the whole cost\n    model self-checks on. Only the "
+          f"all-sections option is priced: it dominates every\n    subset.")
+    cross = gain["gain_cross"]
+    agree = "AGREE" if (cross > 0) == (gain["gain"] > 0) else "DISAGREE"
+    print(f"    scored under the OTHER weighting the same two plans read "
+          f"{cross:+.1f} — the two\n    readings {agree}. This check is not "
+          f"decoration: planning under disbelief does\n    not merely decline "
+          f"to buy a flagged family, it tears DOWN levels of it already\n"
+          f"    held, so 'the refund is full value' does not by itself make a "
+          f"re-cut safe.")
     for name, (_l, target, cost) in sorted(
             _plan_rows(gain["reset_plan"]).items(), key=lambda kv: -kv[1][2]):
         print(f"    re-buy  {name:26s} -> L{target}  {cost:,.0f} chips")
@@ -1066,7 +1079,11 @@ def _audit_hardware(cap, ctx):
     # for a re-cut that only a flagged family justifies.
     gain = ihlib.hardware_reset_gain(hw, sb, spendable,
                                      weights=ihlib.suspect_free_weights())
-    if gain and gain["gain"] > 0:
+    # Both readings must agree before this becomes an unprompted flag. A
+    # re-cut that wins only under disbelief is a real judgement call, and
+    # `ih.py hardware` is where it belongs -- not in a sweep whose whole
+    # contract is "this is silently costing you progress right now".
+    if gain and gain["gain"] > 0 and gain["gain_cross"] > 0:
         flags.append(("RESET", f"a free hardware reset is available and "
                                f"UNUSED — re-cutting all "
                                f"{hw.get('highest_hardware_levels_held')} "

@@ -3695,6 +3695,23 @@ def hardware_plan_score(plan):
     return sum(value * target for _n, _t, _l, target, value, _c in plan)
 
 
+def _hardware_plan_rescore(plan, hardware_info, stats_breakdown, weights):
+    """`hardware_plan_score` for a plan valued under a DIFFERENT weighting.
+
+    The per-level value carried in a plan row is the one it was planned with,
+    so re-valuing means going back to the definitions rather than reusing it.
+    """
+    by_type = {d.get("type"): d for d in hardware_info.get("definitions") or []}
+    total = 0.0
+    for _name, typ, _level, target, _value, _cost in plan:
+        defn = by_type.get(typ)
+        if defn is None:
+            continue
+        total += (hardware_track_value(defn, stats_breakdown, weights) or 0) \
+            * target
+    return total
+
+
 def hardware_reset_gain(hardware_info, stats_breakdown, spendable_chips,
                         curve=None, weights=None):
     """Price the free hardware reset: re-cut everything vs. buy on top.
@@ -3732,8 +3749,14 @@ def hardware_reset_gain(hardware_info, stats_breakdown, spendable_chips,
         return None
     refund = next((o.get("refund") for o in
                    hardware_info.get("reset_section_options") or []
-                   if o.get("section") == "all"), None) or {}
-    refund_chips = refund.get("chips") or 0
+                   if o.get("section") == "all"), None)
+    refund_chips = (refund or {}).get("chips") or 0
+    if not refund_chips:
+        # `can_reset` without a priceable all-sections refund means the panel
+        # is telling us less than this function needs. Returning a zeroed
+        # comparison would read as "resetting is worth nothing", which is a
+        # verdict; None reads as "no answer", which is the truth.
+        return None
     if curve is None:
         curve = hardware_cost_curve(hardware_info, family="combat")
     if curve is None:
@@ -3751,6 +3774,20 @@ def hardware_reset_gain(hardware_info, stats_breakdown, spendable_chips,
     modelled = sum(hardware_cumulative(curve, d.get("current_level") or 0)
                    for d in hardware_info.get("definitions") or []
                    if hardware_cost_family(d) == "combat")
+    # Re-score BOTH plans under the weighting they were NOT planned with.
+    # The dominance argument above is only proven inside one weighting, and
+    # for a reset that is a much weaker guarantee than it sounds: planning
+    # under disbelief does not merely decline to BUY a flagged family, it
+    # tears down levels of it already held (10 Aug: Corruption 198.8 -> 145.1
+    # if Malware Injector is not re-bought). So a re-cut that wins only
+    # because a flagged weight was zeroed has to be visible, not asserted
+    # away by a sentence about full-value refunds.
+    other = ((CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT) if weights
+             else suspect_free_weights())
+    cross = _hardware_plan_rescore(reset_plan, hardware_info, stats_breakdown,
+                                   other) \
+        - _hardware_plan_rescore(keep_plan, hardware_info, stats_breakdown,
+                                 other)
     return {
         "refund": refund,
         "refund_chips": refund_chips,
@@ -3763,6 +3800,7 @@ def hardware_reset_gain(hardware_info, stats_breakdown, spendable_chips,
         "keep_score": keep_score,
         "reset_score": reset_score,
         "gain": reset_score - keep_score,
+        "gain_cross": cross,
     }
 
 

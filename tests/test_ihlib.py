@@ -1375,6 +1375,31 @@ class HardwarePlanTest(unittest.TestCase):
         self.assertLess(halved["refund_shortfall"], -0.4)
         self.assertLess(halved["gain"], 0)
 
+    def test_gain_is_cross_checked_under_the_other_weighting(self):
+        """A re-cut planned under disbelief does not merely decline to BUY a
+        flagged family — it tears down levels of it already held. So the
+        dominance argument, which only holds inside one weighting, has to be
+        re-run under the other one and reported. Guards the direction too:
+        the cross score must come from the definitions, not from the value
+        already baked into the plan rows."""
+        hw = _hardware_fixture()
+        sf = ihlib.suspect_free_weights()
+        dis = ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000,
+                                        weights=sf)
+        raw = ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000)
+        self.assertNotAlmostEqual(dis["gain"], dis["gain_cross"], places=3,
+                                  msg="cross score reused the planned value, "
+                                      "so it can never contradict `gain`")
+        # the raw call's cross-check is the disbelieving one and vice versa
+        self.assertAlmostEqual(raw["gain_cross"],
+                               ihlib._hardware_plan_rescore(
+                                   raw["reset_plan"], hw,
+                                   hw["stats_breakdown"], sf)
+                               - ihlib._hardware_plan_rescore(
+                                   raw["keep_plan"], hw,
+                                   hw["stats_breakdown"], sf),
+                               places=6)
+
     def test_reset_gain_is_none_when_no_reset_is_available(self):
         hw = _hardware_fixture()
         hw["can_reset"] = False
