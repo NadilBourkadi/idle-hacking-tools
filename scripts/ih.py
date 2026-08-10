@@ -612,9 +612,18 @@ def cmd_hardware(args):
     locked_note = f" (+{locked_chips:,.0f} shop-locked)" if locked_chips else ""
     stale_note = ("" if free_chips == hw.get("chips")
                   else f"  [panel snapshot said {hw.get('chips'):,.0f}]")
+    # `hardware_purchased` was printed as "levels held" until 10 Aug 2026. It
+    # is the LIFETIME purchase count and includes levels the 27 Jul reset
+    # already refunded -- 1,671 against 850 actually held. Only the held
+    # figure is what a reset hands back, so the two were 2x apart in the one
+    # place a reader would use them. Checked against ground truth: across
+    # every capture in the archive `highest_hardware_levels_held` equals
+    # sum(current_level) exactly, and `hardware_purchased` does not.
     print(f"  chips {free_chips:,.0f}{locked_note}  "
           f"hackcoin {hw.get('hackcoin')}  "
-          f"levels held {hw.get('hardware_purchased')}{stale_note}")
+          f"levels held {hw.get('highest_hardware_levels_held')} "
+          f"(bought {hw.get('hardware_purchased')} lifetime)"
+          f"{stale_note}")
     if hw.get("can_reset"):
         refund = next((o.get("refund") for o in hw.get("reset_section_options") or []
                        if o.get("section") == "all"), None)
@@ -1126,9 +1135,16 @@ def _audit_cicd_budget(cap, homelab, definitions):
     # sweep. Runs do not bank across days (checked over the 3-5 Aug gap),
     # and the register's remaining asserted constants all name the
     # pipeline as their unblock -- budget expiring while those fits are
-    # pending is progress lost silently: the held Corrupt crafts and the
-    # hardware reset re-cut stay blocked on numbers an idle instrument
-    # could be measuring.
+    # pending is progress lost silently: the held Corrupt crafts stay
+    # blocked on a number an idle instrument could be measuring.
+    #
+    # This line used to name the hardware reset re-cut as blocked here too.
+    # It is not, and saying so parked a free monthly reset for ten days on a
+    # constant that cannot reach it: NO hardware track carries MaxHP
+    # (`max_hp.hardware` is 0 and no definition has a max_hp effect), so the
+    # MaxHP fit cannot move a chip. Corruption is the one flagged family with
+    # a track, and `hardware` now plans under disbelief of it rather than
+    # waiting -- see `_print_hardware_plan`.
     if not definitions:
         return []
     cicd_level = next((u["level"] for u in
@@ -1146,9 +1162,8 @@ def _audit_cicd_budget(cap, homelab, definitions):
     return [("MEASURE", f"CI/CD runs unused today: {note}. They expire at "
                         f"the UTC day reset and do not bank — "
                         f"{', '.join(pending_fits)} still asserted "
-                        f"with the pipeline as named unblock; the "
-                        f"held Corrupt crafts and the hardware "
-                        f"reset re-cut wait on those fits")]
+                        f"with the pipeline as named unblock, and the "
+                        f"held Corrupt crafts wait on that fit")]
 
 
 def _audit_cicd_budget_note(cicd_level):
