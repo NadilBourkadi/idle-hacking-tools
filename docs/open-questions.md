@@ -628,6 +628,15 @@ Separation ~4.3 streaks against SE 1.17 at 6 runs/arm — **~3.7σ**, decisive o
 a 12-run block. Both arms are now held by `RESERVED_PROBES`; before the fix
 Light Speed was position 5 on the decompile list.
 
+**Reserved in code as of 10 Aug 2026.** Both arms are held by name in
+`RESERVED_PROBES` — `locks` listed them for decompile that morning, because
+the ArmorPen reservation had concluded on the weight fit and this extension
+was backed by nothing but the paragraph below. A replication is reserved by
+NAME, not by family: re-ranking substitutes different arms and answers a
+different question, and on that capture it would have picked
+`Uncatchable Analyzer of the Bastion` — signed purity 50.8 off 67.3 of
+absolute movement, exactly the cancellation case argued against above.
+
 **Second, free reading already available:** re-run the same two Analyzer arms in
 Corporate Network. The zones differ by ~30 streaks for this build, so if the
 conversion is regime-local the two zones will disagree, and if it is a property

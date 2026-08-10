@@ -1768,3 +1768,73 @@ for anything Corrupt-carrying at this stat level.**
 
 **Loadout after both crafts:** Def 106.97% → 76.55% is the real cost paid, against
 AtkDmg +106.96%, AtkSpd +78.28%, Eva +102.15%, ArmorPen 975 → 1,568, Regen 1,178.
+
+## 10 August 2026 — the reset nobody priced, and a blocker that could not reach it
+
+**Approved craft: `Assault Daemon of Rending` (Daemon).** Contract simulated
+at mean **+39.55**, p10 **+27.83**, p90 **+50.53**, worst **+12.82**,
+P(Δ>+5) **100%**, P(all phases) 8.3% — the deliberately over-committed plan
+(`of Rending` T9→**T1**, not the planner's T9→T5), which is the shape
+`CLAUDE.md` asks for: bounded downside, unbounded upside, and a craft that
+runs out of Stability is still an upgrade. Recorded to the prediction ledger
+at contract time. The Daemon is the weakest equipped slot at score 40.2 and
+the ceiling is 78.5; the base is robust to the flagged weights — worth
+**+44.8 ex-suspect**, i.e. *better* without Corrupt/MaxHP, so no part of the
+verdict rests on a suspect family.
+
+**The hardware reset had been available since 1 Aug and was never priced.**
+`ih.py hardware` printed "RESET AVAILABLE" with a refund figure and stopped,
+and the 601,768 idle chips got a value-per-1K ranking rather than an
+allocation. Priced: re-cutting all 850 held levels and re-spending the
+4,001,750 chips is worth **+74.1 score** against buying on top — about two of
+the largest craft on today's board, for free, on a monthly clock.
+
+**The stated reason it was blocked could not reach it.** The CI/CD budget
+flag named "the hardware reset re-cut" as waiting on the MaxHP fit. **No
+hardware track carries MaxHP** — `max_hp.hardware` is 0 and no definition has
+a `max_hp` effect — so that constant cannot move a single chip. Corruption is
+the one flagged family with a track behind it, and the answer to that is to
+plan under disbelief of it, not to wait. Incident #31.
+
+**The chip allocator was the one irreversible spend with no disbelieving
+reading.** `locks` and `potential` both decide on `min(raw, ex-suspect)`;
+`hardware_track_value` read the module globals only. The raw-optimal plan
+sends 73,830 chips (12% of the budget) into Malware Injector, whose
+Corruption sits at 198.8 against a verified-linear ~72 — the family the
+9 Aug Firewall grade confirmed over-predicts ~2× at this level. The
+disbelieving plan buys none of it. Incident #32; this is #25's lesson in the
+one place it had never been applied.
+
+**The dominance argument was asserted, and is now checked.** "The refund is
+full value, so a reset cannot lose" holds only *inside one weighting*, and
+for a reset that is much weaker than it sounds: planning under disbelief does
+not merely decline to buy a flagged family, it **tears down levels already
+held** — the re-cut drops Corruption 198.8 → 145.1 by not re-buying Malware
+Injector. `gain_cross` re-scores both plans under the other weighting: **+33.9
+raw against +74.1 ex-suspect, both positive**, and that agreement is what
+justifies acting rather than the docstring. The unprompted audit flag now
+requires both.
+
+**par.21's zone-replication arms were one sweep from deletion.** The ArmorPen
+reservation concluded on the *weight* — correctly, that is what it declared —
+but par.21 closed with the Corporate Network extension still open on those
+exact two arms (`Targeted Analyzer of Light Speed`, `Resilient Analyzer of
+Decay`), backed by nothing. `locks` listed both for decompile today, with 25
+CI/CD runs expiring unused. Reservations can now name their arms, because a
+replication re-tests a beta fitted on *specific* arms — and re-ranking would
+have substituted `Uncatchable Analyzer of the Bastion` (signed purity 50.8 off
+67.3 of absolute movement), precisely the near-total-cancellation arm par.21
+argued against. Incident #33.
+
+The guard test that forbade named arms was pinning the wrong invariant: the
+five arms lost before 9 Aug were lost to **silence** (a reservation in doc
+prose that nothing recomputed), not to naming. Named arms resolve against the
+capture every call and report a missing one as PROBE-GONE. Test rewritten to
+pin that.
+
+**Two corrections to output that was simply wrong.** `hardware` printed
+`hardware_purchased` as "levels held" — it is the lifetime count including
+levels the 27 Jul reset already refunded, 1,671 against 850 actually held,
+2× apart in the line directly above the reset refund. And `cmd_locks` crashed
+outright on the first named probe hold: 91 library tests green, and no test
+had ever exercised the command that decides irreversible decompiles.
