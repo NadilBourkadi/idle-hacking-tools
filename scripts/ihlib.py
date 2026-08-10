@@ -3690,6 +3690,82 @@ def hardware_plan(hardware_info, stats_breakdown, budget_chips, curve=None,
     return sorted(out, key=lambda r: -r[4])
 
 
+def hardware_plan_score(plan):
+    """Total banked combat score implied by a plan's TARGET levels."""
+    return sum(value * target for _n, _t, _l, target, value, _c in plan)
+
+
+def hardware_reset_gain(hardware_info, stats_breakdown, spendable_chips,
+                        curve=None, weights=None):
+    """Price the free hardware reset: re-cut everything vs. buy on top.
+
+    Returns None when no reset is available. Otherwise a dict with the two
+    plans (`keep_plan`, `reset_plan`), their scores, and `gain` — the score
+    the re-cut adds over spending the same free chips at current levels.
+
+    **Only the all-sections reset is priced, and that is sufficient rather
+    than lazy.** The refund is full value, so resetting a SUPERSET of tracks
+    weakly dominates: every level the narrower reset keeps can be re-bought
+    with the chips the wider one hands back, and the wider one has strictly
+    more chips and strictly more freedom on top. The capture's per-section
+    options carry `held_levels` and a refund but no track MEMBERSHIP, so
+    pricing them individually would mean guessing the partition from a levels
+    sum — an inference with no ground truth in the capture, for an answer that
+    is dominated anyway.
+
+    "Full value" is CHECKED, not assumed: `refund_shortfall` is the game's own
+    refund minus the fitted curve's cumulative cost of the levels actually
+    held, as a fraction. The dominance argument is only as good as that
+    agreement, and a test asserting non-negative `gain` on a fixture whose
+    refund short-changed the curve is what turned this from a sentence in a
+    docstring into a returned number (10 Aug 2026). A negative `gain` is
+    therefore a finding about the two disagreeing, not advice to skip a free
+    reset — the caller must say which it is looking at.
+
+    What this does NOT model, and what the caller must therefore say out loud:
+    an all-sections reset also zeroes the unscored economy tracks (Drop Rate
+    Amplifier, Loot Filter, Power Supply), which are bought with HACKCOIN. The
+    refund returns that hackcoin — full value, same self-check — so restoring
+    them is a wash, but it is a wash the player has to actually execute.
+    """
+    if not hardware_info.get("can_reset"):
+        return None
+    refund = next((o.get("refund") for o in
+                   hardware_info.get("reset_section_options") or []
+                   if o.get("section") == "all"), None) or {}
+    refund_chips = refund.get("chips") or 0
+    if curve is None:
+        curve = hardware_cost_curve(hardware_info, family="combat")
+    if curve is None:
+        return None
+    zeroed = dict(hardware_info,
+                  definitions=[dict(d, current_level=0)
+                               for d in hardware_info.get("definitions") or []])
+    keep_plan = hardware_plan(hardware_info, stats_breakdown, spendable_chips,
+                              curve=curve, weights=weights)
+    reset_plan = hardware_plan(zeroed, stats_breakdown,
+                               spendable_chips + refund_chips,
+                               curve=curve, weights=weights)
+    keep_score = hardware_plan_score(keep_plan)
+    reset_score = hardware_plan_score(reset_plan)
+    modelled = sum(hardware_cumulative(curve, d.get("current_level") or 0)
+                   for d in hardware_info.get("definitions") or []
+                   if hardware_cost_family(d) == "combat")
+    return {
+        "refund": refund,
+        "refund_chips": refund_chips,
+        "budget": spendable_chips + refund_chips,
+        "modelled_refund": modelled,
+        "refund_shortfall": ((refund_chips - modelled) / modelled
+                             if modelled else None),
+        "keep_plan": keep_plan,
+        "reset_plan": reset_plan,
+        "keep_score": keep_score,
+        "reset_score": reset_score,
+        "gain": reset_score - keep_score,
+    }
+
+
 # ---- Active A/B experiment tracking ----------------------------------------
 # The experiment DECLARATIONS live in experiments.py -- the campaign record,
 # quarantined from the library logic (public-release restructure, 6 Aug 2026).
