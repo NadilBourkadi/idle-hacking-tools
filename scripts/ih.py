@@ -1654,6 +1654,12 @@ def _audit_decompile_locks(cap, ctx):
     return flags
 
 
+def _probe_item_locked(cap, name):
+    return any((item.get("name") or "").lower() == name.lower()
+               and item.get("decompile_locked")
+               for _w, _s, item in ihlib.iter_items(cap))
+
+
 def _audit_reserved_probes(cap, ctx):
     """Are the instruments for the open measurements still owned, and held?
 
@@ -1676,8 +1682,36 @@ def _audit_reserved_probes(cap, ctx):
     measurement rather than a few score points.
     """
     flags = []
+    holds = ihlib.reserved_probe_holds(cap)
     for probe in ihlib.reserved_probes():
         family = probe["family"]
+        if probe.get("items"):
+            # A replication reservation is judged on ITS OWN arms, not on
+            # whatever ranks best today. Ranking them would report a healthy
+            # instrument while the two items the earlier block actually ran
+            # on were being decompiled.
+            owned = {name: hold for name, hold in holds.items()
+                     if hold["probe"] is probe}
+            gone = [n for n in probe["items"]
+                    if n.lower() not in {o.lower() for o in owned}]
+            if gone:
+                flags.append((
+                    "PROBE-GONE",
+                    f"{family} replication arm(s) NO LONGER OWNED: "
+                    f"{'; '.join(gone)} — the earlier block ran on those exact "
+                    f"items, so this measurement can no longer be replicated "
+                    f"and must be re-fitted from scratch. Why it is held: "
+                    f"{probe['reason']}. Needs: {probe['unblock']}"))
+            loose = [n for n, _h in owned.items()
+                     if not _probe_item_locked(cap, n)]
+            if loose:
+                flags.append((
+                    "PROBE-LOOSE",
+                    f"{len(loose)} reserved {family} replication arm(s) are "
+                    f"UNLOCKED and one sweep from deletion — lock: "
+                    + "; ".join(loose)
+                    + f". Needs: {probe['unblock']}"))
+            continue
         levers = ihlib.probe_levers(cap, family, top=probe.get("arms", 1))
         if not levers:
             flags.append((

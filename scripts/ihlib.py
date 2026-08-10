@@ -1563,9 +1563,29 @@ def reserved_probe_holds(capture):
     A reservation with NO owned lever is not an error here -- it is a finding,
     and `_audit_reserved_probes` is what reports it. This function's contract
     is only "what must not be decompiled today".
+
+    A reservation may name `items` explicitly, and then those are held INSTEAD
+    of the purity-ranked ones. That is not a relapse into the rotting sentence
+    above: it is the one case where a name is the requirement rather than a
+    shortcut. A REPLICATION -- par.21's "re-run the same two Analyzer arms in
+    Corporate Network" -- compares a beta fitted on specific arms against the
+    same arms in another regime, so different arms answer a different
+    question. Re-ranking silently substituted them on 10 Aug 2026: the top two
+    by purity had both changed since the first block, and one of them
+    (`Uncatchable Analyzer of the Bastion`, signed purity 50.8 off 67.3 of
+    absolute movement) is exactly the near-total-cancellation case par.21
+    argued AGAINST running. Named arms still resolve against the capture every
+    call, so a missing one is reported GONE rather than silently dropped.
     """
     holds = {}
     for probe in reserved_probes():
+        named = [n.lower() for n in probe.get("items") or []]
+        if named:
+            for _where, _slot, item in iter_items(capture):
+                if (item.get("name") or "").lower() in named:
+                    holds.setdefault(item.get("name"),
+                                     {"probe": probe, "lever": None})
+            continue
         for row in probe_levers(capture, probe["family"],
                                 top=probe.get("arms", 1)):
             holds.setdefault(row["name"], {"probe": probe, "lever": row})
@@ -1735,12 +1755,21 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
             # exactly how the previous five were lost.
             probe = row["probe"]["probe"]
             lever = row["probe"]["lever"]
+            # A named (replication) arm has no purity row: it is held because
+            # the earlier block ran on THIS item, not because it ranks well
+            # today. Saying so is the point -- a purity figure printed here
+            # would invite swapping it for a better-ranked one, which is the
+            # substitution that breaks a replication.
+            how = (f"purity {lever['purity']:.1f}, moves {lever['move']:+.1f} "
+                   f"{probe['family']} against {lever['other']:+.1f} signed "
+                   f"other" if lever else
+                   f"named arm — the {probe['family']} block already ran on "
+                   f"this exact item, so a better-ranked substitute would "
+                   f"answer a different question")
             if not row["locked"]:
                 row["reason"] = (
-                    f"RESERVED {probe['family']} probe arm (purity "
-                    f"{lever['purity']:.1f}, moves {lever['move']:+.1f} "
-                    f"{probe['family']} against {lever['other']:+.1f} signed "
-                    f"other) and currently UNLOCKED — lock it now. Held as an "
+                    f"RESERVED {probe['family']} probe arm ({how}) and "
+                    f"currently UNLOCKED — lock it now. Held as an "
                     f"instrument, not a craft base: {probe['unblock']}")
                 lock.append(row)
             continue
