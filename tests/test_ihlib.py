@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 # Point at an EMPTY data tree BEFORE importing ihlib, which resolves its data
@@ -1090,6 +1091,27 @@ class ReservedProbeArmTest(unittest.TestCase):
         self.assertEqual([k for k, _ in flags], ["PROBE-GONE"])
         self.assertIn("Named", flags[0][1])
         self.assertIn("replicated", flags[0][1])
+
+    def test_cmd_locks_renders_a_named_hold(self):
+        """`cmd_locks` read `lever["locked"]` unconditionally and crashed on
+        the first named reservation — the print path had no test, so the
+        library tests were all green while the command was broken."""
+        import contextlib
+        import io
+
+        import ih
+        cap = self._capture([self._item("Named", True, armor_pen=300.0)])
+        named = [dict(self.PROBE[0], items=["Named"], arms=2)]
+        buf = io.StringIO()
+        with mock.patch.object(ihlib, "RESERVED_PROBES", named), \
+             mock.patch.object(ihlib, "ACTIVE_EXPERIMENT", None), \
+             mock.patch.object(ihlib, "load_capture",
+                               return_value=(cap, Path("fixture.json"))), \
+             contextlib.redirect_stdout(buf):
+            ih.cmd_locks(SimpleNamespace(file=None,
+                                         floor=ihlib.COMPILE_FLOOR))
+        self.assertIn("Named", buf.getvalue())
+        self.assertIn("RESERVED ArmorPen probe arm", buf.getvalue())
 
     def test_an_unlocked_named_arm_surfaces_as_a_lock_action(self):
         import ih
