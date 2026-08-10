@@ -696,6 +696,41 @@ zero the weight or scale it, and **closes the `PENDING_REFITS` row either way**.
 is a property of the stat they do not. That tests the one assumption every β in
 this workspace rests on.
 
+### RE-OPENED 10 Aug 2026 — the block ran, and it ran off the end of the scale
+
+The 12-run block above was executed on 7–8 Aug and closed the `PENDING_REFITS`
+row at β_Barrier = 0.041 ± 0.024. **That row is re-opened**: the block was run
+in Corporate Network at an enemy-level cap of **5,769**, and
+
+| arm | Barrier / Regen | runs | loss enemy level | vs cap 5,769 |
+|---|---|---|---|---|
+| A (high Barrier) | 5,900.8 / 1,221.0 | 6 | 4,991–5,129 | clear |
+| B (low Barrier) | 5,153.6 / 1,844.6 | 6 | 5,841–6,106 | **all six at or above** |
+
+Past the cap the enemy stops getting harder, so arm B's 255.2 is a **lower
+bound**, not a reading. The censoring is perfectly asymmetric and it binds on
+the arm carrying *less* Barrier — so it understates how well low Barrier does
+and therefore **overstates Barrier**. `β = 0.041` is a **ceiling**, the applied
+weight 0.0088 is a ceiling, and the true value may be zero. The information the
+truncation destroyed is not recoverable from the banked runs.
+
+**Why it was invisible:** `final_streak` and `enemy_level_cap` travel in the
+same sim payload and nothing read them together until `cicd_rows` gained a
+headroom check on 10 Aug. It found this on its first run.
+
+**Re-run design — unchanged except for the zone.** Same two arms, 6 runs each,
+in a zone whose cap clears their loss levels. `ih.py sims` now prints the
+headroom per zone for the newest pair; **check it before spending the runs**,
+because the cap tracks the player and a zone that was clear last week may not
+be. Read arm B's uncensored mean against 255.2 — the gap between them is the
+size of the bias, and it also calibrates `SIM_CAP_HEADROOM_WARN`, which is
+asserted.
+
+**Supporting, not a fit:** the 10 Aug Daemon pair dropped **2,604.8 Barrier**
+and 74.9 Thorns and *gained* +6.83 ± 0.91 streaks, uncensored, in the current
+regime. Many stats moved, so it isolates nothing — but it is hard to reconcile
+with Barrier being worth much.
+
 ## par.23 — What is `post_combat_heal` worth? (opened 10 Aug 2026)
 
 **Nothing prices it, and it is the only stat in that position.** Sweeping every

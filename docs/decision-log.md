@@ -1838,3 +1838,46 @@ levels the 27 Jul reset already refunded, 1,671 against 850 actually held,
 2× apart in the line directly above the reset refund. And `cmd_locks` crashed
 outright on the first named probe hold: 91 library tests green, and no test
 had ever exercised the command that decides irreversible decompiles.
+
+## 10 August 2026 (later) — the Barrier fit was measured off the end of the scale
+
+**Found by a check that did not exist an hour earlier, on its first run.**
+`cicd_rows` now reads each CI/CD run's `loss_enemy_level` against the zone's
+own `enemy_level_cap`. Both numbers have been travelling in the same sim
+payload since the first pipeline run; nothing had ever read them together.
+
+**What it found.** Past the cap the enemy stops getting harder, so a streak
+that reaches it is a lower bound and not a measurement. Seven banked runs are
+censored, and six of them are one arm of the par.22 Barrier pair — the pair
+that set `CRAFT_WEIGHTS_FLAT["Barrier"]`:
+
+| arm | Barrier / Regen | runs | loss level | cap 5,769 |
+|---|---|---|---|---|
+| A (high Barrier) | 5,900.8 / 1,221.0 | 6 | 4,991–5,129 | clear |
+| B (low Barrier) | 5,153.6 / 1,844.6 | 6 | 5,841–6,106 | **6/6 censored** |
+
+Perfectly asymmetric, and it binds on the arm with *less* Barrier — so the
+measurement understates how well low Barrier does and **overstates Barrier**.
+β_Barrier = 0.041 ± 0.024 is a **ceiling**; so is the applied 0.0088.
+
+**`PENDING_REFITS` re-opened** for that weight — the first row on the register
+since 30 Jul. This is a legitimate deferral, not an avoided fix: the truncation
+destroyed the information and no re-analysis of the banked runs recovers it.
+The unblock is 12 CI/CD runs of the same two arms in a zone with headroom, and
+`ih.py sims` now prints which zones have it. Every consumer prints the banner
+meanwhile.
+
+**Direction, since it is known even though the magnitude is not.** Barrier is
+currently over-valued. Anything that *loses* Barrier is under-projected — which
+includes today's Daemon craft, and is consistent with it beating projection.
+
+**Also shipped.** `sims` gained a headroom column, per-arm censored counts, an
+explicit BOUND line on any A−B whose arms are censored, and a
+cross-zone replication table so the next pair's zone is checked *before* the
+runs are spent rather than after. Three zones that read as candidates this
+morning are marked UNUSABLE — they censor every arm.
+
+**Not fixed, and it is a real limitation:** the payload carries only
+min/average/max of `loss_enemy_level`, never per-simulation values, so
+`censored` cannot say *how many* of a run's ten streaks were truncated. One in
+ten and ten in ten read the same. `cap_headroom` is the only signal of degree.
