@@ -891,16 +891,27 @@ def cmd_sims(args):
         print("\n# CI/CD Pipeline — full-streak runs "
               "(each row aggregates `sims` simulated streaks)")
         print(f"{'when':>8}  {'zone':<18} {'set':<10} {'sims':>4} "
-              f"{'streak':>7} {'min-max':>9}  final-enemy")
+              f"{'streak':>7} {'min-max':>9} {'headroom':>9}  final-enemy")
         for r in crows:
             when = (datetime.fromtimestamp(r["seen_ms"] / 1000,
                                            timezone.utc).strftime("%H:%M:%S")
                     if r.get("seen_ms") else "-")
+            # Headroom to the zone's enemy-level cap. Blank means the run
+            # banked no cap, not that it had room -- runs before 10 Aug 2026
+            # are read from the same payload, so this is a real distinction.
+            if r.get("censored"):
+                room = "CENSORED"
+            elif r.get("near_cap"):
+                room = f"NEAR {r['cap_headroom'] * 100:.0f}%"
+            elif r.get("cap_headroom") is not None:
+                room = f"{r['cap_headroom'] * 100:.0f}%"
+            else:
+                room = "-"
             print(f"{when:>8}  {str(r['zone'] or '-'):<18} "
                   f"{str(r['gear_set']):<10} {r['sims'] or 0:>4} "
                   f"{r['streak_avg'] or 0:>7.1f} "
-                  f"{r['streak_min'] or 0:>4}-{r['streak_max'] or 0:<4}  "
-                  f"{r['loss_archetype'] or '-'}")
+                  f"{r['streak_min'] or 0:>4}-{r['streak_max'] or 0:<4} "
+                  f"{room:>9}  {r['loss_archetype'] or '-'}")
         # Arm summaries are PER UTC DAY-BLOCK, and arms are identified by
         # their player_combat_stats vector, never the label. Until 6 Aug 2026
         # this pooled every day's rows by gear_set label — mixing the 5 Aug
@@ -930,16 +941,72 @@ def cmd_sims(args):
                 means = [g["streak_avg"] for g in group]
                 se = (statistics.stdev(means) / len(means) ** 0.5
                       if len(means) > 1 else float("nan"))
-                named.append(("/".join(labels), means))
+                cut = sum(1 for g in group if g.get("censored"))
+                named.append(("/".join(labels), means, cut))
                 print(f"    {'/'.join(labels):<10} runs={len(means)}  "
-                      f"{statistics.mean(means):7.2f} ± {se:.2f}")
+                      f"{statistics.mean(means):7.2f} ± {se:.2f}"
+                      f"{f'   {cut}/{len(group)} runs CENSORED' if cut else ''}")
             if len(named) == 2:
-                (na, ma), (nb, mb) = named
+                (na, ma, ca), (nb, mb, cb) = named
                 diff = statistics.mean(ma) - statistics.mean(mb)
                 se = ((statistics.variance(ma) / len(ma) +
                        statistics.variance(mb) / len(mb)) ** 0.5
                       if min(len(ma), len(mb)) > 1 else float("nan"))
                 print(f"    {na} − {nb} = {diff:+.2f} ± {se:.2f}")
+                # Censoring binds on the stronger arm first, so it pulls the
+                # gap toward zero. Say which way the bound runs rather than
+                # printing the difference as if it were a measurement.
+                if ca or cb:
+                    ahead, behind = ((nb, na) if diff < 0 else (na, nb))
+                    cut_ahead = cb if diff < 0 else ca
+                    if cut_ahead:
+                        print(f"      BOUND: {ahead} ran into the zone's "
+                              f"enemy-level cap, so its streaks are lower "
+                              f"bounds — the true gap over {behind} is at "
+                              f"least {abs(diff):.2f}, not exactly it")
+                    else:
+                        print(f"      BOUND: only {behind} (the WEAKER arm) "
+                              f"is censored, which inflates this gap — treat "
+                              f"{abs(diff):.2f} as an upper bound")
+        # Where can the newest pair be REPLICATED? A cross-zone re-run is the
+        # cheapest test of whether a conversion generalises, but it is only
+        # readable in a zone whose enemy-level cap sits clear of the arms'
+        # own loss levels -- otherwise the stronger arm is truncated and the
+        # zone effect and the ceiling are indistinguishable.
+        if by_day:
+            newest = by_day[max(by_day)]
+            arms = {}
+            for r in newest:
+                fp = tuple(sorted((r.get("player_combat_stats") or {}).items())) \
+                    or r["gear_set"]
+                arms.setdefault(fp, []).append(r)
+            arm_rows = {"/".join(sorted({str(g["gear_set"]) for g in group})): group
+                        for group in arms.values()}
+            zones = ihlib.cicd_zone_headroom(ihlib.cicd_zones(), arm_rows)
+            ran_in = {r.get("zone_id") for r in newest}
+            elsewhere = [z for z in zones
+                         if z["available"] and z["zone_id"] not in ran_in]
+            if elsewhere and len(arm_rows) > 1:
+                print(f"\n  replicating the {max(by_day)} arms in another "
+                      f"zone (cap vs their own worst loss level):")
+                for z in elsewhere:
+                    if len(z["censors"]) >= len(arm_rows):
+                        # Every arm truncated: the gap is not a bound in
+                        # either direction, it is unreadable. Saying "lower
+                        # bound" here would invite spending runs on it.
+                        note = ("UNUSABLE — censors every arm, so a gap "
+                                "read here means nothing")
+                    elif z["censors"]:
+                        note = ("CENSORS " + ", ".join(z["censors"]) +
+                                " — the gap it reads would be a lower bound")
+                    elif z["headroom"] is not None and \
+                            z["headroom"] <= ihlib.SIM_CAP_HEADROOM_WARN:
+                        note = f"NEAR CAP ({z['headroom'] * 100:.0f}% headroom)"
+                    elif z["headroom"] is None:
+                        note = "no loss levels banked — cannot tell"
+                    else:
+                        note = f"clear ({z['headroom'] * 100:.0f}% headroom)"
+                    print(f"    {z['zone']:<20} cap {z['cap']:>6,}  {note}")
         last = crows[-1]
         if last.get("daily_used") is not None:
             print(f"  daily budget at last run: {last['daily_used']}"

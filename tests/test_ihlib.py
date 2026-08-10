@@ -1641,3 +1641,79 @@ class SimCapCensoringTest(unittest.TestCase):
         # Center's 8,177. A is clear of both.
         self.assertEqual(by_zone["Corporate Network"]["censors"], ["B"])
         self.assertEqual(by_zone["Data Center"]["censors"], [])
+
+    def test_sims_marks_the_gap_as_a_bound_when_the_better_arm_is_cut(self):
+        """The difference must not print as a measurement. Censoring binds on
+        the stronger arm first, so it drags the gap toward zero."""
+        import ih
+        rows = self._rows([(1, "A", 223.7, 4991, 5769),
+                           (2, "B", 255.2, 6106, 5769),
+                           (3, "A", 224.8, 5014, 5769),
+                           (4, "B", 253.3, 5919, 5769)])
+        buf = []
+        with mock.patch.object(ihlib, "cicd_rows", return_value=rows), \
+             mock.patch.object(ihlib, "sim_rows", return_value=[]), \
+             mock.patch.object(ihlib, "cicd_zones", return_value=[]), \
+             mock.patch("builtins.print", lambda *a, **k: buf.append(" ".join(map(str, a)))):
+            ih.cmd_sims(SimpleNamespace(mode=None))
+        out = "\n".join(buf)
+        self.assertIn("CENSORED", out)
+        self.assertIn("BOUND:", out)
+        self.assertIn("at least", out)
+
+
+class SimReplicationZoneTest(unittest.TestCase):
+    """A zone that truncates EVERY arm reads nothing — it is not a weaker
+    measurement, it is not a measurement. Calling it 'a lower bound' would
+    invite spending an expiring CI/CD budget on an unreadable run."""
+
+    def _render(self, rows, zones):
+        import ih
+        buf = []
+        with mock.patch.object(ihlib, "cicd_rows", return_value=rows), \
+             mock.patch.object(ihlib, "sim_rows", return_value=[]), \
+             mock.patch.object(ihlib, "cicd_zones", return_value=zones), \
+             mock.patch("builtins.print",
+                        lambda *a, **k: buf.append(" ".join(map(str, a)))):
+            ih.cmd_sims(SimpleNamespace(mode=None))
+        return "\n".join(buf)
+
+    @staticmethod
+    def _row(seen_ms, label, streak, loss_max, cap, barrier):
+        return {"seen_ms": seen_ms, "zone": "Data Center",
+                "zone_id": "data_center", "gear_set": label, "sims": 10,
+                "streak_avg": streak, "streak_min": streak - 5,
+                "streak_max": streak + 5, "loss_archetype": "Spike Router",
+                "loss_level_avg": loss_max - 100, "loss_level_max": loss_max,
+                "zone_level_cap": cap,
+                "cap_headroom": (cap - loss_max) / cap,
+                "censored": loss_max >= cap, "near_cap": False,
+                "player_combat_stats": {"DamageBarrier": barrier},
+                "daily_used": 6, "daily_limit": 25}
+
+    def setUp(self):
+        self.rows = [self._row(1, "A", 274.9, 7150, 8177, 5398.0),
+                     self._row(2, "B", 281.8, 7728, 8177, 2793.0),
+                     self._row(3, "A", 275.1, 7094, 8177, 5398.0),
+                     self._row(4, "B", 280.3, 7376, 8177, 2793.0)]
+
+    def test_a_zone_that_censors_every_arm_is_called_unusable(self):
+        out = self._render(self.rows, [
+            {"id": "local_network", "name": "Local Network",
+             "enemy_level_cap": 3487, "available": True}])
+        self.assertIn("UNUSABLE", out)
+        self.assertNotIn("lower bound", out)
+
+    def test_a_zone_that_censors_only_the_stronger_arm_bounds_the_gap(self):
+        out = self._render(self.rows, [
+            {"id": "corporate_network", "name": "Corporate Network",
+             "enemy_level_cap": 7368, "available": True}])
+        self.assertIn("CENSORS B", out)
+        self.assertIn("lower bound", out)
+        self.assertNotIn("UNUSABLE", out)
+
+    def test_an_unreachable_zone_is_never_offered(self):
+        out = self._render(self.rows, [
+            {"id": "government_mainframe", "name": "Government Mainframe",
+             "enemy_level_cap": 99999, "available": False}])
+        self.assertNotIn("Government Mainframe", out)
