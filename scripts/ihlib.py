@@ -2955,6 +2955,25 @@ def assumptions():
          "~7.6x the floor -- so the binding case is untested and a marginal "
          "lever has never been run",
          "9 Aug 2026 (asserted at introduction)", None),
+        ("SIM_CAP_HEADROOM_WARN", SIM_CAP_HEADROOM_WARN, "asserted",
+         "fraction of a zone's enemy-level cap within which a CI/CD streak "
+         "run is reported as NEAR CAP. A model constant, not a display "
+         "threshold: it decides whether an A-B streak difference is read as "
+         "a measurement or as a lower bound, and past the cap the enemy "
+         "stops getting harder so `final_streak` stops measuring power at "
+         "all. Set to 0.05 by argument -- observed loss levels spread about "
+         "+-4% around their run mean (Data Center, 10 Aug: 6,534-7,728 "
+         "around ~6,995), so a run whose max sits inside 5% of the cap "
+         "probably already has simulated streaks touching it. The HARD edge "
+         "(headroom <= 0) is exercised by already-banked runs. The 5% "
+         "WARNING band is the part still untested -- no run yet sits between "
+         "0 and 5% headroom, so whether that margin catches anything is "
+         "unknown. "
+         "TO MEASURE: bank a deliberately-censored run (re-run a current "
+         "Data Center arm in Corporate Network, cap 7,368 against a loss "
+         "max of 7,728) and read how far the arm mean falls against its "
+         "uncensored twin",
+         "10 Aug 2026 (asserted at introduction)", None),
         ("PROBE_MIN_PURITY", PROBE_MIN_PURITY, "asserted",
          "admission floor for a reserved CI/CD probe arm: |target family "
          "score move| / |signed other move|. Decides which items are held as "
@@ -4274,13 +4293,33 @@ def sim_rows(mode="software_profiler", path=None):
     return rows
 
 
+# Fraction of a zone's enemy-level cap below which a streak run is reported
+# as running out of difficulty headroom. See the register row for why this is
+# a model constant and not a display threshold.
+SIM_CAP_HEADROOM_WARN = 0.05
+
+
 def cicd_rows(path=None):
     """One row per CI/CD Pipeline run. Each run is `sims` full-streak
     simulations; the game returns only their aggregate (avg/min/max of
     final_streak etc.) plus best/worst run detail, so the run-average is
     the unit of analysis. `gear_set` is the player-chosen label — identify
     arms from `player_combat_stats`, never from the label (the 5 Aug first
-    use had A=post-craft, B=pre-craft, the reverse of the instruction)."""
+    use had A=post-craft, B=pre-craft, the reverse of the instruction).
+
+    Also carries the run's loss enemy level against the ZONE'S ENEMY-LEVEL
+    CAP, because a streak that runs into the cap stops measuring power: past
+    the cap the enemy stops getting harder, so `final_streak` becomes a
+    lower bound on the arm rather than a reading of it. That censoring is
+    ASYMMETRIC — it binds on the stronger arm first — so it shrinks an A−B
+    gap toward zero and can only ever make a real difference look smaller.
+
+    `censored` is DEGREE-BLIND, and deliberately so: the payload carries only
+    min/average/max of `loss_enemy_level`, never the per-simulation values,
+    so the flag says "at least one of this run's streaks touched the cap" and
+    cannot say how many did. One truncated streak in ten and ten in ten both
+    read `censored`; `cap_headroom` is the only signal of degree.
+    """
     rows = []
     for record in sim_records(path):
         if record.get("kind") != "sim" or record.get("mode") != "cicd_pipeline":
@@ -4289,10 +4328,23 @@ def cicd_rows(path=None):
         agg = res.get("aggregate") or {}
         fs = agg.get("final_streak") or {}
         arch = agg.get("most_common_final_enemy_archetype") or {}
+        loss = agg.get("loss_enemy_level") or {}
+        # The cap travels in the run's own context, so it is the cap that
+        # was in force for THAT run -- it rises with the player (Corporate
+        # Network read 4,433 on 5 Aug and 7,368 on 10 Aug), and a cap read
+        # from the latest capture would silently re-judge older runs.
+        zones = ((record.get("context") or {}).get("hacking_simulator")
+                 or {}).get("zones") or []
+        cap = next((z.get("enemy_level_cap") for z in zones
+                    if z.get("id") == res.get("zone_id")), None)
+        loss_max = loss.get("max")
+        headroom = ((cap - loss_max) / cap
+                    if cap and loss_max is not None else None)
         rows.append({
             "key": record.get("key"),
             "seen_ms": record.get("seen_ms"),
             "zone": res.get("zone_name") or res.get("zone_id"),
+            "zone_id": res.get("zone_id"),
             "gear_set": res.get("gear_set_name") or res.get("gear_mode") or "current",
             "gear_set_id": res.get("gear_set_id"),
             "sims": res.get("simulation_count"),
@@ -4301,6 +4353,15 @@ def cicd_rows(path=None):
             "streak_min": fs.get("min"),
             "streak_max": fs.get("max"),
             "loss_archetype": arch.get("class"),
+            "loss_level_avg": loss.get("average"),
+            "loss_level_max": loss_max,
+            "zone_level_cap": cap,
+            "cap_headroom": headroom,
+            # censored: at least one simulated streak ran the enemy level
+            # into the zone cap, so this run's average understates the arm.
+            "censored": bool(headroom is not None and headroom <= 0),
+            "near_cap": bool(headroom is not None
+                             and 0 < headroom <= SIM_CAP_HEADROOM_WARN),
             "player_combat_stats": res.get("player_combat_stats") or {},
             "credits_per_hour": (agg.get("credits_per_hour_without_buffs") or {}).get("average"),
             "xp_per_hour": (agg.get("xp_per_hour_without_buffs") or {}).get("average"),
@@ -4310,6 +4371,63 @@ def cicd_rows(path=None):
         })
     rows.sort(key=lambda r: (r.get("seen_ms") or 0))
     return rows
+
+
+def cicd_zones(path=None):
+    """Simulator zone table from the most recent CI/CD run's own context.
+
+    The caps track the player, so the NEWEST record is the only one that
+    describes what a replication run today would face."""
+    latest = None
+    for record in sim_records(path):
+        if record.get("kind") != "sim" or record.get("mode") != "cicd_pipeline":
+            continue
+        if latest is None or (record.get("seen_ms") or 0) >= (latest.get("seen_ms") or 0):
+            latest = record
+    if latest is None:
+        return []
+    return (((latest.get("context") or {}).get("hacking_simulator")
+             or {}).get("zones") or [])
+
+
+def cicd_zone_headroom(capture_zones, arm_rows):
+    """Would re-running these arms in each zone hit the enemy-level cap?
+
+    Answers the question a cross-zone replication has to answer BEFORE it is
+    run, from the arms' own observed loss levels: a zone whose cap sits
+    inside the arm's loss-level range censors it. Returns a list of
+    {zone, cap, censors, headroom} sorted by cap, `censors` naming the arms
+    the zone would truncate.
+
+    Exists because par.21's 'free second reading in Corporate Network' was
+    written when that zone's cap was 4,433 and the arms lost at ~3,850. The
+    cap is not a constant: it tracks the player, and so does the arm.
+    """
+    out = []
+    for zone in capture_zones or []:
+        cap = zone.get("enemy_level_cap")
+        if not cap:
+            continue
+        censors, headrooms = [], []
+        for label, rows in (arm_rows or {}).items():
+            observed = [r["loss_level_max"] for r in rows
+                        if r.get("loss_level_max") is not None]
+            if not observed:
+                continue
+            worst = max(observed)
+            headrooms.append((cap - worst) / cap)
+            if worst >= cap:
+                censors.append(label)
+        out.append({
+            "zone": zone.get("name") or zone.get("id"),
+            "zone_id": zone.get("id"),
+            "available": bool(zone.get("available")),
+            "cap": cap,
+            "censors": sorted(censors),
+            "headroom": min(headrooms) if headrooms else None,
+        })
+    out.sort(key=lambda z: z["cap"])
+    return out
 
 
 def sim_regime_check(rows=None):

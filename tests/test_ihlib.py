@@ -1552,3 +1552,92 @@ class FreshWorkspaceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SimCapCensoringTest(unittest.TestCase):
+    """A streak run that hits the zone's enemy-level cap stops measuring power.
+
+    Found 10 Aug 2026 on this check's FIRST run: six of the six runs of the
+    low-Barrier arm of the par.22 pair -- the pair that set
+    CRAFT_WEIGHTS_FLAT["Barrier"] -- lost at or above the zone cap, while all
+    six of the high-Barrier arm ran clear. Nothing had ever read the two
+    together, so `sims` printed the truncated arm mean as a measurement and
+    the weight was fitted on it.
+    """
+
+    @staticmethod
+    def _record(seen_ms, gear_set, streak, loss_max, cap, zone="corporate_network"):
+        zones = ([{"id": zone, "name": "Corporate Network",
+                   "enemy_level_cap": cap, "available": True}]
+                 if cap is not None else [])
+        return {
+            "kind": "sim", "mode": "cicd_pipeline", "key": f"k{seen_ms}",
+            "seen_ms": seen_ms,
+            "context": {"hacking_simulator": {"zones": zones}},
+            "result": {
+                "zone_id": zone, "zone_name": "Corporate Network",
+                "gear_set_name": gear_set, "simulation_count": 10,
+                "player_combat_stats": {"DamageBarrier": 5000.0
+                                        if gear_set == "A" else 4000.0},
+                "aggregate": {
+                    "final_streak": {"average": streak, "min": streak - 5,
+                                     "max": streak + 5},
+                    "loss_enemy_level": {"average": loss_max - 100,
+                                         "max": loss_max},
+                },
+            },
+        }
+
+    def _rows(self, specs):
+        path = Path(tempfile.mkdtemp(prefix="ih-sims-")) / "runs.jsonl"
+        path.write_text("\n".join(json.dumps(self._record(*s)) for s in specs))
+        return ihlib.cicd_rows(path=path)
+
+    def test_a_run_into_the_cap_is_censored(self):
+        [row] = self._rows([(1, "B", 255.2, 6106, 5769)])
+        self.assertTrue(row["censored"])
+        self.assertLessEqual(row["cap_headroom"], 0)
+
+    def test_a_run_clear_of_the_cap_is_not(self):
+        [row] = self._rows([(1, "A", 223.7, 4991, 5769)])
+        self.assertFalse(row["censored"])
+        self.assertFalse(row["near_cap"])
+        self.assertAlmostEqual(row["cap_headroom"], (5769 - 4991) / 5769)
+
+    def test_the_warning_band_sits_below_the_hard_edge(self):
+        near = int(5769 * (1 - ihlib.SIM_CAP_HEADROOM_WARN / 2))
+        [row] = self._rows([(1, "A", 223.7, near, 5769)])
+        self.assertFalse(row["censored"])
+        self.assertTrue(row["near_cap"])
+
+    def test_a_missing_cap_reads_as_unknown_not_as_clear(self):
+        """One 8 Aug run banked no zone table. Reporting it as uncensored
+        would be a guess wearing a measurement's clothes -- the whole defect
+        this check exists to stop."""
+        [row] = self._rows([(1, "B", 256.0, 6052, None)])
+        self.assertFalse(row["censored"])
+        self.assertIsNone(row["cap_headroom"])
+        self.assertIsNone(row["zone_level_cap"])
+
+    def test_each_run_is_judged_against_its_own_cap(self):
+        """The cap tracks the player: Corporate Network read 4,433 on 5 Aug
+        and 7,368 on 10 Aug. Judging an old run against today's cap would
+        silently un-censor it."""
+        rows = self._rows([(1, "B", 255.2, 6106, 5769),
+                           (2, "B", 255.2, 6106, 8177)])
+        self.assertTrue(rows[0]["censored"])
+        self.assertFalse(rows[1]["censored"])
+
+    def test_zone_headroom_names_the_arms_a_zone_would_truncate(self):
+        rows = self._rows([(1, "A", 274.9, 7150, 8177),
+                           (2, "B", 281.8, 7728, 8177)])
+        arms = {"A": [rows[0]], "B": [rows[1]]}
+        zones = [{"id": "corporate_network", "name": "Corporate Network",
+                  "enemy_level_cap": 7368, "available": True},
+                 {"id": "data_center", "name": "Data Center",
+                  "enemy_level_cap": 8177, "available": True}]
+        by_zone = {z["zone"]: z for z in ihlib.cicd_zone_headroom(zones, arms)}
+        # B loses at 7,728 -- above Corporate Network's 7,368 but below Data
+        # Center's 8,177. A is clear of both.
+        self.assertEqual(by_zone["Corporate Network"]["censors"], ["B"])
+        self.assertEqual(by_zone["Data Center"]["censors"], [])
