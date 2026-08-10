@@ -519,6 +519,87 @@ def cmd_homelab(args):
             print(f"    {d.get('name'):28s} {ihlib.format_cost(d.get('cost')):<24} ({state})")
 
 
+def _plan_rows(plan):
+    """{track name -> (current_level, target_level, chip_delta)} for the buys."""
+    return {name: (level, target, cost)
+            for name, _t, level, target, _v, cost in plan if target > level}
+
+
+def _print_hardware_plan(hw, stats_breakdown, spendable):
+    """SPEND / RESET blocks: what to do with the chips, on the weaker reading.
+
+    Added 10 Aug 2026. Before it, `hardware` ranked tracks by value-per-1K and
+    stopped — so the standing advice for an idle balance was a ranking, and
+    the reset was announced with a refund figure and no idea whether taking it
+    was worth anything. Both gaps mattered on the same day: 601,768 chips idle
+    and a free reset that had been available since 1 Aug unpriced.
+
+    The plan is built under `suspect_free_weights()`, not the raw ones. Chips
+    are the least reversible spend in the game (no sell-back outside the
+    monthly reset) and `locks` already decides irreversible questions on the
+    weaker of the two readings; this is the same rule applied to the same
+    class of decision. The believing plan is not hidden — every row the two
+    disagree about is printed with the chips at stake.
+    """
+    curve = ihlib.hardware_cost_curve(hw, family="combat")
+    if curve is None:
+        return
+    sf = ihlib.suspect_free_weights()
+    plan = ihlib.hardware_plan(hw, stats_breakdown, spendable, curve=curve,
+                               weights=sf)
+    raw_plan = ihlib.hardware_plan(hw, stats_breakdown, spendable, curve=curve)
+    buys, raw_buys = _plan_rows(plan), _plan_rows(raw_plan)
+    if buys:
+        print(f"\n  SPEND {spendable:,.0f} chips — equal-marginal-value "
+              f"allocation, planned under DISBELIEF of the flagged families")
+        print("  (chips cannot be sold back outside the monthly reset, so this "
+              "ranks on the\n   weaker reading, exactly as `locks` does):")
+        for name, (level, target, cost) in sorted(buys.items(),
+                                                  key=lambda kv: -kv[1][2]):
+            print(f"    {name:26s} L{level} -> L{target}  {cost:,.0f} chips")
+    # Only CATEGORICAL disagreements are worth a line: a track one reading
+    # funds and the other does not. Every other row differs by a few levels
+    # purely because the budget freed by dropping a track has to land
+    # somewhere, and printing those buries the one that decides anything.
+    # A threshold would need a registered constant; "bought or not" needs none.
+    for name in sorted(set(buys) ^ set(raw_buys)):
+        funded, row = ("believing", raw_buys[name]) if name in raw_buys \
+            else ("disbelieving", buys[name])
+        _level, target, cost = row
+        print(f"    !! the two readings DISAGREE on {name}: only the "
+              f"{funded} plan funds it, at L{target} for {cost:,.0f} chips "
+              f"({cost / max(spendable, 1):.0%} of the budget)")
+    gain = ihlib.hardware_reset_gain(hw, stats_breakdown, spendable,
+                                     curve=curve, weights=sf)
+    if not gain:
+        return
+    print(f"\n  RESET vs BUY-ON-TOP — re-cutting all "
+          f"{hw.get('highest_hardware_levels_held')} held levels is worth "
+          f"{gain['gain']:+.1f} score")
+    print(f"    keep levels, spend {spendable:,.0f} chips     -> banked score "
+          f"{gain['keep_score']:.1f}")
+    print(f"    reset, spend {gain['budget']:,.0f} chips       -> banked score "
+          f"{gain['reset_score']:.1f}")
+    shortfall = gain["refund_shortfall"]
+    print(f"    the game's refund of {gain['refund_chips']:,.0f} chips is "
+          f"{shortfall:+.1%} against the fitted curve's\n    "
+          f"{gain['modelled_refund']:,.0f} for the levels held — that "
+          f"agreement is WHY a reset cannot lose\n    (the worst case is "
+          f"re-buying what you had), and it is the ground truth the whole\n"
+          f"    cost model self-checks on. Only the all-sections option is "
+          f"priced: it dominates\n    every subset.")
+    for name, (_l, target, cost) in sorted(
+            _plan_rows(gain["reset_plan"]).items(), key=lambda kv: -kv[1][2]):
+        print(f"    re-buy  {name:26s} -> L{target}  {cost:,.0f} chips")
+    print("    NOT MODELLED, and it is what the action WRITES: an all-sections "
+          "reset also\n    zeroes the unscored economy tracks (Drop Rate "
+          "Amplifier, Loot Filter, Power\n    Supply), which are bought with "
+          "HACKCOIN. The refund returns "
+          f"{(gain['refund'].get('hackcoin') or 0)} hackcoin — full value, so "
+          "restoring them\n    is a wash, but it is a wash you have to spend "
+          "back by hand.")
+
+
 def cmd_hardware(args):
     cap, path = ihlib.load_capture(args.file)
     hw = ihlib.hardware_state(cap)
@@ -542,6 +623,7 @@ def cmd_hardware(args):
               f"{ihlib.format_cost(refund)}")
     for _line in ihlib.pending_refit_banner():
         print("  " + _line)
+    _print_hardware_plan(hw, stats_breakdown, spendable)
     print("\n  combat tracks by value per 1K chips (CRAFT_WEIGHTS heuristic on the")
     print("  current build; additive pooling confirmed — mechanics.md §13).")
     print("  This ranks raw SCORE, which is NOT comparable across stat")
@@ -968,6 +1050,25 @@ def _audit_hardware(cap, ctx):
         if level and value == 0:
             flags.append(("DEAD", f"{d.get('name')} L{level} scores 0 — its "
                                   f"multiplicand is zero; those chips do nothing"))
+    # A free reset sitting unused is progress already lost, on a monthly
+    # clock -- the 10 Aug one had been available since 1 Aug because the
+    # sweep announced the refund and never priced it. Priced on the same
+    # disbelieving weights the spend plan uses, so the flag can never argue
+    # for a re-cut that only a flagged family justifies.
+    gain = ihlib.hardware_reset_gain(hw, sb, spendable,
+                                     weights=ihlib.suspect_free_weights())
+    if gain and gain["gain"] > 0:
+        flags.append(("RESET", f"a free hardware reset is available and "
+                               f"UNUSED — re-cutting all "
+                               f"{hw.get('highest_hardware_levels_held')} "
+                               f"held levels and re-spending "
+                               f"{gain['budget']:,.0f} chips is worth "
+                               f"{gain['gain']:+.1f} score over buying on "
+                               f"top of what you hold "
+                               f"({gain['keep_score']:.1f} -> "
+                               f"{gain['reset_score']:.1f}). The refund is "
+                               f"full value, so this cannot lose — "
+                               f"ih.py hardware"))
     return flags
 
 
@@ -1998,7 +2099,18 @@ def _brief_homelab(text):
 
 def _brief_hardware(text):
     out, in_tracks, kept, dropped = [], False, 0, 0
+    rebuys = 0
     for line in text.splitlines():
+        # The re-buy schedule is a do-list, not a verdict: the RESET headline
+        # above it carries the decision, so keep the three largest and count
+        # the rest rather than spending 10 digest lines on chip amounts.
+        if line.lstrip().startswith("re-buy "):
+            rebuys += 1
+            if rebuys > 3:
+                if rebuys == 4:
+                    out.append("    (further re-buy lines suppressed "
+                               "— ih.py hardware)")
+                continue
         if "combat tracks by value" in line:
             in_tracks = True
             out.append(line)

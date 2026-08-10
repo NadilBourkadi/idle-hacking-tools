@@ -1330,6 +1330,57 @@ class HardwarePlanTest(unittest.TestCase):
              if n == "CORRUPTION" and t > lv], [],
             "the disbelieving plan still spends chips on a flagged family")
 
+    def test_reset_gain_is_never_negative(self):
+        """The dominance property the RESET block rests on: the refund is
+        full value, so re-cutting can at worst reproduce what you held. A
+        negative gain means the planner or the cost curve has broken, not
+        that resetting is a bad idea — which is exactly the failure a
+        priced-but-unguarded recommendation would hide."""
+        sf = ihlib.suspect_free_weights()
+        for held in ({"ecc": 200, "corruption": 80, "defense": 100,
+                      "armor_pen": 60},
+                     {"ecc": 20, "corruption": 300, "defense": 300,
+                      "armor_pen": 20}):
+            hw = _hardware_fixture(held)
+            for weights in (None, sf):
+                gain = ihlib.hardware_reset_gain(
+                    hw, hw["stats_breakdown"], 100000, weights=weights)
+                self.assertIsNotNone(gain)
+                self.assertGreaterEqual(
+                    gain["gain"], -1e-6,
+                    f"reset priced as a LOSS for {held} — impossible under a "
+                    f"full-value refund")
+
+    def test_reset_gain_prices_the_all_section_refund(self):
+        hw = _hardware_fixture()
+        all_refund = next(o["refund"]["chips"]
+                          for o in hw["reset_section_options"]
+                          if o["section"] == "all")
+        gain = ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000)
+        self.assertEqual(gain["refund_chips"], all_refund)
+        self.assertEqual(gain["budget"], 100000 + all_refund)
+
+    def test_refund_shortfall_is_measured_against_the_curve(self):
+        """The dominance argument is only as good as refund-vs-curve
+        agreement, so that agreement is returned rather than assumed. A
+        refund the game short-changes must show up as a shortfall AND as a
+        priced loss — the number exists so a caller can tell the two apart."""
+        hw = _hardware_fixture()
+        gain = ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000)
+        self.assertAlmostEqual(gain["refund_shortfall"], 0.0, places=4)
+        for opt in hw["reset_section_options"]:
+            if opt["section"] == "all":
+                opt["refund"]["chips"] = int(opt["refund"]["chips"] * 0.5)
+        halved = ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000)
+        self.assertLess(halved["refund_shortfall"], -0.4)
+        self.assertLess(halved["gain"], 0)
+
+    def test_reset_gain_is_none_when_no_reset_is_available(self):
+        hw = _hardware_fixture()
+        hw["can_reset"] = False
+        self.assertIsNone(
+            ihlib.hardware_reset_gain(hw, hw["stats_breakdown"], 100000))
+
 
 class FreshWorkspaceTest(unittest.TestCase):
     """A fresh clone with an empty data/ must degrade gracefully, and a
