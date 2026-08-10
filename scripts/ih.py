@@ -1500,17 +1500,24 @@ def cmd_locks(args):
     # is a LOCK action above, and printing both is the double-heading defect.
     for name, hold in (actions.get("probe_holds") or {}).items():
         lever, probe = hold["lever"], hold["probe"]
-        if not lever["locked"]:
+        # A named replication arm carries no purity row -- it is held because
+        # the earlier block ran on this exact item. Look its slot and lock
+        # flag up directly rather than off a lever that is not there.
+        slot, locked = ((lever["slot"], lever["locked"]) if lever
+                        else _probe_item_slot_lock(cap, name))
+        if not locked:
             continue
-        by_slot.setdefault(lever["slot"], []).append(("HELD", {
-            "name": name, "slot": lever["slot"], "worth": None,
+        why = (f"Purity {lever['purity']:.1f} ({lever['move']:+.1f} "
+               f"{probe['family']} vs {lever['other']:+.1f} signed other, "
+               f"{lever['other_abs']:.1f} abs)" if lever else
+               "Named arm: the earlier block ran on this exact item, so a "
+               "better-ranked substitute would answer a different question")
+        by_slot.setdefault(slot, []).append(("HELD", {
+            "name": name, "slot": slot, "worth": None,
             "stability": 0, "item_level": 0,
             "reason": f"RESERVED {probe['family']} probe arm — held as an "
                       f"INSTRUMENT, not a craft base, so its craft score is "
-                      f"not why it is kept. Purity {lever['purity']:.1f} "
-                      f"({lever['move']:+.1f} {probe['family']} vs "
-                      f"{lever['other']:+.1f} signed other, "
-                      f"{lever['other_abs']:.1f} abs). Releases when: "
+                      f"not why it is kept. {why}. Releases when: "
                       f"{probe['unblock']}"}))
 
     def _print_at_risk():
@@ -1654,10 +1661,16 @@ def _audit_decompile_locks(cap, ctx):
     return flags
 
 
+def _probe_item_slot_lock(cap, name):
+    """(slot, locked) for a named probe arm, straight off the capture."""
+    for _where, slot, item in ihlib.iter_items(cap):
+        if (item.get("name") or "").lower() == name.lower():
+            return slot, bool(item.get("decompile_locked"))
+    return "?", False
+
+
 def _probe_item_locked(cap, name):
-    return any((item.get("name") or "").lower() == name.lower()
-               and item.get("decompile_locked")
-               for _w, _s, item in ihlib.iter_items(cap))
+    return _probe_item_slot_lock(cap, name)[1]
 
 
 def _audit_reserved_probes(cap, ctx):
