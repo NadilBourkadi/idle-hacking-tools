@@ -1241,6 +1241,96 @@ class ExperimentStatusTest(unittest.TestCase):
         self.assertEqual(status["post_death_streaks"], [])
 
 
+def _hardware_fixture(levels=None):
+    """A synthetic hardware panel: one flagged-family track, three clean ones.
+
+    Built here rather than taken from a capture because the suite is
+    data-isolated by construction (`DataIsolationTest`). Track types are the
+    real ones so `stat_label` resolves them into CRAFT_WEIGHTS families.
+    """
+    levels = levels or {"ecc": 200, "corruption": 80, "defense": 100,
+                        "armor_pen": 60}
+    stats = {"regeneration": {"equipment_flat": 1000, "equipment_pct": 0,
+                              "hardware": 1.0, "homelab": 0},
+             "corruption": {"equipment_flat": 140, "equipment_pct": 0,
+                            "hardware": 0.4, "homelab": 0},
+             "armor_penetration": {"equipment_flat": 1500, "equipment_pct": 0,
+                                   "hardware": 0.3, "homelab": 0},
+             "defense": {"equipment_flat": 0, "equipment_pct": 0.7,
+                         "hardware": 0.5, "homelab": 0}}
+    effects = {"ecc": "regeneration", "corruption": "corruption",
+               "defense": "defense", "armor_pen": "armor_penetration"}
+    defs = []
+    for typ, level in levels.items():
+        defs.append({
+            "name": typ.upper(), "type": typ, "current_level": level,
+            "effects": [{"combat_stat": effects[typ],
+                         "additive_per_level": 0.005}],
+            # cost(L) = 30 * L**1.17, the shape fitted off live captures
+            "next_cost": {"chips": round(30 * level ** 1.17),
+                          "credits": 1000},
+        })
+    held = sum(levels.values())
+    hw = {
+        "definitions": defs, "stats_breakdown": stats,
+        "can_reset": True, "highest_hardware_levels_held": held,
+        "hardware_purchased": held * 2,
+    }
+    # The refund must be FULL VALUE under the same curve the planner fits, or
+    # the fixture is not modelling this game: a short-changing refund makes
+    # resetting a genuine loss, and asserting otherwise would only be testing
+    # that the fixture agreed with itself.
+    curve = ihlib.hardware_cost_curve(hw, family="combat")
+    refund = round(sum(ihlib.hardware_cumulative(curve, lv)
+                       for lv in levels.values()))
+    hw["reset_section_options"] = [
+        {"section": "all", "held_levels": held,
+         "refund": {"chips": refund, "hackcoin": 8}},
+        {"section": "combat", "held_levels": held // 2,
+         "refund": {"chips": refund // 3, "hackcoin": 0}},
+    ]
+    return hw
+
+
+class HardwarePlanTest(unittest.TestCase):
+    """The chip allocator gained a disbelieving reading on 10 Aug 2026.
+
+    Until then `hardware_track_value` read the module weights only, so the
+    least reversible spend in the game — hardware cannot be sold back outside
+    the monthly reset — was the one decision with no ex-suspect check, while
+    `locks` and `potential` both decided on the weaker of the two readings.
+    On the capture that surfaced it the raw-optimal plan sent 12% of the
+    budget into a Corruption track whose stat sits 2.8x past its verified
+    linear range.
+    """
+
+    def test_flagged_only_track_scores_zero_not_none_under_disbelief(self):
+        """None means 'not modelled' and sorts a track into the unscored
+        economy list, where no reader would ever see the two plans disagree
+        about it. Disbelief must say 'worth nothing', not 'unknown'."""
+        hw = _hardware_fixture()
+        defn = next(d for d in hw["definitions"] if d["type"] == "corruption")
+        sf = ihlib.suspect_free_weights()
+        self.assertGreater(
+            ihlib.hardware_track_value(defn, hw["stats_breakdown"]), 0)
+        self.assertEqual(
+            ihlib.hardware_track_value(defn, hw["stats_breakdown"], sf), 0.0)
+
+    def test_disbelieving_plan_funds_no_flagged_family_track(self):
+        hw = _hardware_fixture()
+        sf = ihlib.suspect_free_weights()
+        raw = ihlib.hardware_plan(hw, hw["stats_breakdown"], 400000)
+        dis = ihlib.hardware_plan(hw, hw["stats_breakdown"], 400000,
+                                  weights=sf)
+        bought = {n: t for n, _ty, lv, t, _v, _c in raw if t > lv}
+        self.assertIn("CORRUPTION", bought,
+                      "fixture no longer exercises the disagreement")
+        self.assertEqual(
+            [t for n, _ty, lv, t, _v, _c in dis
+             if n == "CORRUPTION" and t > lv], [],
+            "the disbelieving plan still spends chips on a flagged family")
+
+
 class FreshWorkspaceTest(unittest.TestCase):
     """A fresh clone with an empty data/ must degrade gracefully, and a
     capture missing a lazy panel must not crash the audit (the July-22

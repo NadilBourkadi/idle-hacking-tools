@@ -2078,10 +2078,19 @@ def chip_budget(capture):
     return free + locked, free, locked
 
 
-def hardware_track_value(defn, stats_breakdown):
+def hardware_track_value(defn, stats_breakdown, weights=None):
     """Heuristic bottleneck value of +1 level, on the CRAFT_WEIGHTS scale.
 
     Returns None for pure economy tracks (no combat_stat effect).
+
+    `weights` is an optional `(pct, flat)` pair — pass `suspect_free_weights()`
+    to price a track under DISBELIEF of the flagged families. Until 10 Aug 2026
+    this read the module globals only, so the chip allocator had no
+    disbelieving reading at all while `locks` and `potential` both decided on
+    `min(raw, ex-suspect)`. Hardware is the LEAST reversible spend in the game
+    — levels cannot be sold back outside the monthly reset — and the raw-optimal
+    plan for the 10 Aug reset sent 375,955 chips into Malware Injector
+    (Corruption) that the disbelieving plan spends on measured families instead.
 
     Hardware %, homelab % and equipment % share ONE additive pool — confirmed
     formula-level 27 Jul 2026 (`docs/mechanics.md` §13), so the pooling
@@ -2098,6 +2107,7 @@ def hardware_track_value(defn, stats_breakdown):
       e.g. Packet Shield and Exploit Framework on 27 Jul 2026, which were
       multiplying zero while holding 81K chips.
     """
+    pct_w, flat_w = weights or (CRAFT_WEIGHTS_PCT, CRAFT_WEIGHTS_FLAT)
     value = None
     for effect in defn.get("effects") or []:
         stat = effect.get("combat_stat")
@@ -2109,16 +2119,23 @@ def hardware_track_value(defn, stats_breakdown):
         # drop_boost) that CRAFT_WEIGHTS does not model and that have no
         # stats_breakdown entry. Leave those unscored (None) rather than 0, so
         # callers can tell "not modelled" from "modelled and worth nothing".
-        if label not in CRAFT_WEIGHTS_PCT and label not in CRAFT_WEIGHTS_FLAT:
+        if label not in pct_w and label not in flat_w:
+            # Under `suspect_free_weights` a flagged family is ABSENT, not
+            # zero, so a track carrying only that family must still return a
+            # number (0.0) rather than None -- None means "not modelled" and
+            # would sort it into the unscored economy list, where nothing
+            # would ever notice the two readings disagree about it.
+            if label in CRAFT_WEIGHTS_PCT or label in CRAFT_WEIGHTS_FLAT:
+                value = value or 0.0
             continue
         value = value or 0.0
-        if label in CRAFT_WEIGHTS_PCT:
-            value += per_level * 100 * CRAFT_WEIGHTS_PCT[label]
+        if label in pct_w:
+            value += per_level * 100 * pct_w[label]
         else:
             b = (stats_breakdown or {}).get(stat) or {}
             flat = b.get("equipment_flat") or 0
             pool = gear_flat_pool(b)
-            value += per_level * flat * CRAFT_WEIGHTS_FLAT[label] / pool
+            value += per_level * flat * flat_w[label] / pool
     return value
 
 
@@ -3610,17 +3627,25 @@ def hardware_cumulative(curve, level):
     return A * level ** (p + 1) / (p + 1) if level > 0 else 0.0
 
 
-def hardware_plan(hardware_info, stats_breakdown, budget_chips, curve=None):
+def hardware_plan(hardware_info, stats_breakdown, budget_chips, curve=None,
+                  weights=None):
     """Equal-marginal-value-per-chip allocation across combat tracks.
 
     Returns [(name, type, current_level, target_level, value_per_level,
     chip_delta)] sorted by value. `budget_chips` is spendable chips (locked +
     free); current levels are never reduced, so this plans purchases only --
-    for a full re-allocation, call it with the post-reset level-0 state.
+    for a full re-allocation, call it with the post-reset level-0 state
+    (`hardware_reset_gain` does exactly that).
+
+    `weights` is forwarded to `hardware_track_value`; pass
+    `suspect_free_weights()` to plan under disbelief. That matters here for
+    the same reason it matters in `plan_craft`: a greedy allocator spends the
+    budget where score-per-chip is highest, so a flagged family does not just
+    mis-price its own row, it MOVES CHIPS onto it.
     """
     rows = []
     for d in hardware_info.get("definitions") or []:
-        value = hardware_track_value(d, stats_breakdown)
+        value = hardware_track_value(d, stats_breakdown, weights)
         if value is None:
             continue
         rows.append([d.get("name"), d.get("type"), d.get("current_level") or 0,
