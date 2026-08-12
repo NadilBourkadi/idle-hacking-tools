@@ -2010,10 +2010,21 @@ def homelab_upgrade_score(upgrade_def):
 HOMELAB_SCHEMA_EFFECT_KEYS = frozenset({
     "combat_stat", "additive", "multiplier", "resource",
 })
-# Effects that genuinely pay in currencies, queue capacity or quality-of-life.
-# For these a score of 0.000 is a REAL answer, not a missing one: they buy
-# resources purchasable at ~2 cr/unit, build/queue slots that add no throughput
-# (mechanics.md 15), drop-table and inventory conveniences, or XP.
+# Effects that deliver NO COMBAT STAT. That is the only claim this list makes,
+# and the wording matters: the first version said these "genuinely pay in
+# currencies ... a score of 0.000 is a REAL answer", which was false for most
+# of them (found by code review, 12 Aug 2026, the same day the list shipped).
+# `tier_promotion_stability_preserve` pays in STABILITY -- ranked ABOVE credits
+# in CLAUDE.md's scarcity order, already priced by `stability_preserve_chance`,
+# and bought for 4B cr + 4 hc. `contract_hackcoin_bonus_contracts` pays in
+# HACKCOIN, the scarcest currency there is. Calling those "worth zero" is a
+# harder error than leaving them unscored, because it is a confident wrong
+# answer rather than a missing one -- the exact shape of the two constants this
+# workspace most regrets.
+#
+# So: a key here scores 0.000 on the COMBAT scale and that is all. Whether it
+# is worth anything is a separate question, answered per key by
+# HOMELAB_SCARCE_NON_COMBAT_PAYS_IN below.
 HOMELAB_NON_COMBAT_EFFECT_KEYS = frozenset({
     "build_overclock_max", "build_slots", "build_speed",
     "contract_hackcoin_bonus_contracts", "contract_queue_slots",
@@ -2024,6 +2035,41 @@ HOMELAB_NON_COMBAT_EFFECT_KEYS = frozenset({
     "pending_build_slots", "preferred_equipment_slot_chance",
     "tier_promotion_stability_preserve", "xp",
 })
+# Of those, the ones that pay in something SCARCE, and what. Not a price -- a
+# pointer, so the display can say "no combat stat, pays in X" instead of a bare
+# 0.000 that reads as "considered and worthless". Keys absent from this map are
+# the ones where 0.000 really is the answer: resources purchasable at ~2 cr/unit
+# and build/queue slots that add no throughput (mechanics.md 15).
+HOMELAB_SCARCE_NON_COMBAT_PAYS_IN = {
+    "tier_promotion_stability_preserve":
+        "STABILITY on the craft target — priced by stability_preserve_chance, "
+        "and Stability outranks credits in CLAUDE.md's scarcity order",
+    "contract_hackcoin_bonus_contracts": "HACKCOIN, the scarcest currency",
+    "contract_queue_slots": "contract throughput — 'the real economic lever'",
+    "contract_target_reduction": "contract throughput",
+    "inventory_slots": "inventory, which costs 10 hc/slot and caps every hold",
+    "equipment_drop_chance": "craft bases (~6.8 days for a top-decile one)",
+    "equipment_rarity": "craft bases",
+    "drop_item_level_allowed_ratio": "craft bases",
+    "preferred_equipment_slot_chance": "craft bases, aimed at one slot",
+    "build_speed": "homelab throughput, i.e. install-gate arrival",
+    "build_overclock_max": "homelab throughput, for credits",
+    "hacking_zone_reward_soft_cap": "zone rewards past the streak softcap",
+}
+
+
+def homelab_pays_in(upgrade_def):
+    """What a no-combat-stat upgrade pays in, or None if it really is zero.
+
+    Reads HOMELAB_SCARCE_NON_COMBAT_PAYS_IN, so `homelab` can print "pays in
+    STABILITY" where it used to print `0.000` beside a 4B cr + 4 hc buy.
+    """
+    for eff in upgrade_def.get("effects") or []:
+        for key in eff:
+            note = HOMELAB_SCARCE_NON_COMBAT_PAYS_IN.get(key)
+            if note:
+                return note
+    return None
 
 
 def homelab_unmodelled_effects(upgrade_def):
@@ -3276,7 +3322,11 @@ def assumptions():
          "documented law against the full ledger for the first time. It binds "
          "from streak 130 and it is the half that matters -- at the ~255 "
          "where this build dies, an unfloored decay reads 8.5% of face value "
-         "against a true 30%, i.e. it under-heals the death region 3.9x",
+         "against a true 30%, i.e. it under-heals the death region 3.5x "
+         "(0.30 / 0.99**245). Do not restate this as 3.9x -- that is "
+         "0.99**255 with the grace window dropped, and it is also, "
+         "coincidentally, `simulate_streak`'s OLD combined error, which "
+         "compounded a stale heal base on top of the missing floor",
          "12 Aug 2026", _chk_post_combat_heal),
     ]
     order = {"inherited": 0, "asserted": 1, "supplied": 2, "measured": 3}
@@ -4946,13 +4996,26 @@ def simulate_streak(p, heal_base, level_curve, fits, rng, max_streak=400):
     `heal_base` is `post_combat_heal_base(capture)` -- the stat's own total,
     NOT `5 * hack_level`. This took `hack_level` and rebuilt the base from it
     until 12 Aug 2026, which was wrong twice over: the hack-level term stopped
-    being the whole base once Thermal Budget populated `homelab_flat`, and the
-    decay it applied had no floor, so it under-healed the streak-255 death
-    region by 3.9x. Nothing called this function, so no shipped verdict was
-    computed from it -- but it is the forward model the CI/CD betas would be
-    read against, and a dead instrument with a wrong law in it is a trap, not
-    a spare part.
+    being the whole base once Thermal Budget populated `homelab_flat` (16,660
+    against a real 18,342), and the decay it applied had no floor (0.0852
+    against a real 0.30 at streak 255). Those compound to a 3.9x under-heal of
+    the death region; the FLOOR alone accounts for 3.5x. Nothing called this
+    function, so no shipped verdict was computed from it -- but it is the
+    forward model the CI/CD betas would be read against, and a dead instrument
+    with a wrong law in it is a trap, not a spare part.
+
+    Raises on a None `heal_base` rather than failing inside the loop:
+    `post_combat_heal_base` returns None when `statsBreakdown` was not
+    captured (it is a lazy panel), and the old signature took `hack_level`,
+    which is always present. That swap moved a guaranteed input to an
+    optional one, so the guard is the cost of the fix.
     """
+    if heal_base is None:
+        raise ValueError(
+            "heal_base is None -- statsBreakdown was not captured, so the "
+            "post-combat heal cannot be read. Open the Stats panel and "
+            "recapture; do NOT substitute 5 * hack_level, which has been "
+            "short by the Thermal Budget component since 12 Aug 2026.")
     classes = sorted({c for c, _ in fits})
     hp = p["max_hp"]
     streak = 0

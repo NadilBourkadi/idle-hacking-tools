@@ -389,6 +389,24 @@ def cmd_potential(args):
                 print(f"            econ Δ vs equipped: {'  '.join(econ)}")
 
 
+def _print_heal_magnitude(row, indent):
+    """The HP/fight a post-combat-heal job delivers, or nothing.
+
+    One implementation, three call sites (ranked QUEUE row, unranked tail row,
+    purchasable table). The first version printed it in one of the three and
+    was unreachable in the one that actually matters.
+    """
+    heal = row.get("heal_effect")
+    if not heal:
+        return
+    print(f"{indent}MAGNITUDE (not a weight): +{heal['fraction']:.0%} of "
+          f"{heal['max_hp']:,.0f} Max HP = +{heal['face']:,.0f} HP restored per "
+          f"WIN per level;\n{indent}past streak "
+          f"{ihlib.post_combat_heal_floor_streak()} exhaustion pins it at "
+          f"x{ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR:.2f}, so "
+          f"+{heal['at_floor']:,.0f} HP/fight where this build actually dies.")
+
+
 def cmd_homelab(args):
     cap, path = ihlib.load_capture(args.file)
     homelab, definitions, info = ihlib.homelab_state(cap)
@@ -466,6 +484,13 @@ def cmd_homelab(args):
                       f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
                       f"{p['hours']:.1f}h  {ihlib.format_cost(p['cost'])}  "
                       f"UNMODELLED[{','.join(p['unmodelled'])}]")
+                # a magnitude is the ONE thing a tail row can still say, and
+                # the tail is exactly where a post_combat_heal job lands: it is
+                # unmodelled (score 0.0) and carries the worst pts/h on the
+                # menu, so it can never sort into the ranked head. Printing the
+                # magnitude only above the `continue` hid it from the single
+                # upgrade it was written for.
+                _print_heal_magnitude(p, indent=" " * 15)
                 continue
             print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
                   f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
@@ -477,15 +502,7 @@ def cmd_homelab(args):
                       f"which nothing in CRAFT_WEIGHTS prices. It is listed "
                       f"because it\n           cannot be RANKED, not because it "
                       f"lost: a 0.000 here means unpriced, not worthless.")
-            heal = p.get("heal_effect")
-            if heal:
-                print(f"           MAGNITUDE (not a weight): +{heal['fraction']:.0%} "
-                      f"of {heal['max_hp']:,.0f} Max HP = +{heal['face']:,.0f} HP "
-                      f"restored per WIN, which past\n           streak "
-                      f"{ihlib.post_combat_heal_floor_streak()} is pinned at "
-                      f"x{ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR:.2f} by "
-                      f"exhaustion — so +{heal['at_floor']:,.0f} HP/fight where "
-                      f"this build actually dies.")
+            _print_heal_magnitude(p, indent=" " * 11)
         elided = max((p.get("tail_elided") or 0) for p in picks) if picks else 0
         if elided:
             print(f"    (+{elided} more UNMODELLED job(s) not shown — they carry a "
@@ -501,8 +518,11 @@ def cmd_homelab(args):
     print("  by the STAT they deliver. `score` is on the CRAFT_WEIGHTS scale,")
     print("  directly comparable to a gear affix and to `ih.py hardware` --")
     print("  hardware %, homelab % and equipment % share one pool (§13).")
-    print("  score 0.000 is a real answer for resource and gather-XP")
-    print("  upgrades — they pay in currencies bought at ~2 cr/unit. It is")
+    print("  score 0.000 is a real answer ONLY for resource and gather-XP")
+    print("  upgrades — they pay in currencies bought at ~2 cr/unit. Rows")
+    print("  reading 'pays in ...' deliver no combat stat but DO pay in")
+    print("  something scarce (Stability, hackcoin, inventory, craft bases),")
+    print("  so their 0.000 is a scale mismatch, not a verdict. It is")
     print("  NOT an answer on rows marked UNMODELLED: those deliver a stat")
     print("  the game tracks and nothing here prices, so the 0.000 is")
     print("  missing rather than measured (10 Aug 2026: Thermal Budget).")
@@ -528,16 +548,12 @@ def cmd_homelab(args):
         print(f"    {d.get('name'):26s} L{u['level']}{maxed:<5} "
               f"+{nxt.get('progress_points', 0):>3}pts "
               f"{est}{hours:4.1f}h  {pts_hr:5.0f}pts/h  "
-              f"score {_homelab_score_cell(d, breakdown)}  "
+              f"score {_homelab_score_cell(d)}  "
               f"{est}{ihlib.format_cost(nxt.get('cost'))}{queued}")
         print(f"        [{section}]  {(d.get('description') or '')[:80]}")
-        heal = ihlib.post_combat_heal_effect(d, breakdown)
-        if heal:
-            print(f"        MAGNITUDE (not a weight): +{heal['face']:,.0f} HP per "
-                  f"WIN per level; past streak "
-                  f"{ihlib.post_combat_heal_floor_streak()} exhaustion pins it at "
-                  f"x{ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR:.2f}, so "
-                  f"+{heal['at_floor']:,.0f} HP/fight at death depth")
+        _print_heal_magnitude(
+            {"heal_effect": ihlib.post_combat_heal_effect(d, breakdown)},
+            indent=" " * 8)
     upcoming = sorted({u["def"].get("unlock_level", 0)
                        for u in ihlib.iter_homelab_upgrades(homelab, definitions)
                        if u["def"].get("unlock_level", 0) > level})[:2]
@@ -650,16 +666,29 @@ def _print_hardware_plan(hw, stats_breakdown, spendable):
           "back by hand.")
 
 
-def _homelab_score_cell(defn, stats_breakdown):
+def _homelab_score_cell(defn):
     """The score column: a number, or why there isn't one.
 
     `0.000` and `UNMODELLED` are different claims and printing both as the
     former is how Thermal Budget sat at the bottom of this list.
+
+    Took a `stats_breakdown` it stopped using on 12 Aug 2026, when membership
+    moved off `statsBreakdown` -- which left the signature implying the cell
+    was still breakdown-aware, the exact thing the change was undoing. ruff
+    does not flag unused parameters, so nothing else would have caught it.
     """
     unmodelled = ihlib.homelab_unmodelled_effects(defn)
     if unmodelled:
         return f"UNMODELLED[{','.join(unmodelled)}]"
-    return f"{ihlib.homelab_upgrade_score(defn):5.3f}"
+    score = ihlib.homelab_upgrade_score(defn)
+    if not score:
+        # a 0.000 on the COMBAT scale is not a verdict on the upgrade. Say what
+        # it pays in where that is something scarce, rather than letting a
+        # Stability or hackcoin buy read as worthless.
+        pays = ihlib.homelab_pays_in(defn)
+        if pays:
+            return f"no combat stat; pays in {pays.split(chr(8212))[0].strip()}"
+    return f"{score:5.3f}"
 
 
 def cmd_hardware(args):
@@ -1168,7 +1197,20 @@ def _audit_homelab_effect_keys(cap, ctx):
     priced this", and a list nobody checks is how a combat effect ends up
     ranked as a resource upgrade — which is exactly what happened to every
     `enemy_*_reduction` key until 12 Aug 2026.
+
+    Says so when it CANNOT check. `homelabInfo` is a lazy panel, so a capture
+    taken without opening it yields no keys and the check would pass in
+    silence — an audit that looks like it verified the lists and did not. The
+    whole safety story for exclusion-based classification is that this runs
+    every time, so "did not run" has to be as visible as "found something".
     """
+    if not ihlib.homelab_effect_keys(cap):
+        return [("EFFECTKEY",
+                 "homelab effect-key lists NOT CHECKED this capture — "
+                 "homelabInfo is a lazy panel and was not captured, so the "
+                 "exclusion lists that decide whether an upgrade's 0.000 is "
+                 "measured or missing went unverified. Open the Homelab panel "
+                 "and recapture; a silent pass here is not a pass")]
     unknown = ihlib.homelab_unclassified_effect_keys(cap)
     if not unknown:
         return []
@@ -1250,7 +1292,13 @@ def _audit_homelab(cap, ctx):
     # The real loss is throughput reaching ZERO, i.e. nothing active AND
     # nothing queued. Flag that hard; mention free slots only as coverage.
     if not active and not pend:
-        picks = ihlib.homelab_fill_suggestions(cap, limit=3)
+        # `homelab_fill_suggestions` returns the ranked head PLUS an unranked
+        # tail of unmodelled jobs, so it can hand back up to 2x `limit` rows.
+        # Only the head is a recommendation -- a tail row is there so it is not
+        # lost, and presenting one inside "Start: ..." would sell an unrankable
+        # job as a ranked pick.
+        picks = [p for p in ihlib.homelab_fill_suggestions(cap, limit=3)
+                 if not p.get("tail")]
         named = "; ".join(
             f"{p['name']} [{p['section']}] -> L{p['target_level']} "
             f"({p['pts_per_hour']:.0f}pts/h, +{p['points']}pts, "
