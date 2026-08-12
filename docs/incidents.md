@@ -47,23 +47,40 @@ owns it is not negotiable in that moment. Argue with it afterwards, in writing.
 | 33 | **A reservation that concluded on half its own paragraph** — the ArmorPen probe closed on the weight fit and released its arms | par.21 closed with the zone-generalisation extension still open, on those exact two arms, backed by no reservation. `locks` listed both for decompile the same day the CI/CD budget expired unused. The re-ranked replacements were also the near-total-cancellation arm par.21 had argued against | *A replication is reserved by name; a fit is reserved by family* |
 | 34 | **A measurement instrument read past the end of its own scale** — CI/CD streak runs scored against a zone whose enemy-level cap the arm had outgrown | past the cap the enemy stops getting harder, so `final_streak` is a lower bound, not a reading — and the truncation binds on the STRONGER arm first, dragging every A−B gap toward zero. It hit the par.22 Barrier pair perfectly asymmetrically: **6 of 6** runs of the low-Barrier arm censored, **0 of 6** of the high-Barrier arm, which is why `β_Barrier = 0.041 ± 0.024` and the weight fitted from it are CEILINGS. Three days live, and the cap was sitting in the same payload as the streak the whole time | *Build the second opinion*; *state the regime a model was fitted in* |
 | 26 | **A stat family's formula assumed from its siblings** — the homelab term put in the pool for gear-flat stats | wrong by +0.35% the moment a gear-flat stat first carried one, in 159 captures. The game credits the raw fraction as a flat addend, so "+0.5% Corruption" delivers +0.005 — ~90× less than the description, and a homelab upgrade recommended for its stat is worth nothing | *Self-validate against the game's own totals* |
+| 35 | **A law used far outside the regime it was fitted in, while the ground truth to re-check it sat banked and free** — post-combat heal decay resolved 22 Jul on 21 fights at streaks 38–58, then applied at 255 | the multiplier **floors at 0.30 from streak 130** and the sample could not have seen it. For three weeks the model read 8.5% of face value where the game gives 30% — a **3.9× under-heal in the exact band where every run ends** — and `mechanics.md` §3 stated the unfloored law as settled. The ledger held 89k rows of the game's own multiplier the whole time; one comparison found it, and it now runs on every `assumptions` call | *State the regime a model was fitted in, and re-validate before using it outside that regime*; *prefer models that self-validate against a game-provided ground truth* |
+| 36 | **A membership rule that was self-validating and still blind, because its blind spot was the question** — `homelab_unmodelled_effects` flagged an unpriced effect only if the game exposed it in `statsBreakdown` | that rule is the workspace's own preferred pattern — derived from the game's reckoning, not a hand-kept list — and it read as principled for two days. But `post_combat_heal` is the only combat-relevant effect key the game tracks as a stat, so **ten combat upgrades scored a silent 0.000** beside resource jobs: every `enemy_*_reduction`, `lifesteal`, `starting_streak_floor`. **Rate Limiter was the top QUEUE pick the day it was found**, recommended on points with a `0.000` next to it. A unit test asserted the blind spot was correct behaviour and passed every run | *"The tests pass" is a fact, "verified" is a claim*; *a scalar ranking cannot audit the weights it is built from* |
 
 ## What the shape of this list says
 
-**Twenty-two of the twenty-six were found by something other than reading the
-code** — a player question, a coincidence, a cross-check between two views,
-or an automated review. That is the argument for building second opinions
+*(Counts are deliberately absent below. This section carried "twenty-two of the
+twenty-six" while the table grew past thirty — a tally restated in prose beside
+the thing it counts, which is failure mode #15/#16/#21/#24/#27 committed by the
+page that indexes them. Read the groupings; count the table if you need a
+number.)*
+
+**Almost none of these were found by reading the code.** They were found by a
+player question, a coincidence, a cross-check between two views, or an
+automated review. That is the argument for building second opinions
 deliberately rather than trusting a careful read.
 
-**Nine are the same underlying mistake**: a number was believed without anyone
+**The largest group is one mistake**: a number was believed without anyone
 checking whether it had ever been measured (#3, #4, #5, #6, #7, #13, #18, #19,
 #21). That is why `ih.py assumptions` runs before any verdict resting on a
-weight, and why the register is the first thing `audit` prints.
+weight, and why the register is the first thing `audit` prints. #35 is its
+subtler form — the number *had* been measured, correctly, and was then used
+hundreds of streaks outside the band it was measured in.
 
-**Five are duplication** (#15, #16, #21, #24, #27): the same fact computed, written
+**Duplication** (#15, #16, #21, #24, #27): the same fact computed, written
 or registered in two places, drifting apart. Prefer one implementation with two
 callers, and prefer pointing at a command over restating its output. #24 is the
 sharpest form — the two copies never drifted, one was simply never consulted by
 the callers that needed it, so both were individually correct and the advice was
 still wrong. #27 is the limiting case: the second copy was prose, so there was
 never anything for a caller to consult at all.
+
+**A newer group: checks that looked principled and under-covered** (#30, #34,
+#36). Each was a deliberate, defensible rule — cap the hold, score the streak,
+infer membership from the game's own reckoning — whose scope quietly failed to
+reach the case it existed for. These do not announce themselves, because the
+output stays clean and confident. The counter is to exercise a rule against the
+question it was written for, not against the examples that motivated it.

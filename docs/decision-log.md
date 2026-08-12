@@ -1881,3 +1881,126 @@ morning are marked UNUSABLE — they censor every arm.
 min/average/max of `loss_enemy_level`, never per-simulation values, so
 `censored` cannot say *how many* of a run's ten streaks were truncated. One in
 ten and ten in ten read the same. `cap_headroom` is the only signal of degree.
+
+---
+
+## 12 August 2026 — the heal has a floor, and ten combat upgrades were scoring zero
+
+Two defects, both found by the same move: taking something this workspace had
+already written down and checking it against data that was already banked.
+
+### 1. Post-combat heal exhaustion FLOORS at 0.30 (`mechanics.md` §3 corrected)
+
+The law resolved on 22 July — `heal = heal_base × 0.99^(streak − 10)` — was
+fitted on 21 consecutive wins at **streaks 38–58** and has been stated as
+settled ever since. Checked against every victory row in the combat-stream
+ledger for the first time today, the real law is:
+
+```text
+multiplier = max(0.30, 0.99^(win_streak − 10))
+heal       = round_half_up(heal_base × multiplier), capped at missing HP
+```
+
+Exact to 1e-12 on **every** victory row, streaks 0–302, zero exceptions. The
+only rows that miss are losses, where the game zeroes the whole block.
+
+The 22 July sample **could not have seen the floor**: it binds from streak 130
+and the sample topped out at 58. The law was right in its regime and was then
+used ~200 streaks outside it for three weeks.
+
+**Why it matters.** At the ~255 where this build actually dies, the unfloored
+law reads 8.5% of face value against a true 30% — a **3.9× under-heal in the
+exact band where every run ends**. And the floor means between-fight recovery
+never fades: it is a permanent 5,503 HP/fight at the current base, not
+something that decays to nothing.
+
+Measured attrition curve, recent era (max_hp ≥ 50k, 19,472 victories) — share
+of wins that fail to top back up to full:
+
+| streak band | 0–200 | 225 | 250 | 275 |
+|---|---:|---:|---:|---:|
+| capped by the heal | 0% | 7.9% | **30.9%** | 50.0% |
+| mean HP not recovered | 0 | 477 | 4,814 | 11,165 |
+
+Against a mean death depth of ~255. **Deaths happen exactly where the floored
+heal stops covering per-fight damage** — that is the attrition bottleneck,
+stated quantitatively for the first time.
+
+### 2. `homelab_flat` — a stat component nothing read (`mechanics.md` §13)
+
+`audit`'s MODEL check flagged `composed_stat_total(post_combat_heal) = 16,660`
+against a game-reported 18,342. The gap is exactly 1,682, a **`homelab_flat`**
+component that `composed_stat_total` did not read at all — zero in all 174
+archived captures until Thermal Budget L3 populated it.
+
+This **resolves open-questions par.23's discriminant**, which was posed
+precisely to settle it before spending levels: 1,682 = exactly 3% of the 56,062
+Max HP, so the effect is **description-faithful**, not the raw-fraction addend
+Corruption turned out to be (incident #26). The two readings differ by
+~52,000×. A Thermal Budget level is worth ~+561 to the base, i.e. **+168 HP per
+fight at the exhaustion floor** — at any depth past 130, including where the
+build dies.
+
+Fourth composition defect this detector has caught (`attack_damage` 27 Jul,
+`homelab_mult` 31 Jul, gear-flat `homelab` footing 8 Aug, this).
+
+**Regime, stated because it cannot be resolved:** `post_combat_heal` is the
+only stat that has ever carried `homelab_flat` and its pool is exactly 1, so
+inside- and outside-the-bracket reproduce the total identically. Placed with
+`equipment_flat`. Buying more Thermal Budget levels does *not* discriminate.
+
+### 3. Ten homelab combat upgrades were scoring a silent 0.000
+
+`homelab_unmodelled_effects` flagged an unpriced effect only if the effect key
+appeared in `statsBreakdown`. That rule is this workspace's own preferred
+pattern — self-validating against the game's reckoning rather than a hand-kept
+list — and it read as principled when it shipped on 10 August.
+
+`post_combat_heal` is the **only** combat-relevant effect key the game exposes
+as a stat line. Every enemy debuff was therefore invisible to it and scored
+0.000 next to resource upgrades: `enemy_attack_speed_reduction`,
+`enemy_accuracy_reduction`, `enemy_evasion_reduction`,
+`enemy_crit_chance_reduction`, `enemy_crit_damage_reduction`,
+`enemy_defense_reduction`, `enemy_armor_penetration_reduction`,
+`enemy_lockup_chance`, `corruption_damage_reduction`,
+`corruption_duration_rounds`, `lifesteal`,
+`player_damage_variance_min_bonus`, `starting_streak_floor`,
+`snapshot_rollback_cooldown_fights`.
+
+**Rate Limiter — `enemy_attack_speed_reduction`, pure mitigation by §14 — was
+the top QUEUE pick in today's own brief, recommended on points with a `0.000`
+beside it.** Its rank does not change (it also leads on points/hour), but the
+reason given for it was wrong.
+
+A unit test asserted the blind spot was correct behaviour ("`enemy_lockup_chance`
+and friends … are out of scope here") and passed every run since it was
+written. Rewritten to assert the opposite, with the old text preserved in the
+docstring.
+
+Membership is now by **exclusion**, and because a hand-kept list is a liability
+(#24), `ih.py audit` re-derives the live key space every run and raises
+`EFFECTKEY` on anything unclassified. **None of these are now priced** — the
+change makes the gap visible, not smaller.
+
+Knock-on: the "never truncate an unmodelled job" guarantee was written when one
+job was unmodelled. With ten, an uncapped tail printed **eight picks for one
+free queue place**, defeating `limit` entirely. The tail is now capped with a
+count.
+
+### 4. `simulate_streak` carried both heal errors — dead code, fixed anyway
+
+The Python forward model applied `5 * hack_level * 0.99^(streak-10)`: no floor,
+and a base that stopped being the whole base once `homelab_flat` appeared. It
+has **no callers and no tests**, so no shipped verdict was computed from it —
+`ih.py sims` reads the *in-game* Hacking Simulator and CI/CD Pipeline, not
+this. Fixed regardless: it is the forward model CI/CD betas would be read
+against, and a dead instrument with a wrong law in it is a trap, not a spare
+part. It now takes `post_combat_heal_base(capture)` and calls the shared law.
+
+### What none of this does
+
+It does not price any of it in streaks, which is what `CRAFT_WEIGHTS` is
+denominated in. `post_combat_heal` is now exact in HP/fight and still has no
+beta; the thirteen other combat effects have neither. Inventing weights for
+them is still the thing not to do — par.23's unblock (a live pre-registered
+Thermal Budget window) is unchanged.
