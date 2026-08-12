@@ -80,6 +80,23 @@ class StatModelTest(unittest.TestCase):
             ihlib.composed_stat_total(b, "accuracy"), 17215.309830158225,
             places=6)
 
+    def test_homelab_flat_is_read_as_a_flat_addend(self):
+        """Ground truth from the 12 Aug 2026 capture, where Thermal Budget L3
+        put a non-zero `homelab_flat` on `post_combat_heal` for the first time
+        in 174 captures. `composed_stat_total` did not read the key at all and
+        returned 16,660 against the game's 18,342 -- audit's MODEL self-check
+        caught it, not the tests, for the second time in this class.
+
+        REGIME: the pool here is exactly 1, so this fixture cannot distinguish
+        the addend sitting inside the bracket from outside it. It locks the
+        value, which is what was wrong; it does not lock the footing, which
+        nothing can yet."""
+        b = {"base": 0, "level": 16660, "equipment_flat": 0,
+             "equipment_pct": 0, "hardware": 0, "homelab": 0,
+             "homelab_flat": 1682, "syndicate": 0, "total": 18342}
+        self.assertAlmostEqual(
+            ihlib.composed_stat_total(b, "post_combat_heal"), 18342, places=6)
+
     def test_suspect_free_plan_never_loses_to_the_rescored_raw_plan(self):
         """The invariant `locks` violated on 8 Aug 2026.
 

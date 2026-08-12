@@ -3668,9 +3668,29 @@ def composed_stat_total(breakdown, stat, d_equipment_pct=0.0, d_hardware=0.0,
     if is_economy_breakdown(b):
         # deltas land inside the additive bracket, so they scale with it
         return pool * economy_multiplier(b)
+    # `homelab_flat` is a homelab FLAT addend, a different component from the
+    # `homelab` percentage term, and it is read here on the same footing as
+    # `equipment_flat`. Zero in all 174 archived captures until 12 Aug 2026,
+    # when Thermal Budget L3 populated it on `post_combat_heal` (1,682 =
+    # exactly 3% of the 56,062 Max HP) and audit's MODEL check flagged the
+    # miss -- the same self-check that caught `attack_damage` (27 Jul),
+    # `homelab_mult` (31 Jul) and the gear-flat `homelab` footing (8 Aug).
+    # REGIME: `post_combat_heal` is the only stat that has ever carried it and
+    # its pool is exactly 1 (no equipment_pct, hardware or homelab source for
+    # the stat is known), so inside-the-bracket and outside-the-bracket
+    # reproduce the game's total identically and this cannot yet distinguish
+    # them. Placed with `equipment_flat` because that is the footing every
+    # other flat addend has; `validate_stat_totals` re-checks every capture,
+    # so if a percent source for the stat ever appears a wrong form here
+    # cannot stay quiet. Buying Thermal Budget levels does NOT discriminate --
+    # it moves the addend, not the pool.
+    homelab_flat = b.get("homelab_flat") or 0
     if stat in DIRECT_STATS:
-        return (b.get("base") or 0) + pool - 1
-    flat = (b.get("equipment_flat") or 0) + d_equipment_flat
+        # `d_equipment_flat` stays out of this branch: it was never modelled
+        # here and no caller passes it for a direct stat, so honouring it now
+        # would be an invented law rather than a fix.
+        return (b.get("base") or 0) + homelab_flat + pool - 1
+    flat = (b.get("equipment_flat") or 0) + homelab_flat + d_equipment_flat
     if stat in SCALING_STATS:
         return ((b.get("base") or 0) + (b.get("level") or 0) + flat) * pool
     # gear-flat: homelab lands in the bracket, not the pool, so a homelab delta
