@@ -1858,3 +1858,66 @@ class SimReplicationZoneTest(unittest.TestCase):
             {"id": "government_mainframe", "name": "Government Mainframe",
              "enemy_level_cap": 99999, "available": False}])
         self.assertNotIn("Government Mainframe", out)
+
+
+class SignatureAffixTest(unittest.TestCase):
+    """Epic signatures were invisible to the whole toolkit until 12 Aug 2026.
+
+    Found by the player: "are we accounting for signature items in our analysis
+    of craft bases? some of the suggested unlocks are signatures." They were
+    not. `signature_id`/`signature_name`/`signature_tag`/`signature_description`
+    had been in every capture since the first one, `grep signature scripts/`
+    returned nothing item-related, and all three signature items owned that day
+    were on the irreversible decompile list.
+
+    A signature is not an affix -- it lives in its own item fields, never in
+    `prefixes`/`suffixes` -- so no score, ranking or ex-suspect reading contains
+    it, and a decompile verdict on one is computed from a model that cannot see
+    part of the item.
+    """
+
+    SIG = {"name": "Impenetrable Driver of Aiming", "slot": "gloves",
+           "signature_id": "sig_stable_construction",
+           "signature_name": "Stable Construction",
+           "signature_tag": "Expertise",
+           "signature_description":
+               "This item can roll one additional prefix or suffix."}
+
+    def test_signature_is_read_off_the_item(self):
+        sig = ihlib.signature_effect(self.SIG)
+        self.assertEqual(sig["id"], "sig_stable_construction")
+        self.assertEqual(sig["tag"], "Expertise")
+        self.assertIn("additional prefix", sig["description"])
+
+    def test_a_plain_item_has_no_signature(self):
+        self.assertIsNone(ihlib.signature_effect({"name": "x"}))
+        self.assertIsNone(ihlib.signature_effect({}))
+        self.assertIsNone(ihlib.signature_effect(None))
+
+    def test_nothing_is_claimed_as_priced(self):
+        """`PRICED_SIGNATURE_IDS` is the guard against quietly deciding a
+        signature is handled. `sig_stable_construction` is deliberately absent
+        even though the affix caps happen to capture it: that credit comes from
+        `augment_state` reading the item's own caps, not from anything
+        modelling the signature."""
+        self.assertNotIn("sig_stable_construction", ihlib.PRICED_SIGNATURE_IDS)
+        for item in (self.SIG,):
+            self.assertFalse(ihlib.signature_effect(item)["priced"])
+
+    def test_header_names_an_unpriced_signature(self):
+        header = ihlib.item_header(self.SIG)
+        self.assertIn("Stable Construction", header)
+        self.assertIn("unpriced", header)
+
+    def test_augment_reads_the_items_own_affix_caps(self):
+        """The half of `Stable Construction` that IS handled, and the reason
+        it is handled -- `augment_state` reads the caps off the item rather
+        than assuming 3/3/6, so an extra-slot signature is not silently
+        truncated to a normal item's ceiling."""
+        wide = dict(self.SIG, max_normal_affixes=7, max_prefixes=4,
+                    max_suffixes=4,
+                    prefixes=[{}, {}, {}], suffixes=[{}, {}, {}])
+        narrow = dict(wide, max_normal_affixes=6, max_prefixes=3,
+                      max_suffixes=3)
+        self.assertTrue(ihlib.augment_state(wide)[0])
+        self.assertFalse(ihlib.augment_state(narrow)[0])

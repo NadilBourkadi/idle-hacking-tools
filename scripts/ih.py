@@ -1190,6 +1190,25 @@ def _audit_stat_model(cap, ctx):
             for stat, reported, modelled in ihlib.validate_stat_totals(cap)]
 
 
+def _audit_unpriced_signatures(cap, ctx):
+    """Epic signatures the affix model calls surplus and cannot price.
+
+    Surfaced in `audit` and not only in `locks` because it is the one class of
+    irreversible loss the value model is structurally blind to: a signature is
+    not an affix, so no score, ranking or ex-suspect reading contains it. Every
+    signature item owned on 12 Aug 2026 was on that day's decompile list.
+    """
+    review = ihlib.lock_actions(cap).get("signature_review") or []
+    if not review:
+        return []
+    named = "; ".join(f"{r['name']} [{r['signature']['name']}: "
+                      f"{r['signature']['description']}]" for r in review)
+    return [("SIGNATURE",
+             f"{len(review)} item(s) carry an epic signature nothing prices "
+             f"and would otherwise be on the decompile list — held out of it "
+             f"for your call, effects stated: {named}")]
+
+
 def _audit_homelab_effect_keys(cap, ctx):
     """Guard the hand-kept effect-key lists against a game patch.
 
@@ -1703,6 +1722,34 @@ def cmd_locks(args):
                       f"not why it is kept. {why}. Releases when: "
                       f"{probe['unblock']}"}))
 
+    def _print_signature_review():
+        """Epic signatures the affix model calls surplus but cannot price.
+
+        Deliberately NOT an imperative. Every other block here resolves to a
+        click; this one resolves to a judgement, because the missing term has
+        no sign — `Stable Construction` is pure upside, `Risk Assessment`
+        carries a -20% healing penalty squarely on the death-depth bottleneck.
+        Printing the effect text is the whole point: the fields were in the
+        capture from the start and NOTHING in the toolkit had ever shown them,
+        so the only way to know an unlock line was a signature item was to
+        open the game and check (player, 12 Aug 2026).
+        """
+        review = actions.get("signature_review") or []
+        if not review:
+            return
+        print(f"\n  SIGNATURE — {len(review)} item(s) the affix model ranks "
+              f"as surplus AND that carry an epic signature nothing prices.")
+        print("  Held OUT of the UNLOCK list rather than actioned: a decompile "
+              "is irreversible and the\n  verdict below each one never saw the "
+              "signature. Your call, with the effect stated.")
+        for r in review:
+            sig = r["signature"]
+            print(f"    {r['name']:44s} keep {r['keep_worth']:+6.1f}  "
+                  f"raw {r['raw']:+6.1f}  [{r['slot']}]")
+            print(f"           SIGNATURE {sig['name']} ({sig['tag']}): "
+                  f"{sig['description']}")
+            print(f"           affix-only verdict was: {r['reason']}")
+
     def _print_at_risk():
         """What the depth cap is about to lose, stated rather than implied."""
         risk = actions.get("at_risk") or []
@@ -1728,6 +1775,7 @@ def cmd_locks(args):
 
     if not by_slot:
         print("\n  no lock changes needed — every flag matches its value")
+        _print_signature_review()
         _print_at_risk()
         return
     n_lock, n_unlock = len(actions["lock"]), len(actions["unlock"])
@@ -1754,6 +1802,7 @@ def cmd_locks(args):
             print(f"    {action:6s} {r['name']:44s} {worth}  "
                   f"(now: {now})")
             print(f"           {r['reason']}")
+    _print_signature_review()
     _print_at_risk()
 
 
@@ -1941,6 +1990,7 @@ AUDIT_CHECKS = [
     _audit_sim_ledger,
     _audit_stat_model,
     _audit_homelab_effect_keys,
+    _audit_unpriced_signatures,
     _audit_hardware,
     _audit_homelab,
     _audit_contracts,
