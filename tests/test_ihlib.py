@@ -85,6 +85,16 @@ class PostCombatHealTest(unittest.TestCase):
     def test_missing_breakdown_is_none_not_zero(self):
         self.assertIsNone(ihlib.post_combat_heal_base({"state": {}}))
 
+    def test_simulate_streak_rejects_a_none_heal_base(self):
+        """Code review, 12 Aug 2026. The signature moved from `hack_level`,
+        always present, to a heal base read from a LAZY panel -- so the
+        documented call `simulate_streak(p, post_combat_heal_base(cap), ...)`
+        passes None on any capture taken without the Stats panel open, and the
+        old code would have hit `None * float` deep inside the loop."""
+        with self.assertRaises(ValueError) as ctx:
+            ihlib.simulate_streak({"max_hp": 1}, None, {0: 1}, {}, None)
+        self.assertIn("statsBreakdown", str(ctx.exception))
+
 
 class StatModelTest(unittest.TestCase):
     """Locks the whole stat-composition family model to game ground truth."""
@@ -1508,6 +1518,37 @@ class UnmodelledEffectTest(unittest.TestCase):
         self.assertEqual(
             sorted(set(ihlib.UNPRICED_COMBAT_EFFECT_KEYS)
                    & ihlib.HOMELAB_SCHEMA_EFFECT_KEYS), [])
+
+    def test_a_scarce_non_combat_effect_does_not_read_as_worthless(self):
+        """Code review, 12 Aug 2026, same day the list shipped.
+
+        `tier_promotion_stability_preserve` was on a list whose comment said a
+        0.000 there is "a REAL answer" because such upgrades "pay in currencies
+        bought at ~2 cr/unit". Snapshot Backups pays in STABILITY, which
+        CLAUDE.md ranks ABOVE credits and which `stability_preserve_chance`
+        already prices, and it costs 4B cr + 4 hc. A confident wrong answer is
+        worse than a missing one.
+        """
+        defn = {"effects": [{"tier_promotion_stability_preserve": 0.05}]}
+        self.assertEqual(ihlib.homelab_unmodelled_effects(defn), [])
+        self.assertEqual(ihlib.homelab_upgrade_score(defn), 0.0)
+        self.assertIn("STABILITY", ihlib.homelab_pays_in(defn))
+
+    def test_a_genuinely_worthless_effect_still_says_nothing(self):
+        """The distinction only means something if it stays narrow: a
+        resource multiplier really is worth zero and must not acquire a
+        'pays in ...' note."""
+        self.assertIsNone(ihlib.homelab_pays_in(
+            {"effects": [{"resource": "snippets", "multiplier": 0.03}]}))
+        self.assertIsNone(ihlib.homelab_pays_in(
+            {"effects": [{"build_slots": 1}]}))
+
+    def test_every_scarce_key_is_a_non_combat_key(self):
+        """The pays-in map annotates the non-combat list; a key in one and not
+        the other is a classification that drifted."""
+        self.assertEqual(
+            sorted(set(ihlib.HOMELAB_SCARCE_NON_COMBAT_PAYS_IN)
+                   - ihlib.HOMELAB_NON_COMBAT_EFFECT_KEYS), [])
 
 
 class HardwarePlanTest(unittest.TestCase):

@@ -1909,8 +1909,8 @@ and the sample topped out at 58. The law was right in its regime and was then
 used ~200 streaks outside it for three weeks.
 
 **Why it matters.** At the ~255 where this build actually dies, the unfloored
-law reads 8.5% of face value against a true 30% — a **3.9× under-heal in the
-exact band where every run ends**. And the floor means between-fight recovery
+law reads 8.5% of face value against a true 30% — a **3.5× under-heal in the
+exact band where every run ends** (0.30 / 0.99^245). And the floor means between-fight recovery
 never fades: it is a permanent 5,503 HP/fight at the current base, not
 something that decays to nothing.
 
@@ -2004,3 +2004,67 @@ denominated in. `post_combat_heal` is now exact in HP/fight and still has no
 beta; the thirteen other combat effects have neither. Inventing weights for
 them is still the thing not to do — par.23's unblock (a live pre-registered
 Thermal Budget window) is unchanged.
+
+### Code review, same session — 7 findings, all fixed
+
+Run at `medium` via the skill after the first attempt called the `Workflow`
+tool directly at `high`; that path ignores the effort argument *and* is the
+~1.5M-token fan-out, so the level was silently dropped and the cost was
+maximal. The player stopped it mid-flight. `CLAUDE.md` now pins the
+invocation.
+
+Two findings were defects in the change itself:
+
+1. **The 3.9× under-heal figure was wrong in three places.** The multiplier-only
+   ratio at streak 255 is `0.30 / 0.99^245` = **3.5×**. 3.9× is `0.99^255` —
+   the grace window dropped — and, coincidentally, `simulate_streak`'s OLD
+   *combined* error, which compounded a stale heal base on top of the missing
+   floor. I derived it from the simulator comparison and then restated it in
+   the register row, the incidents table and the log, all of which discuss the
+   law alone. Textbook restatement drift, in the same session as a commit whose
+   own message is about restatement drift.
+2. **The heal MAGNITUDE line was unreachable in the QUEUE block** for the only
+   upgrade it exists for. The unranked-tail branch `continue`s before the print,
+   and a `post_combat_heal` job is unmodelled with the worst pts/h on the menu,
+   so it *always* sorts into the tail. Now one `_print_heal_magnitude` helper
+   with three call sites instead of two divergent copies.
+
+Three were traps laid rather than sprung:
+
+3. `simulate_streak`'s signature moved from `hack_level` (always present) to a
+   heal base read from a **lazy** panel, so the documented call passes `None`
+   on any capture taken without the Stats panel open. Guarded with a message
+   that names the panel and forbids the `5 * hack_level` substitute.
+4. **The EFFECTKEY guard was silently inert without `homelabInfo`.** The entire
+   safety story for exclusion-based classification is "audit re-derives the key
+   space every run" — but the panel is lazy, so a capture without it produced
+   an audit that *looked* like it verified the lists. "Did not run" now prints
+   as loudly as "found something".
+5. `homelab_fill_suggestions` returns the ranked head plus an unranked tail, and
+   `_audit_homelab` joined whatever came back into its `Start: …` sentence —
+   presenting up to three unrankable jobs as ranked recommendations.
+
+And one was a wrong claim I authored:
+
+6. **`tier_promotion_stability_preserve` was on a list asserting a 0.000 there
+   is "a REAL answer" because such upgrades "pay in currencies bought at
+   ~2 cr/unit".** Snapshot Backups pays in **Stability**, which `CLAUDE.md`
+   ranks above credits, which `stability_preserve_chance` already prices, and
+   which costs 4B cr + 4 hc. Checking the rest of that list, the error was
+   broader than the instance: `contract_hackcoin_bonus_contracts` pays in
+   **hackcoin**, `inventory_slots` in slots costing 10 hc each, four keys in
+   craft bases at ~6.8 days for a top-decile one. The list now claims only what
+   it can support — *delivers no combat stat* — and
+   `HOMELAB_SCARCE_NON_COMBAT_PAYS_IN` says what each pays in instead, so
+   `homelab` prints "no combat stat; pays in STABILITY on the craft target"
+   where it printed `0.000`.
+
+   Worth naming the shape: this is the *inverse* of the finding the session
+   began with. There, combat effects were scored zero and read as worthless;
+   here, I fixed that by writing a confident "genuinely worth zero" claim over
+   a set I had not checked. A wrong answer is harder to catch than a missing
+   one, and I introduced it while removing one.
+
+7. `_homelab_score_cell` kept a `stats_breakdown` parameter it no longer used —
+   implying the cell was still breakdown-aware, the exact thing the change was
+   undoing. ruff does not flag unused parameters.
