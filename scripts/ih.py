@@ -646,6 +646,13 @@ def _print_hardware_plan(hw, stats_breakdown, spendable):
           f"{gain['modelled_refund']:,.0f} for the levels held, which is the "
           f"ground truth the whole cost\n    model self-checks on. Only the "
           f"all-sections option is priced: it dominates every\n    subset.")
+    print("    REPORTED, NOT RECOMMENDED. The reset is a MONTHLY option, and "
+          "spending it costs the\n    option to spend it later on a larger or "
+          "more mis-allocated pool — which nothing\n    here prices, because "
+          "nothing has ever compared 'reset now' against 'reset in N\n    "
+          "weeks'. Standing preference (12 Aug 2026): hold it as an emergency "
+          "release\n    valve. Propose a reset only with a reason that beats "
+          "keeping the option.")
     cross = gain["gain_cross"]
     agree = "AGREE" if (cross > 0) == (gain["gain"] > 0) else "DISAGREE"
     print(f"    scored under the OTHER weighting the same two plans read "
@@ -1280,17 +1287,33 @@ def _audit_hardware(cap, ctx):
     # `ih.py hardware` is where it belongs -- not in a sweep whose whole
     # contract is "this is silently costing you progress right now".
     if gain and gain["gain"] > 0 and gain["gain_cross"] > 0:
+        # FRAMING CORRECTED 12 Aug 2026, at the player's push-back. This said
+        # "the refund is full value, so this cannot lose" -- true of the
+        # arithmetic and false as advice, because the reset is a MONTHLY
+        # option and spending it has a cost the model does not price: the
+        # option to spend it later, on a bigger or more mis-allocated pool.
+        # Nothing here has ever compared "reset now" against "reset in N
+        # weeks", so "cannot lose" was a claim from a model that had not
+        # considered the alternative it was dismissing.
+        #
+        # The player's standing preference is to treat the reset as an
+        # EMERGENCY RELEASE VALVE, not routine procedure (CLAUDE.md). So this
+        # reports the gain and stops recommending; a reset is proposed only
+        # with a specific reason that beats holding the option.
         flags.append(("RESET", f"a free hardware reset is available and "
                                f"UNUSED — re-cutting all "
                                f"{hw.get('highest_hardware_levels_held')} "
                                f"held levels and re-spending "
-                               f"{gain['budget']:,.0f} chips is worth "
+                               f"{gain['budget']:,.0f} chips would be worth "
                                f"{gain['gain']:+.1f} score over buying on "
                                f"top of what you hold "
                                f"({gain['keep_score']:.1f} -> "
-                               f"{gain['reset_score']:.1f}). The refund is "
-                               f"full value, so this cannot lose — "
-                               f"ih.py hardware"))
+                               f"{gain['reset_score']:.1f}). REPORTED, NOT "
+                               f"RECOMMENDED: the reset is monthly and its "
+                               f"option value is unpriced, and the standing "
+                               f"preference is to hold it for an emergency. "
+                               f"Spending it needs a reason that beats "
+                               f"keeping the option — ih.py hardware"))
     return flags
 
 
