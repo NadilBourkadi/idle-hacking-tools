@@ -430,8 +430,8 @@ additive pool** (open-questions §13 resolved). Four families:
 
 | Family | Stats | Formula |
 |---|---|---|
-| **Scaling** | max_hp, defense, accuracy, evasion, **attack_damage**, **post_combat_heal** | `(base + level + equipment_flat) × (1 + equipment_pct + hardware + homelab)` |
-| **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + equipment_pct + hardware + homelab` (no scaling term) |
+| **Scaling** | max_hp, defense, accuracy, evasion, **attack_damage**, **post_combat_heal** | `(base + level + equipment_flat + homelab_flat) × (1 + equipment_pct + hardware + homelab)` |
+| **Direct multiplier** | attack_speed, crit_chance, crit_damage | `base + homelab_flat + equipment_pct + hardware + homelab` (no scaling term) |
 | **Gear-flat** | regeneration, corruption, thorns, damage_barrier, armor_penetration | `(equipment_flat + homelab) × (1 + equipment_pct + hardware)` — note the homelab term is an **addend, not a pool member**, unlike every other family |
 | **Economy** | credits, cycles, hashes, packets, snippets | different schema — `equipment` (not `equipment_pct`), no `level`; `(base + additive components) × (1 + participation_bonus) × (1 + firewall_cache) × (1 + homelab_mult)` — the `homelab_mult` term appeared 31 Jul 2026 when Container Runtime L1 ("×1.01, multiplicative" per its own description) first populated it; confirmed formula-level, all four gathering stats reproduce to <1e-9 with it and sit +0.52% off without it |
 
@@ -451,8 +451,22 @@ Verifications (27 Jul capture): defense `518.5 × 2.05260 = 1064.27`; accuracy
 `10370 × 1.35358 = 14036.61`; attack_speed `1 + 0.5471 + 0.065 + 0.03 = 1.6421`;
 crit_chance `0.05 + 0.3939 + 0.066 = 0.5099`; regeneration `194 × 1.24 = 240.56`.
 `post_combat_heal` carries `5 × hack_level` in its `level` term (5,270 at level
-1,054) and is pool-multiplied like any other scaling stat — currently
-indistinguishable from a constant only because nothing grants it pool.
+1,054) and is pool-multiplied like any other scaling stat — still
+indistinguishable from a constant because nothing grants it pool.
+
+**`homelab_flat` is a separate component from `homelab`** (added 12 Aug 2026).
+It is a flat addend from a homelab upgrade, where `homelab` is a percentage
+joining the pool; a stat can carry either. Zero in all 174 archived captures
+until Thermal Budget L3 populated it on `post_combat_heal` (1,682), and
+`composed_stat_total` did not read it at all — the `MODEL` self-check caught the
+1,682 gap on the first capture that had one, the fourth time that detector has
+found a composition defect (`attack_damage` 27 Jul, `homelab_mult` 31 Jul, the
+gear-flat `homelab` footing 8 Aug). **Regime:** `post_combat_heal` is the only
+stat that has ever carried it and its pool is exactly 1, so inside-the-bracket
+and outside-the-bracket reproduce the total identically and nothing yet
+distinguishes them; it is placed with `equipment_flat` because that is the
+footing every other flat addend has. Buying more Thermal Budget levels does
+**not** discriminate — that moves the addend, not the pool.
 
 **The economy family is not purely additive** (corrected 27 Jul 2026, 21:07Z
 capture). Two of its components — `participation_bonus` and `firewall_cache` —
