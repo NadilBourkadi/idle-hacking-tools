@@ -1894,18 +1894,38 @@ class SignatureAffixTest(unittest.TestCase):
         self.assertIsNone(ihlib.signature_effect({}))
         self.assertIsNone(ihlib.signature_effect(None))
 
-    def test_nothing_is_claimed_as_priced(self):
-        """`PRICED_SIGNATURE_IDS` is the guard against quietly deciding a
-        signature is handled. `sig_stable_construction` is deliberately absent
-        even though the affix caps happen to capture it: that credit comes from
-        `augment_state` reading the item's own caps, not from anything
-        modelling the signature."""
-        self.assertNotIn("sig_stable_construction", ihlib.PRICED_SIGNATURE_IDS)
-        for item in (self.SIG,):
-            self.assertFalse(ihlib.signature_effect(item)["priced"])
+    def test_stable_construction_is_priced_only_when_the_slot_is_full(self):
+        """The asymmetry that makes this a rule and not an allow-list.
+
+        A FULL extra slot holds a normal affix, which scores normally, so the
+        signature is exactly priced. An OPEN one scores 0 by design
+        (`plan_craft` credits an open augment no projected value), so the item
+        is UNDER-priced -- the dangerous direction for an irreversible
+        decompile. A flat PRICED_SIGNATURE_IDS set would have called both
+        priced and re-armed the very decompile this exists to prevent.
+        """
+        full = dict(self.SIG, max_normal_affixes=7, max_prefixes=4,
+                    max_suffixes=4, prefixes=[{}, {}, {}, {}],
+                    suffixes=[{}, {}, {}])
+        opened = dict(full, prefixes=[{}, {}, {}])
+        self.assertTrue(ihlib.signature_effect(full)["priced"])
+        self.assertIn("FULL", ihlib.signature_effect(full)["priced_because"])
+        self.assertFalse(ihlib.signature_effect(opened)["priced"])
+        self.assertIn("OPEN", ihlib.signature_effect(opened)["priced_because"])
+
+    def test_no_other_signature_is_claimed_as_priced(self):
+        """The three that genuinely need a fit must never read as handled."""
+        for sig_id in ("sig_risk_assessment", "sig_spiked_feedback",
+                       "sig_reserve_battery"):
+            with self.subTest(sig_id=sig_id):
+                item = dict(self.SIG, signature_id=sig_id,
+                            max_normal_affixes=7, max_prefixes=4,
+                            max_suffixes=4, prefixes=[{}, {}, {}, {}],
+                            suffixes=[{}, {}, {}])
+                self.assertFalse(ihlib.signature_effect(item)["priced"])
 
     def test_header_names_an_unpriced_signature(self):
-        header = ihlib.item_header(self.SIG)
+        header = ihlib.item_header(self.SIG)  # no affix lists -> slot open
         self.assertIn("Stable Construction", header)
         self.assertIn("unpriced", header)
 
