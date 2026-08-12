@@ -461,6 +461,12 @@ def cmd_homelab(args):
               f"  they only buffer work so progress never stops. Running a job "
               f"alone is how you finish it soonest, at the cost of points:")
         for p in picks:
+            if p.get("tail"):
+                print(f"    (unranked) {p['name']:22s} -> L{p['target_level']:<4} "
+                      f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
+                      f"{p['hours']:.1f}h  {ihlib.format_cost(p['cost'])}  "
+                      f"UNMODELLED[{','.join(p['unmodelled'])}]")
+                continue
             print(f"    {p['name']:26s} -> L{p['target_level']:<4} "
                   f"{p['pts_per_hour']:>4.0f}pts/h  +{p['points']:>3}pts  "
                   f"{p['hours']:.1f}h  "
@@ -471,6 +477,21 @@ def cmd_homelab(args):
                       f"which nothing in CRAFT_WEIGHTS prices. It is listed "
                       f"because it\n           cannot be RANKED, not because it "
                       f"lost: a 0.000 here means unpriced, not worthless.")
+            heal = p.get("heal_effect")
+            if heal:
+                print(f"           MAGNITUDE (not a weight): +{heal['fraction']:.0%} "
+                      f"of {heal['max_hp']:,.0f} Max HP = +{heal['face']:,.0f} HP "
+                      f"restored per WIN, which past\n           streak "
+                      f"{ihlib.post_combat_heal_floor_streak()} is pinned at "
+                      f"x{ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR:.2f} by "
+                      f"exhaustion — so +{heal['at_floor']:,.0f} HP/fight where "
+                      f"this build actually dies.")
+        elided = max((p.get("tail_elided") or 0) for p in picks) if picks else 0
+        if elided:
+            print(f"    (+{elided} more UNMODELLED job(s) not shown — they carry a "
+                  f"combat effect nothing prices,\n     so they cannot be ranked "
+                  f"against the picks above; the purchasable list below has "
+                  f"every one)")
         if not picks:
             print("    nothing affordable left un-queued")
 
@@ -510,6 +531,13 @@ def cmd_homelab(args):
               f"score {_homelab_score_cell(d, breakdown)}  "
               f"{est}{ihlib.format_cost(nxt.get('cost'))}{queued}")
         print(f"        [{section}]  {(d.get('description') or '')[:80]}")
+        heal = ihlib.post_combat_heal_effect(d, breakdown)
+        if heal:
+            print(f"        MAGNITUDE (not a weight): +{heal['face']:,.0f} HP per "
+                  f"WIN per level; past streak "
+                  f"{ihlib.post_combat_heal_floor_streak()} exhaustion pins it at "
+                  f"x{ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR:.2f}, so "
+                  f"+{heal['at_floor']:,.0f} HP/fight at death depth")
     upcoming = sorted({u["def"].get("unlock_level", 0)
                        for u in ihlib.iter_homelab_upgrades(homelab, definitions)
                        if u["def"].get("unlock_level", 0) > level})[:2]
@@ -628,7 +656,7 @@ def _homelab_score_cell(defn, stats_breakdown):
     `0.000` and `UNMODELLED` are different claims and printing both as the
     former is how Thermal Budget sat at the bottom of this list.
     """
-    unmodelled = ihlib.homelab_unmodelled_effects(defn, stats_breakdown)
+    unmodelled = ihlib.homelab_unmodelled_effects(defn)
     if unmodelled:
         return f"UNMODELLED[{','.join(unmodelled)}]"
     return f"{ihlib.homelab_upgrade_score(defn):5.3f}"
@@ -1131,6 +1159,25 @@ def _audit_stat_model(cap, ctx):
                       f"game reports {reported:,.4f} — fix its family "
                       f"in ihlib before trusting any projection using it")
             for stat, reported, modelled in ihlib.validate_stat_totals(cap)]
+
+
+def _audit_homelab_effect_keys(cap, ctx):
+    """Guard the hand-kept effect-key lists against a game patch.
+
+    They decide whether an upgrade's 0.000 means "measured zero" or "nobody
+    priced this", and a list nobody checks is how a combat effect ends up
+    ranked as a resource upgrade — which is exactly what happened to every
+    `enemy_*_reduction` key until 12 Aug 2026.
+    """
+    unknown = ihlib.homelab_unclassified_effect_keys(cap)
+    if not unknown:
+        return []
+    return [("EFFECTKEY",
+             f"{len(unknown)} homelab effect key(s) are not classified in "
+             f"ihlib: {', '.join(unknown)} — decide whether each is combat "
+             f"(add to UNPRICED_COMBAT_EFFECT_KEYS) or genuinely non-combat "
+             f"(HOMELAB_NON_COMBAT_EFFECT_KEYS). Until then they print as "
+             f"UNMODELLED, which is the safe default but is a guess")]
 
 
 def _audit_hardware(cap, ctx):
@@ -1845,6 +1892,7 @@ AUDIT_CHECKS = [
     _audit_capture_integrity,
     _audit_sim_ledger,
     _audit_stat_model,
+    _audit_homelab_effect_keys,
     _audit_hardware,
     _audit_homelab,
     _audit_contracts,

@@ -1446,38 +1446,68 @@ class UnmodelledEffectTest(unittest.TestCase):
     tracks in statsBreakdown -- through an effect key that is not
     `combat_stat`, so it scored 0.000, sorted last, and was invisible against
     a stated #1 bottleneck of HP attrition (10 Aug 2026).
-    """
 
-    BREAKDOWN = {"post_combat_heal": {"total": 14655},
-                 "defense": {"total": 3743}, "snippets": {"total": 2.2}}
+    REWRITTEN 12 Aug 2026, and the old version is the reason this docstring is
+    long. It asserted that `enemy_lockup_chance` "and friends are game
+    mechanics with no stat line, so they are out of scope here" -- and that
+    test PASSED, every run, while nine enemy-debuff upgrades scored a silent
+    0.000 next to resource upgrades. The membership rule was inferred from
+    `statsBreakdown`, `post_combat_heal` is the only combat-relevant key the
+    game tracks as a stat, and the test was written to the rule instead of to
+    the question the rule exists to answer. A passing suite is not a verified
+    one (CLAUDE.md): this is what a test written alongside a misunderstanding
+    looks like from the inside.
+    """
 
     def test_a_tracked_but_unpriced_stat_is_reported_not_scored_zero(self):
         defn = {"effects": [{"post_combat_heal": 0.01}]}
         self.assertEqual(ihlib.homelab_upgrade_score(defn), 0.0)
-        self.assertEqual(
-            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN),
-            ["post_combat_heal"])
+        self.assertEqual(ihlib.homelab_unmodelled_effects(defn),
+                         ["post_combat_heal"])
 
     def test_a_priced_stat_is_not_reported_as_unmodelled(self):
         defn = {"effects": [{"combat_stat": "defense", "additive": 0.01}]}
         self.assertGreater(ihlib.homelab_upgrade_score(defn), 0)
-        self.assertEqual(
-            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+        self.assertEqual(ihlib.homelab_unmodelled_effects(defn), [])
 
     def test_a_resource_effect_is_a_real_zero_not_unmodelled(self):
         """The distinction only means something if it stays narrow: an
         upgrade paying in a purchasable currency really is worth zero, and
         must not start reading as 'we could not price it'."""
         defn = {"effects": [{"resource": "snippets", "multiplier": 0.03}]}
-        self.assertEqual(
-            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+        self.assertEqual(ihlib.homelab_unmodelled_effects(defn), [])
 
-    def test_an_effect_the_game_does_not_track_is_not_unmodelled(self):
-        """`enemy_lockup_chance` and friends are game mechanics with no stat
-        line, so they are out of scope here rather than silently in it."""
-        defn = {"effects": [{"enemy_lockup_chance": 0.05}]}
+    def test_a_combat_effect_the_game_tracks_as_no_stat_is_still_unmodelled(self):
+        """The case the old test asserted the opposite of.
+
+        An enemy debuff changes combat whether or not the game exposes a stat
+        line for it, so it cannot be scored zero alongside a snippets
+        multiplier. Rate Limiter (`enemy_attack_speed_reduction`) is pure
+        mitigation by mechanics.md 14 and was the top QUEUE pick the day this
+        was found.
+        """
+        for key in ("enemy_lockup_chance", "enemy_attack_speed_reduction",
+                    "lifesteal", "starting_streak_floor"):
+            with self.subTest(key=key):
+                defn = {"effects": [{key: 0.05}]}
+                self.assertEqual(ihlib.homelab_unmodelled_effects(defn), [key])
+
+    def test_every_known_combat_key_is_reported(self):
+        """Guard against the list being narrowed back by accident."""
+        for key in ihlib.UNPRICED_COMBAT_EFFECT_KEYS:
+            with self.subTest(key=key):
+                self.assertEqual(
+                    ihlib.homelab_unmodelled_effects({"effects": [{key: 0.01}]}),
+                    [key])
+
+    def test_the_two_key_lists_do_not_overlap(self):
+        """A key on both lists would be scored zero AND flagged unpriced."""
         self.assertEqual(
-            ihlib.homelab_unmodelled_effects(defn, self.BREAKDOWN), [])
+            sorted(set(ihlib.UNPRICED_COMBAT_EFFECT_KEYS)
+                   & ihlib.HOMELAB_NON_COMBAT_EFFECT_KEYS), [])
+        self.assertEqual(
+            sorted(set(ihlib.UNPRICED_COMBAT_EFFECT_KEYS)
+                   & ihlib.HOMELAB_SCHEMA_EFFECT_KEYS), [])
 
 
 class HardwarePlanTest(unittest.TestCase):

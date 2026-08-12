@@ -2004,30 +2004,148 @@ def homelab_upgrade_score(upgrade_def):
     return total
 
 
-def homelab_unmodelled_effects(upgrade_def, stats_breakdown):
-    """Effect keys naming a stat the GAME tracks but CRAFT_WEIGHTS does not.
+# Effect keys that carry the value of an upgrade. `combat_stat` names a stat
+# and `additive`/`multiplier`/`resource` qualify it, so they are schema, not
+# effects in their own right.
+HOMELAB_SCHEMA_EFFECT_KEYS = frozenset({
+    "combat_stat", "additive", "multiplier", "resource",
+})
+# Effects that genuinely pay in currencies, queue capacity or quality-of-life.
+# For these a score of 0.000 is a REAL answer, not a missing one: they buy
+# resources purchasable at ~2 cr/unit, build/queue slots that add no throughput
+# (mechanics.md 15), drop-table and inventory conveniences, or XP.
+HOMELAB_NON_COMBAT_EFFECT_KEYS = frozenset({
+    "build_overclock_max", "build_slots", "build_speed",
+    "contract_hackcoin_bonus_contracts", "contract_queue_slots",
+    "contract_target_reduction", "decompile_multiplier",
+    "drop_item_level_allowed_ratio", "equipment_drop_chance",
+    "equipment_rarity", "gathering_slots", "hacking_zone_reward_soft_cap",
+    "inventory_slots", "offline_progression_extension_seconds",
+    "pending_build_slots", "preferred_equipment_slot_chance",
+    "tier_promotion_stability_preserve", "xp",
+})
 
-    The test is self-validating rather than a hand-kept list: an effect key
-    that appears in `statsBreakdown` is a stat by the game's own reckoning,
-    so if nothing prices it the score is missing, not zero. On the 10 Aug
-    capture exactly one key qualifies across every homelab upgrade --
-    `post_combat_heal` -- and every value under the `combat_stat` schema is
-    priced, which is why this went unnoticed: the gap is in effects that
-    deliver a stat WITHOUT using that key at all.
+
+def homelab_unmodelled_effects(upgrade_def):
+    """Effect keys that change COMBAT and that nothing in the model prices.
 
     Returning the keys rather than a score is deliberate. Pricing them would
-    mean inventing a weight, and the two constants this workspace most
-    regrets both came from a confident number derived off thin evidence.
+    mean inventing a weight, and the two constants this workspace most regrets
+    both came from a confident number derived off thin evidence.
+
+    WIDENED 12 Aug 2026, and the old rule is worth stating because it is the
+    more attractive design. It flagged a key only if the key appeared in
+    `statsBreakdown` -- self-validating against the game's own reckoning rather
+    than a hand-kept list, which is the pattern this workspace prefers
+    everywhere else. It also had a blind spot big enough to drive the whole
+    homelab menu through: `post_combat_heal` is the ONLY combat-relevant
+    effect key the game tracks as a stat, so every enemy debuff on the board
+    was invisible to it and scored a silent 0.000 -- `lifesteal` (Power
+    Conditioner, in-fight sustain), `enemy_attack_speed_reduction` (Rate
+    Limiter, which is pure mitigation by mechanics.md 14 and was the top QUEUE
+    pick the day this was found), and seven more `enemy_*_reduction` keys,
+    plus `corruption_damage_reduction`, `player_damage_variance_min_bonus` and
+    `starting_streak_floor`. All were indistinguishable from a resource
+    upgrade, which is the exact failure `homelab_upgrade_score` was written to
+    prevent one key too narrowly.
+
+    So membership is now by EXCLUSION: a key is unpriced-combat unless it is
+    schema, or on the non-combat list, or actually priced. A hand-kept list is
+    a liability (incident #24), so it is not trusted to stay complete -- it is
+    only trusted to be checked. `ih.py audit` re-derives the key space from
+    the live capture on every run and raises EFFECTKEY on anything
+    unclassified, so a game patch adding a key surfaces as a flag instead of
+    as another silent zero.
     """
     out = []
     for eff in upgrade_def.get("effects") or []:
         for key in eff:
-            if key == "combat_stat" or key not in (stats_breakdown or {}):
+            if (key in HOMELAB_SCHEMA_EFFECT_KEYS
+                    or key in HOMELAB_NON_COMBAT_EFFECT_KEYS):
                 continue
             label = stat_label(key)
             if label not in CRAFT_WEIGHTS_PCT and label not in CRAFT_WEIGHTS_FLAT:
                 out.append(key)
     return sorted(set(out))
+
+
+def homelab_effect_keys(capture):
+    """Every effect key the live homelab definitions actually use.
+
+    Empty when `homelabInfo` is absent -- it is a LAZY panel, present only if
+    the player opened it (docs/data-dictionary.md), so "no keys" here means
+    "not captured", never "no upgrades exist".
+    """
+    homelab, definitions, _info = homelab_state(capture)
+    if not homelab or not definitions:
+        return set()
+    keys = set()
+    for u in iter_homelab_upgrades(homelab, definitions):
+        for eff in u["def"].get("effects") or []:
+            keys.update(eff)
+    return keys
+
+
+def homelab_unclassified_effect_keys(capture):
+    """Live effect keys that no list above accounts for.
+
+    The guard on the hand-kept lists in this module. Anything returned is a key
+    whose treatment nobody has decided, so `homelab_unmodelled_effects` is
+    currently guessing it is unpriced combat -- which is the safe default (it
+    prints rather than scoring 0.000) but is still a guess.
+    """
+    known = (HOMELAB_SCHEMA_EFFECT_KEYS | HOMELAB_NON_COMBAT_EFFECT_KEYS
+             | set(UNPRICED_COMBAT_EFFECT_KEYS))
+    out = set()
+    for key in homelab_effect_keys(capture):
+        if key in known:
+            continue
+        label = stat_label(key)
+        if label in CRAFT_WEIGHTS_PCT or label in CRAFT_WEIGHTS_FLAT:
+            continue
+        out.add(key)
+    return sorted(out)
+
+
+# Combat effects nothing prices, as observed on 12 Aug 2026. Listed ONLY so
+# `homelab_unclassified_effect_keys` can tell a known gap from a new one; no
+# code prices anything off this, and adding a key here does not price it.
+UNPRICED_COMBAT_EFFECT_KEYS = (
+    "corruption_damage_reduction", "corruption_duration_rounds",
+    "enemy_accuracy_reduction", "enemy_armor_penetration_reduction",
+    "enemy_attack_speed_reduction", "enemy_crit_chance_reduction",
+    "enemy_crit_damage_reduction", "enemy_defense_reduction",
+    "enemy_evasion_reduction", "enemy_lockup_chance", "enemy_lockup_cooldown",
+    "lifesteal", "player_damage_variance_min_bonus", "post_combat_heal",
+    "snapshot_rollback_cooldown_fights", "starting_streak_floor",
+)
+
+
+def post_combat_heal_effect(upgrade_def, stats_breakdown):
+    """Per-level HP/fight a homelab upgrade adds to post-combat heal, or None.
+
+    A MAGNITUDE, not a weight -- and the distinction is the whole point. This
+    does not price the upgrade in streaks; it reports how much HP the effect
+    actually delivers, so an UNMODELLED row prints a number the player can
+    reason about instead of a bare `0.000` that reads as "worthless". Pricing
+    it in streaks still needs a fitted beta (open-questions par.23).
+
+    `at_floor` is the honest figure for a build that dies deep: past streak
+    130 the exhaustion multiplier is pinned at
+    POST_COMBAT_HEAL_EXHAUSTION_FLOOR, so that -- not the face value -- is
+    what the effect is worth in the region where runs actually end.
+    """
+    max_hp = (stats_breakdown or {}).get("max_hp", {}).get("total")
+    if not max_hp:
+        return None
+    fraction = 0.0
+    for eff in upgrade_def.get("effects") or []:
+        fraction += eff.get("post_combat_heal") or 0.0
+    if not fraction:
+        return None
+    face = fraction * max_hp
+    return {"fraction": fraction, "max_hp": max_hp, "face": face,
+            "at_floor": face * POST_COMBAT_HEAL_EXHAUSTION_FLOOR}
 
 
 def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
@@ -2082,7 +2200,8 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
             "hours": homelab_job_hours(info, nxt.get("duration_ticks") or 0),
             "cost": cost, "description": d.get("description") or "",
             "score": homelab_upgrade_score(d),
-            "unmodelled": homelab_unmodelled_effects(
+            "unmodelled": homelab_unmodelled_effects(d),
+            "heal_effect": post_combat_heal_effect(
                 d, capture["state"].get("statsBreakdown")),
         })
     for r in out:
@@ -2098,15 +2217,25 @@ def homelab_fill_suggestions(capture, limit=3, allow_hackcoin=False):
         r["score_per_level"] = r["score"]
     out.sort(key=lambda r: (not r["near_best"], -r["score"],
                             -r["pts_per_hour"], -r["hours"]))
-    # An unmodelled job must never be dropped by `limit`. It cannot be RANKED
-    # -- nothing prices its stat -- but silently truncating it is the failure
+    # An unmodelled job must never be dropped SILENTLY by `limit`. It cannot be
+    # RANKED -- nothing prices its stat -- and truncating it away is the failure
     # this whole distinction exists to stop: it would sort last on a 0.0 that
     # only means "unpriced" and then vanish, which reads exactly like "we
     # considered it and it lost".
+    #
+    # The tail is CAPPED, which it was not until 12 Aug 2026. That day the
+    # unmodelled set went from one job to ten (every `enemy_*_reduction` had
+    # been scoring a silent 0.000), an uncapped tail appended all of them, and
+    # a QUEUE block with one free place printed eight picks -- `limit` defeated
+    # entirely. Suppressing WITH A COUNT keeps the guarantee, which was never
+    # "print them all", only "never let one disappear unremarked".
     head = out[:limit]
     named = {r["name"] for r in head}
-    return head + [r for r in out
-                   if r["unmodelled"] and r["name"] not in named]
+    tail = [r for r in out if r["unmodelled"] and r["name"] not in named]
+    shown, elided = tail[:limit], max(0, len(tail) - limit)
+    for r in shown:
+        r["tail"], r["tail_elided"] = True, elided
+    return head + shown
 
 
 def homelab_level_threshold(definitions, target_level):
