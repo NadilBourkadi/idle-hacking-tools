@@ -772,3 +772,69 @@ by +0.01 (the raw-fraction addend that Corruption turned out to be — incident
 #26). `validate_stat_totals` re-checks the composition on every capture, so a
 wrong form cannot stay quiet; but the two readings differ by ~52,000x and only
 one of them is worth a queue slot.
+
+### RESOLVED IN PART, 12 Aug 2026 — the discriminant, and the multiplier's floor
+
+**Discriminant: description-faithful.** Thermal Budget L3 puts **1,682** into a
+new `homelab_flat` component of `post_combat_heal` — exactly 3% of the 56,062
+Max HP. Not the raw-fraction addend. So a level really is worth ~+561 to the
+base at the current Max HP, and L25 really would roughly double the stat.
+`composed_stat_total` did not read `homelab_flat` at all and audit's `MODEL`
+check caught the 1,682 gap on the first capture that had one; fixed the same
+session (`mechanics.md` §13).
+
+**And the exhaustion multiplier FLOORS at 0.30** (`mechanics.md` §3), which the
+22 July decay law did not say and nobody had checked against the ledger until
+now. This changes the shape of the answer:
+
+- Past streak 130 the multiplier is pinned, so a Thermal Budget level is worth
+  a flat **+168 HP per fight** at any depth below that — including the ~255
+  where this build dies. It does not fade.
+- The heal is not marginal at death depth. Measured on the recent era, the
+  share of wins that fail to top back up to full is 0% through streak 200, then
+  7.9% / 30.9% / 50.0% at 225 / 250 / 275. Deaths happen exactly where the
+  floored heal stops covering per-fight damage.
+
+**Still open: the beta.** None of this prices a level in *streaks*, which is
+what `CRAFT_WEIGHTS` is denominated in — and inventing that number is still the
+thing not to do. What has changed is that the quantity is now exact in HP/fight
+rather than unknown, so `ih.py homelab` prints the magnitude next to the
+UNMODELLED tag instead of a bare `0.000`.
+
+**Unblock unchanged**: a live pre-registered before/after on Thermal Budget
+levels, read as beta per par.22. Note the buy is credit-only and irreversible.
+
+### WIDENED 12 Aug 2026 — par.23 was one key too narrow
+
+Sweeping every homelab effect key against the model found that
+`post_combat_heal` is *not* the only unpriced combat effect — it is only the
+unpriced combat effect the game happens to expose as a **stat line**, which is
+the sole reason the 10 Aug sweep found it and nothing else. The detector
+inferred membership from `statsBreakdown`, so every enemy debuff was invisible
+to it and scored a silent `0.000` next to resource upgrades:
+
+| Upgrade | Effect key | What it does |
+|---|---|---|
+| Rate Limiter | `enemy_attack_speed_reduction` | −1%/level enemy attack speed — pure mitigation (§14) |
+| Power Conditioner | `lifesteal` | heals 1%/level of damage dealt, capped 10% Max HP/round |
+| DNS Sinkhole | `enemy_accuracy_reduction` | −0.5%/level |
+| Heuristic Targeting | `enemy_evasion_reduction` | −0.5%/level |
+| IDS Signatures | `enemy_crit_chance_reduction` | −1%/level |
+| WAF Rules | `enemy_crit_damage_reduction` | −1%/level |
+| Attack Surface Mapper | `enemy_defense_reduction` | gated homelab 16 |
+| Ablative Routing | `enemy_armor_penetration_reduction` | −%/level |
+| Quarantine Rules | `enemy_lockup_chance` / `_cooldown` | gated homelab 12 |
+| Isolated Sandbox | `corruption_damage_reduction` | incoming corruption |
+| Resident Shader | `corruption_duration_rounds` | outgoing corruption duration |
+| Payload Refinement | `player_damage_variance_min_bonus` | raises the damage floor |
+| Session Recorder | `starting_streak_floor` | +3 starting streak per level |
+| Snapshot Rollback | `snapshot_rollback_cooldown_fights` | survives a lethal hit |
+
+**Rate Limiter was the top QUEUE pick on the day this was found**, recommended
+on points alone with a `0.000` beside it. Membership is now by exclusion and
+`ih.py audit` raises `EFFECTKEY` on any key no list accounts for, so a patch
+adding one surfaces as a flag rather than as another silent zero. **None of
+these are priced** — the change makes the gap visible, not smaller. Prioritising
+them is a real open question: `lifesteal` and `enemy_attack_speed_reduction`
+are the two with the clearest mechanism against the standing attrition
+bottleneck.
