@@ -2156,3 +2156,65 @@ constants nobody had checked. This is a whole *field* nobody had read — a
 category the register cannot flag, because an unregistered constant at least
 exists somewhere. `audit` had 25 checks and none of them asked "is there
 anything in the item schema this model ignores?"
+
+---
+
+## 12 August 2026 (evening) — Barrier, read uncensored at last
+
+The full day's CI/CD budget went to the Barrier re-fit. 25/25 runs used;
+the block that matters is the last 14.
+
+**Arms, identified from `player_combat_stats` and not from the labels:**
+
+| | Barrier | Regen | mean streak (n=7) |
+|---|---:|---:|---:|
+| A | 2,794 | 2,827 | 299.03 ± 0.59 |
+| B | **896** | 2,827 | 298.30 ± 1.03 |
+
+Regen is **identical in both arms** — the confound that made the original
+par.22 pair hard to read is gone. Removing **1,898 Barrier** cost
+**0.73 ± 1.19 streaks**, i.e. **β = 0.070 ± 0.114** streaks per score point.
+
+**Uncensored.** Zero censored runs against a cap of 8,904. Three runs landed
+inside the 5% NEAR-CAP band (3.2%, 3.6%, 4.6%) and none of them was truncated.
+The censoring risk flagged before the block was run did not materialise.
+
+### PENDING_REFITS closed — but not because the weight was confirmed
+
+The row claimed *"0.041 is a CEILING on beta and the applied 0.0088 is a
+CEILING on the weight. The true value may be zero."* The clean reading is
+**0.070 — above that ceiling, not below it.** The feared bias did not appear in
+the feared direction.
+
+A `PENDING_REFITS` row means *"the numbers this tool prints are already known
+to be false."* After an unbiased reading whose interval contains the applied
+value, that sentence is no longer true of Barrier, and leaving the banner up
+would itself have been a false claim on every `potential`/`contract`/
+`hardware`/`locks` run. So it closes.
+
+**What did NOT happen: a refit.** The new reading is 5× *less* precise than the
+censored one it replaces, because its lever moves −10.4 score where the
+original moved −49. The 2σ interval is β ∈ [−0.158, +0.298] — weight [0,
+0.064], a 7× range containing both zero and Regen-parity-scaled values. It sits
+0.61σ from zero and 1.14σ from Regen parity and **distinguishes neither**.
+
+**0.0088 retained deliberately.** The new point estimate is 0.0151, but moving
+to it trades one point estimate for another carrying 5× the uncertainty, off a
+0.6σ result. That is churn, not a fix, and the applied value is inside 1σ of
+the unbiased reading. Recorded in the register with the full interval; the two
+Driver arms stay reserved, because settling the *size* needs the same
+instrument with a lever nearer −49.
+
+The question changed from **"is this biased?"** (answered: no) to **"how big is
+it?"** (not answered). Those are different rows in different places, and
+conflating them is how a banner outlives its evidence.
+
+### `SIM_CAP_HEADROOM_WARN` got its first real exercise
+
+Its register row said "no run yet sits between 0 and 5% headroom, so whether
+that margin catches anything is unknown". Three runs did today, and **none was
+censored** — so the band fires *before* truncation rather than after. That is
+the conservative direction and the useful one for a check that decides whether
+a number is a measurement or a lower bound. It also fired symmetrically, one
+flag per arm, so it did not bias the pair. Still unmeasured: how far inside the
+band real censoring actually starts.
