@@ -838,3 +838,55 @@ these are priced** — the change makes the gap visible, not smaller. Prioritisi
 them is a real open question: `lifesteal` and `enemy_attack_speed_reduction`
 are the two with the clearest mechanism against the standing attrition
 bottleneck.
+
+## par.24 — What is an epic Signature affix worth? (opened 12 Aug 2026)
+
+**Nothing prices one, and until today nothing even displayed one.** An epic
+item can carry one signature affix in its own fields (`signature_id`,
+`signature_name`, `signature_tag`, `signature_description`) — never in
+`prefixes`/`suffixes`. It cannot be removed, rerolled or changed, and Compile
+does not multiply it (`crafting.md` §2).
+
+`grep signature scripts/` returned nothing item-related. The fields have been
+in every capture since the first one. **All three signature items owned on
+12 Aug 2026 were on that day's decompile list**, which is irreversible.
+
+Found by the player asking directly — not by any check.
+
+**The four seen in the archive, and why no blanket rule works.** They are not
+even the same sign:
+
+| id | effect | reading |
+|---|---|---|
+| `sig_stable_construction` | +1 prefix or suffix slot | **already captured**, by luck — `augment_state` reads the item's own `max_prefixes`/`max_suffixes`/`max_normal_affixes` rather than assuming 3/3/6 |
+| `sig_risk_assessment` | chips ×2 after 10 wins; **all healing −20%** | a drawback squarely on the death-depth bottleneck (§3). This item may be worth **less** than its score says |
+| `sig_spiked_feedback` | thorns can crit; multi-crits 75% not 90% | both directions at once |
+| `sig_reserve_battery` | damage barrier carries over, up to 50% of max | interacts with the Barrier weight, itself `KNOWN-WRONG` |
+
+**What shipped, and what did not.** Not a weight — pricing these means
+inventing one. What changed is that an unpriced signature can no longer be
+destroyed by a verdict that never saw it: `lock_actions` routes such an item to
+a `signature_review` list instead of `unlock`, `ih.py locks` prints the effect
+text beside the affix-only verdict, `item_header` names the signature, and
+`audit` raises `SIGNATURE`. The block is deliberately **not** an imperative —
+every other block in `locks` resolves to a click, this one resolves to a
+judgement.
+
+**Unblock, and `sig_risk_assessment` is the tractable one.** "All healing
+reduced by 20%" is now exactly computable: §3 gives the post-combat heal
+formula to 1e-12 and `post_combat_heal_base` reads the base, so equipping the
+item should move `post_combat_heal_base` by −20% — or, if the reduction applies
+at the point of healing rather than to the stat, leave the base alone and cut
+`post_combat_heal_total`. **Those two are distinguishable in one capture with
+the item equipped**, and they differ in whether in-fight Regen is hit too. Do
+that before pricing anything.
+
+`sig_stable_construction` needs no fit — the extra slot is worth exactly what
+the affix in it is worth, which `plan_craft` already computes. The open
+question there is only whether the credit is robust: it is a side effect of
+reading the caps, so if the game ever grants the slot without moving those
+fields it vanishes silently. That is why the id is **not** in
+`PRICED_SIGNATURE_IDS`.
+
+`sig_spiked_feedback` and `sig_reserve_battery` need the CI/CD pipeline, and
+`sig_reserve_battery` cannot be read cleanly until the Barrier refit closes.

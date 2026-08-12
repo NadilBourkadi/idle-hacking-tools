@@ -2068,3 +2068,91 @@ And one was a wrong claim I authored:
 7. `_homelab_score_cell` kept a `stats_breakdown` parameter it no longer used —
    implying the cell was still breakdown-aware, the exact thing the change was
    undoing. ruff does not flag unused parameters.
+
+---
+
+## 12 August 2026 (afternoon) — the craft landed, and a field nobody had read
+
+### Payload craft: projected +115.7, realized **+125.5**
+
+`Ravaging Payload of Contagion` → `Overclocked Payload of Zero-Day`, equipped.
+Equipped Payload score 95.3 → **220.8**. Projection was mean +115.7, p10
++101.2, p90 +132.3 — **realized inside the interval**, the first coverage hit
+in the current era (was 0/3 on p10–p90, now 1/4). Bias stays positive: +9.8
+over projection, consistent with every uncapped era. Graded in the ledger.
+
+**And measured live, uncensored:** a CI/CD pair on the pre- and post-craft
+stat vectors, 5 runs each in Data Center, gave mean streak **291.24 → 298.64,
++7.40 streaks**. Arms identified from `player_combat_stats` (ArmorPen
+1,654 → 2,678, Corruption 199 → 323), never from the A/B labels.
+
+Two things worth recording about that pair:
+
+- **It implies β ≈ 0.059 streaks per score point** (7.40 / 125.5), against the
+  0.13–0.20 that `PROBE_MIN_MOVE`'s register row assumes. A 2–3× gap. Do not
+  refit anything on one pair over a 125-point move — the 28 Jul
+  diminishing-returns amendment predicts exactly this curvature at large
+  deltas — but it is the first datapoint on β at this size and it points one
+  way.
+- **`SIM_CAP_HEADROOM_WARN`'s untested band finally fired.** Its register row
+  said "no run yet sits between 0 and 5% headroom, so whether that margin
+  catches anything is unknown". One arm B run came in at **4.6%** headroom
+  (loss max 8,487 against Data Center's cap, now risen to 8,897) and printed
+  NEAR CAP. Uncensored, so the reading stands — but the deeper arm is now
+  within one craft of running off the end of the zone.
+
+**The Barrier re-fit did NOT run.** `DamageBarrier` is identical (2,794) in
+both arms of this block, so it measures the Payload craft and says nothing
+about Barrier. `CRAFT_WEIGHTS_FLAT["Barrier"]` stays `KNOWN-WRONG` and
+`PENDING_REFITS` stays open. 15 CI/CD runs remained unused at the time of
+capture.
+
+### Epic Signature affixes — an item field the value model had never read
+
+The player asked: *"are we accounting for signature items in our analysis of
+craft bases? some of the suggested unlocks are signatures."*
+
+**No.** `grep signature scripts/` returned nothing item-related. The fields —
+`signature_id`, `signature_name`, `signature_tag`, `signature_description` —
+have been in every capture since the first, and a signature lives in its own
+item fields rather than in `prefixes`/`suffixes`, so **no score, ranking or
+ex-suspect reading contained one**. All three signature items owned were on
+that morning's decompile list, which I wrote.
+
+The effects are not even the same sign, so no blanket rule would have worked:
+`Stable Construction` is +1 affix slot; `Risk Assessment` doubles chips after
+10 wins **and cuts all healing by 20%** — a drawback landing squarely on the
+death-depth bottleneck established earlier the same day; `Spiked Feedback`
+buffs thorns and nerfs multi-crits at once.
+
+**One half was already handled, and only by luck.** `augment_state` reads
+`max_prefixes`/`max_suffixes`/`max_normal_affixes` off the item instead of
+assuming 3/3/6, so `Stable Construction`'s extra slot is credited and its
+affix scores normally. That credit is a side effect of reading the caps, not of
+modelling the signature — which is why `sig_stable_construction` is deliberately
+**not** in `PRICED_SIGNATURE_IDS`. Claiming it as priced would assert a
+guarantee the code does not have.
+
+**Shipped:** `signature_effect()`; `item_header` names the signature;
+`lock_actions` routes an unpriced-signature item that the affix model calls
+surplus into a `signature_review` list **instead of `unlock`**; `ih.py locks`
+prints the effect text beside the affix-only verdict; `audit` raises
+`SIGNATURE`. Opened as par.24.
+
+**Not shipped: a weight.** Pricing these means inventing one. The block is
+deliberately not an imperative — every other block in `locks` resolves to a
+click, this one resolves to a judgement, and the missing term has no known
+sign.
+
+**The tractable unblock is `sig_risk_assessment`.** "All healing reduced by
+20%" is now exactly testable against the heal law fixed this morning: equip it
+and see whether `post_combat_heal_base` drops 20% (a stat-level cut) or the
+base holds while `post_combat_heal_total` drops (a cut at the point of
+healing). Those differ in whether in-fight Regen is hit too, and one capture
+separates them.
+
+**Why this one stings.** The morning's work was about numbers computed from
+constants nobody had checked. This is a whole *field* nobody had read — a
+category the register cannot flag, because an unregistered constant at least
+exists somewhere. `audit` had 25 checks and none of them asked "is there
+anything in the item schema this model ignores?"

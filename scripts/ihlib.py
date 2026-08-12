@@ -272,6 +272,61 @@ def affix_lines(item):
     return lines
 
 
+# ---- Epic Signature affixes ------------------------------------------------
+# An epic item can carry ONE signature affix, in its own fields
+# (`signature_id`/`signature_name`/`signature_tag`/`signature_description`) --
+# never in `prefixes`/`suffixes`. It cannot be removed, rerolled or changed,
+# and Compile does not multiply it (crafting.md 2).
+#
+# NOTHING IN THIS MODULE PRICES ONE. Every score, every ranking and -- until
+# 12 Aug 2026 -- the irreversible decompile list was computed as though these
+# effects did not exist, because they are not affixes and no code path had ever
+# read the fields. Found by the player asking "are we accounting for signature
+# items? some of the suggested unlocks are signatures". All three signature
+# items owned that day were on the decompile list.
+#
+# The four seen in the archive, and why a generic "signatures are good" or
+# "signatures are noise" rule would be wrong -- they are not even the same SIGN:
+#
+#   sig_stable_construction  +1 affix slot. STRUCTURALLY PRICED ALREADY, and
+#                            only by luck: `augment_state` reads the item's own
+#                            `max_prefixes`/`max_suffixes`/`max_normal_affixes`
+#                            rather than assuming 3/3/6, so the extra slot is
+#                            credited and its affixes score normally.
+#   sig_risk_assessment      chips x2 after 10 wins, and ALL HEALING -20%. A
+#                            drawback squarely on the death-depth bottleneck
+#                            (mechanics.md 3), so this item may well be worth
+#                            LESS than its score says.
+#   sig_spiked_feedback      thorns can crit; multi-crits 75% not 90%. Both
+#                            directions at once.
+#   sig_reserve_battery      damage barrier carries over, up to 50% of max.
+#
+# Pricing them means inventing weights, which is the thing not to do. What the
+# code does instead is refuse to let an UNPRICED signature be destroyed by a
+# verdict that never saw it -- see `lock_actions`.
+PRICED_SIGNATURE_IDS = frozenset({
+    # `sig_stable_construction` is NOT listed here even though its effect is
+    # captured. It is priced as a side effect of reading the affix caps, not
+    # because anything modelled the signature; if the game ever grants the slot
+    # without moving those fields the credit silently vanishes. Listing it would
+    # claim a guarantee this module does not have.
+})
+
+
+def signature_effect(item):
+    """The item's epic signature, or None. `priced` is the decision-relevant bit."""
+    sig_id = (item or {}).get("signature_id")
+    if not sig_id:
+        return None
+    return {
+        "id": sig_id,
+        "name": (item or {}).get("signature_name") or sig_id,
+        "tag": (item or {}).get("signature_tag"),
+        "description": (item or {}).get("signature_description") or "",
+        "priced": sig_id in PRICED_SIGNATURE_IDS,
+    }
+
+
 def item_header(item, slot=None, where=None):
     bits = [
         item.get("name"),
@@ -283,6 +338,14 @@ def item_header(item, slot=None, where=None):
         f"stab {item.get('stability')}/{item.get('stability_max')}",
         f"scale x{scale_percent_value(item.get('item_level') or 0):.3f}",
     ]
+    sig = signature_effect(item)
+    if sig:
+        # printed on every header because it was printed NOWHERE until 12 Aug
+        # 2026: the fields existed in the capture from the start and no output
+        # in the toolkit mentioned them, so the only way to know an item had a
+        # signature was to open the game
+        bits.append(f"SIGNATURE[{sig['name']}"
+                    + ("" if sig["priced"] else ", unpriced") + "]")
     return "  ".join(str(b) for b in bits if b)
 
 
@@ -1670,6 +1733,7 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
         base[display] = weighted_score(eq_totals[display])
 
     lock, unlock, candidates, contested_rows = [], [], [], []
+    signature_review = []
     for where, slot, item in iter_items(capture):
         if where != "inventory":
             continue
@@ -1724,6 +1788,7 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                "stability": item.get("stability") or 0,
                "item_level": item.get("item_level") or 0}
         row["locked"] = bool(item.get("decompile_locked"))
+        row["signature"] = signature_effect(item)
         row["protected"] = name.lower() in protected_lc
         row["probe"] = probe_lc.get(name.lower())
         candidates.append(row)
@@ -1813,11 +1878,33 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
                              else f"#{row['slot_rank']} in {row['slot']}")
             lock.append(row)
         elif row["locked"] and not in_depth and not contested:
-            row["reason"] = _lock_reason(
-                row["raw"], row["ex_suspect"], row["suspect_labels"],
-                row["slot_rank"], row["slot"], per_slot,
-                worth=row["keep_worth"])
-            unlock.append(row)
+            sig = row["signature"]
+            if sig and not sig["priced"]:
+                # An UNPRICED signature must never be destroyed by a verdict
+                # that could not see it. This is NOT a model hold like
+                # CONTESTED -- there is no second reading to wait for, because
+                # nothing prices the effect at all -- so it is handed to the
+                # player WITH the effect text rather than actioned either way.
+                # The verdict below it is still computed and still shown; what
+                # changes is that it stops being an imperative.
+                #
+                # Bounded by construction: only epic items carry a signature,
+                # only one each, and a signature item that is ALREADY correctly
+                # locked and in depth never reaches here. The list is as long
+                # as the signature items you own that the affix model calls
+                # surplus -- three on 12 Aug 2026, all three of which the
+                # decompile list had been recommending.
+                row["reason"] = _lock_reason(
+                    row["raw"], row["ex_suspect"], row["suspect_labels"],
+                    row["slot_rank"], row["slot"], per_slot,
+                    worth=row["keep_worth"])
+                signature_review.append(row)
+            else:
+                row["reason"] = _lock_reason(
+                    row["raw"], row["ex_suspect"], row["suspect_labels"],
+                    row["slot_rank"], row["slot"], per_slot,
+                    worth=row["keep_worth"])
+                unlock.append(row)
         elif row["locked"] and contested:
             row["reason"] = (
                 f"CONTESTED: raw {row['raw']:+.1f} vs ex-suspect "
@@ -1872,7 +1959,9 @@ def lock_actions(capture, floor=COMPILE_FLOOR, per_slot=KEEP_DEPTH_PER_SLOT):
     unlock.sort(key=lambda r: r["worth"])
     used, cap_slots, free, price = inventory_pressure(capture)
     contested_rows.sort(key=lambda r: -r["discard_worth"])
+    signature_review.sort(key=lambda r: -r["discard_worth"])
     return {"lock": lock, "unlock": unlock, "contested": contested_rows,
+            "signature_review": signature_review,
             "at_risk": at_risk,
             "protected": sorted(protected),
             "probe_holds": probe_holds,
