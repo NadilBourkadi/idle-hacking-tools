@@ -3134,6 +3134,21 @@ def assumptions():
         ("composed_stat_total stat families", "SCALING/DIRECT/economy", "measured",
          "self-validates against the game's reported totals for every stat",
          "27 Jul 2026", _chk_stat_families),
+        ("POST_COMBAT_HEAL_GRACE_WINS/POST_COMBAT_HEAL_DECAY_PER_WIN/"
+         "POST_COMBAT_HEAL_EXHAUSTION_FLOOR",
+         POST_COMBAT_HEAL_EXHAUSTION_FLOOR, "measured",
+         "max(0.30, 0.99**max(0, streak-10)) -- exact to 1e-12 on EVERY "
+         "victory row in the ledger against the game's OWN "
+         "`post_combat_heal_exhaustion_multiplier` (the live check below "
+         "prints the count and depth; read it there rather than from this "
+         "text, which would go stale silently), so this self-validates "
+         "rather than being fitted to our own numbers. The DECAY half was "
+         "documented 22 Jul; the FLOOR was found 12 Aug 2026 by checking that "
+         "documented law against the full ledger for the first time. It binds "
+         "from streak 130 and it is the half that matters -- at the ~255 "
+         "where this build dies, an unfloored decay reads 8.5% of face value "
+         "against a true 30%, i.e. it under-heals the death region 3.9x",
+         "12 Aug 2026", _chk_post_combat_heal),
     ]
     order = {"inherited": 0, "asserted": 1, "supplied": 2, "measured": 3}
     return sorted(rows, key=lambda r: order.get(r[2], 9))
@@ -3717,6 +3732,92 @@ def validate_stat_totals(capture, tolerance=1e-6):
         if abs(modelled - reported) / scale > tolerance:
             bad.append((stat, reported, modelled))
     return bad
+
+
+# ---- Post-combat heal exhaustion (mechanics.md 3) --------------------------
+# After every WIN the game restores `post_combat_heal_base` HP, scaled by an
+# exhaustion multiplier that decays as the streak lengthens -- and then FLOORS.
+# The floor is the half that matters: it means between-fight recovery never
+# vanishes, so at the depth where this build actually dies the heal is a
+# permanent 30% of face value rather than the ~8% an unfloored decay implies.
+#
+#   multiplier = max(0.30, 0.99 ** max(0, streak - 10))     streak = post-win
+#   total      = round-half-up(post_combat_heal_base * multiplier)
+#   applied    = min(total, max_hp - hp_after_combat)
+#
+# MEASURED, not asserted: exact to 1e-12 on every victory row in the combat-
+# stream ledger, with zero exceptions -- `_chk_post_combat_heal` re-runs that
+# comparison on each `assumptions` call and prints the count and depth, so the
+# evidence is live rather than a number frozen in this comment. The only rows
+# that miss are LOSSES, where the game zeroes the whole heal block
+# (`post_combat_heal_base` 0, multiplier defaulted to 1): there is no
+# post-combat heal on a death.
+#
+# The decay half was already in mechanics.md from 22 Jul; the FLOOR was found
+# 12 Aug 2026 by validating that documented law against the full ledger for the
+# first time -- two things that should agree, disagreeing (CLAUDE.md), not by
+# re-reading the note. The floor binds from streak 130 (0.99**120 = 0.2994).
+#
+# `post_combat_heal_exhaustion_relief` exists in every row and is 0 in all
+# 89,573 of them; whatever grants relief has never been owned, so nothing here
+# models it. See open-questions par.23.
+POST_COMBAT_HEAL_GRACE_WINS = 10
+POST_COMBAT_HEAL_DECAY_PER_WIN = 0.99
+POST_COMBAT_HEAL_EXHAUSTION_FLOOR = 0.30
+
+
+def post_combat_heal_exhaustion(streak):
+    """Fraction of `post_combat_heal_base` granted after the win at `streak`."""
+    decay = POST_COMBAT_HEAL_DECAY_PER_WIN ** max(
+        0, streak - POST_COMBAT_HEAL_GRACE_WINS)
+    return max(POST_COMBAT_HEAL_EXHAUSTION_FLOOR, decay)
+
+
+def post_combat_heal_floor_streak():
+    """First streak whose multiplier is pinned at the floor. DERIVED, not typed.
+
+    Kept as arithmetic off the three constants so it cannot drift from them --
+    a hand-written 130 in a display string is exactly the kind of restated
+    constant that goes stale silently when one of them is refitted.
+    """
+    return POST_COMBAT_HEAL_GRACE_WINS + math.ceil(
+        math.log(POST_COMBAT_HEAL_EXHAUSTION_FLOOR)
+        / math.log(POST_COMBAT_HEAL_DECAY_PER_WIN))
+
+
+def post_combat_heal_at(heal_base, streak):
+    """HP the game restores after the win at `streak`, before the missing-HP cap."""
+    return math.floor(heal_base * post_combat_heal_exhaustion(streak) + 0.5)
+
+
+def post_combat_heal_base(capture):
+    """`post_combat_heal` total from statsBreakdown, or None if not captured.
+
+    Read from the breakdown rather than recomputed as `5 * hack_level`: since
+    12 Aug 2026 Thermal Budget adds a `homelab_flat` component on top of the
+    level term, so the hack-level shorthand is no longer the whole base and
+    drifts further with every level bought.
+    """
+    b = (capture["state"].get("statsBreakdown") or {}).get("post_combat_heal")
+    return composed_stat_total(b, "post_combat_heal") if b else None
+
+
+def _chk_post_combat_heal(_cap):
+    """Re-check the exhaustion law against every victory in the ledger."""
+    rows = [r["fight"] for r in _fight_ledger_rows()]
+    obs = [f for f in rows
+           if f.get("victory") is True
+           and f.get("post_combat_heal_exhaustion_multiplier") is not None
+           and f.get("current_win_streak") is not None]
+    if not obs:
+        return ("SKIP", "no victory rows carrying the multiplier in the ledger")
+    bad = [f for f in obs
+           if abs(post_combat_heal_exhaustion(f["current_win_streak"])
+                  - f["post_combat_heal_exhaustion_multiplier"]) > 1e-12]
+    depth = max(f["current_win_streak"] for f in obs)
+    return (("OK" if not bad else "DRIFT"),
+            f"exact on {len(obs) - len(bad)}/{len(obs)} victory rows to "
+            f"streak {depth:,}" + (f"; {len(bad)} MISS" if bad else ""))
 
 
 # ---- Hardware shop cost model and allocation planner -----------------------
@@ -4529,7 +4630,7 @@ def sim_regime_check(rows=None):
 #   barrier           absorbs exactly its value once per fight mechanics.md §16
 #   corruption        ~6 x stat per round at full stack        mechanics.md §19
 #   thorns            = stat per enemy hit landed              mechanics.md §19
-#   post-combat heal  5 * hack_level * 0.99^(streak-10)        mechanics.md §3
+#   post-combat heal  base * max(0.30, 0.99^(streak-10))       mechanics.md §3
 #
 # Enemy stats come from per-class power-law fits of the ledger's own
 # `enemy_stats` (17,751 fights), and enemy level from the recent ledger's
@@ -4710,8 +4811,19 @@ def simulate_fight(p, e, hp, rng, max_rounds=400):
     return True, hp, max_rounds
 
 
-def simulate_streak(p, hack_level, level_curve, fits, rng, max_streak=400):
-    """Run one streak to death. Returns (streak_reached, fights)."""
+def simulate_streak(p, heal_base, level_curve, fits, rng, max_streak=400):
+    """Run one streak to death. Returns the streak reached.
+
+    `heal_base` is `post_combat_heal_base(capture)` -- the stat's own total,
+    NOT `5 * hack_level`. This took `hack_level` and rebuilt the base from it
+    until 12 Aug 2026, which was wrong twice over: the hack-level term stopped
+    being the whole base once Thermal Budget populated `homelab_flat`, and the
+    decay it applied had no floor, so it under-healed the streak-255 death
+    region by 3.9x. Nothing called this function, so no shipped verdict was
+    computed from it -- but it is the forward model the CI/CD betas would be
+    read against, and a dead instrument with a wrong law in it is a trap, not
+    a spare part.
+    """
     classes = sorted({c for c, _ in fits})
     hp = p["max_hp"]
     streak = 0
@@ -4729,19 +4841,19 @@ def simulate_streak(p, hack_level, level_curve, fits, rng, max_streak=400):
         if not won:
             return streak
         streak += 1
-        # post-combat heal: 5 * hack_level, decaying 0.99^(streak-10)
-        heal = 5.0 * hack_level * (0.99 ** max(0, streak - 10))
-        hp = min(p["max_hp"], hp + heal)
+        # the game applies the heal against the POST-win streak, and caps it at
+        # missing HP -- which `min(max_hp, ...)` is exactly
+        hp = min(p["max_hp"], hp + post_combat_heal_at(heal_base, streak))
     return max_streak
 
 
-def streak_distribution(p, hack_level, trials=300, seed=12345,
+def streak_distribution(p, heal_base, trials=300, seed=12345,
                         level_curve=None, fits=None):
     """Death-streak distribution for a stat vector. Returns sorted list."""
     rng = random.Random(seed)
     level_curve = level_curve if level_curve is not None else enemy_level_curve()
     fits = fits if fits is not None else enemy_stat_fits()
-    return sorted(simulate_streak(p, hack_level, level_curve, fits, rng)
+    return sorted(simulate_streak(p, heal_base, level_curve, fits, rng)
                   for _ in range(trials))
 
 

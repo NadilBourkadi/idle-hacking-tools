@@ -146,9 +146,10 @@ The in-game Help Affixes table is authoritative but was not present in static ex
 
 ### 9. Streak recovery model — RESOLVED 22 July 2026 (formula), residual unknowns
 
-Exact law from 21 winning fights: `heal = heal_base × 0.99^(streak − 10)`, capped at missing HP. See `mechanics.md` §3.
-`heal_base` resolved 22 July (second rich capture): **5 × player hack level** — `statsBreakdown.post_combat_heal` shows the full 4,470 under `level` (= 5 × 894); the earlier 4,465 sample matches level 893. Not max-HP- or equipment-scaled.
-Remaining unknowns: what triggers `post_combat_heal_exhaustion_relief` (0 in all samples), and whether the 0.99^ decay would also apply to Homelab `thermal_budget` post-combat healing.
+Law CORRECTED 12 Aug 2026: `heal = heal_base × max(0.30, 0.99^(streak − 10))`, capped at missing HP. See `mechanics.md` §3.
+The 21-fight sample this was resolved on ran at streaks 38–58, far above the floor's onset at 130, so it could not have seen the floor — the law was right in its regime and was then used outside it for three weeks. Re-checked against every victory row in the ledger (streaks 0–302) and exact.
+`heal_base` was **5 × player hack level** until 12 Aug 2026, when Thermal Budget L3 added a `homelab_flat` component (+1% of Max HP per level, description-faithful) — so it IS max-HP-scaled now, via that upgrade only. Read it with `ihlib.post_combat_heal_base(capture)`.
+Remaining unknowns: what triggers `post_combat_heal_exhaustion_relief` (0 in every ledger row). **Resolved**: the decay does apply to Thermal Budget healing — it scales `heal_base`, which the multiplier multiplies whole.
 
 ### 11. In-fight regeneration decay
 
