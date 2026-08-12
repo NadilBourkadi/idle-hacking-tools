@@ -33,6 +33,59 @@ FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "capture-fixture.json").read_text())
 
 
+class PostCombatHealTest(unittest.TestCase):
+    """The exhaustion law, and the two places it was wrong (12 Aug 2026).
+
+    `mechanics.md` carried the decay from 22 Jul as "1% compounding per win"
+    with no floor. Checked against the whole combat-stream ledger for the first
+    time, the multiplier turns out to FLOOR at 0.30 from streak 130 -- which is
+    the half that matters, because it is the half that applies at the ~255
+    where this build dies.
+    """
+
+    def test_grace_window_is_flat(self):
+        for streak in range(0, ihlib.POST_COMBAT_HEAL_GRACE_WINS + 1):
+            self.assertEqual(ihlib.post_combat_heal_exhaustion(streak), 1.0)
+
+    def test_decay_is_one_percent_per_win_after_the_grace_window(self):
+        # the 12 Aug capture's own combat log: streak 19 -> 0.9135,
+        # streak 40 -> 0.7397003733882801
+        self.assertAlmostEqual(ihlib.post_combat_heal_exhaustion(19),
+                               0.9135172474836408, places=12)
+        self.assertAlmostEqual(ihlib.post_combat_heal_exhaustion(40),
+                               0.7397003733882801, places=12)
+
+    def test_the_multiplier_floors_and_never_decays_past_it(self):
+        floor = ihlib.POST_COMBAT_HEAL_EXHAUSTION_FLOOR
+        for streak in (130, 200, 255, 302, 5000):
+            self.assertEqual(ihlib.post_combat_heal_exhaustion(streak), floor)
+        # and it is still ABOVE the floor one win earlier, so the derived
+        # floor streak is the first pinned one rather than one past it
+        self.assertGreater(
+            ihlib.post_combat_heal_exhaustion(
+                ihlib.post_combat_heal_floor_streak() - 1), floor)
+
+    def test_floor_streak_is_derived_from_the_constants(self):
+        self.assertEqual(ihlib.post_combat_heal_floor_streak(), 130)
+
+    def test_heal_rounds_half_up_like_the_game(self):
+        # 6155 * 0.30 = 1846.5; the game reports 1847, and Python's
+        # round-half-even would say 1846
+        self.assertEqual(ihlib.post_combat_heal_at(6155, 255), 1847)
+        self.assertEqual(ihlib.post_combat_heal_at(18342, 40), 13568)
+
+    def test_heal_base_reads_homelab_flat_not_five_times_hack_level(self):
+        """The Thermal Budget component the old `5 * hack_level` shorthand
+        dropped -- 1,682 of an 18,342 base on the 12 Aug capture."""
+        cap = {"state": {"statsBreakdown": {"post_combat_heal": {
+            "base": 0, "level": 16660, "equipment_flat": 0, "equipment_pct": 0,
+            "hardware": 0, "homelab": 0, "homelab_flat": 1682, "total": 18342}}}}
+        self.assertEqual(ihlib.post_combat_heal_base(cap), 18342)
+
+    def test_missing_breakdown_is_none_not_zero(self):
+        self.assertIsNone(ihlib.post_combat_heal_base({"state": {}}))
+
+
 class StatModelTest(unittest.TestCase):
     """Locks the whole stat-composition family model to game ground truth."""
 
