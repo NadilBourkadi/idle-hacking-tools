@@ -477,41 +477,36 @@ CRAFT_WEIGHTS_FLAT = {  # value per +1 flat point
 # Striking, realized +64.7 vs projected +80.6) -- and both bands were
 # re-derived to +/-16 the same session. See the bands' own provenance rows.
 PENDING_REFITS = [
-    {
-        "name": 'CRAFT_WEIGHTS_FLAT["Barrier"]',
-        "applied": 0.0088,
-        "opened": "10 Aug 2026",
-        "blocked_on":
-            "beta_Barrier = 0.041 +- 0.024 was fitted on a CENSORED arm and "
-            "the truncated information cannot be recovered from the banked "
-            "runs. The par.22 pair ran in Corporate Network at an "
-            "enemy-level cap of 5,769: the HIGH-Barrier arm (Bar 5,900.8 / "
-            "Regen 1,221) lost at 4,991-5,129, comfortably clear, while ALL "
-            "SIX runs of the LOW-Barrier arm (Bar 5,153.6 / Regen 1,844.6) "
-            "lost at 5,841-6,106, i.e. AT OR ABOVE the cap. Past the cap the "
-            "enemy stops getting harder, so that arm's 255.2 is a lower "
-            "bound, not a reading. Censoring bound on the arm carrying LESS "
-            "Barrier, so it understates how well low Barrier does and "
-            "therefore OVERSTATES Barrier: 0.041 is a CEILING on beta and "
-            "the applied 0.0088 is a CEILING on the weight. The true value "
-            "may be zero. Found 10 Aug 2026 by a new cap-headroom check in "
-            "`cicd_rows`, on its first run -- never by re-reading the fit",
-        "unblock":
-            "re-run the SAME two par.22 Barrier arms, 6 runs each, in a zone "
-            "whose enemy-level cap clears their loss levels -- `ih.py sims` "
-            "now prints the headroom per zone for the newest pair, and Data "
-            "Center's cap has since risen to 8,177. Read the low-Barrier "
-            "arm's uncensored mean against 255.2; the gap between them is "
-            "the size of the bias. 12 CI/CD runs, no crafting, no equipping",
-    },
     # A row here means the numbers this tool prints are already known to be
     # false. Empty is the intended steady state.
     #
     # BARRIER ROW CLOSED 8 Aug 2026: the 12-run Daemon pair (par.22) measured
     # beta_Barrier = 0.041 +- 0.024 against Regen's 0.200 and the weight was
-    # refit 0.043 -> 0.0088 in the same change. RE-OPENED 10 Aug 2026 -- see
-    # the live row above; that pair was censored by the zone's enemy-level
-    # cap and nothing read the two together for three days.
+    # refit 0.043 -> 0.0088 in the same change. RE-OPENED 10 Aug 2026 because
+    # that pair was censored by the zone's enemy-level cap.
+    #
+    # CLOSED AGAIN 12 Aug 2026, and the reason it closes is NOT that the
+    # weight was confirmed -- it is that the row's own claim stopped being
+    # true. The row said "0.041 is a CEILING on beta and the applied 0.0088 is
+    # a CEILING on the weight. The true value may be zero." A clean 14-run
+    # pair that evening (7/arm, Data Center, cap 8,904, ZERO censored runs, two
+    # near-cap flags split one per arm so not directional) reads
+    # beta = 0.070 +- 0.114 -- ABOVE the claimed ceiling, not below it. The
+    # feared bias did not appear in the direction feared.
+    #
+    # A PENDING_REFITS row means "the numbers this tool prints are already
+    # known to be false". After an unbiased reading whose interval contains the
+    # applied value, that sentence is no longer true of Barrier, and leaving
+    # the banner up would itself be a false claim on every potential /
+    # contract / hardware / locks run. What remains is IMPRECISION, which is
+    # what the assumptions register is for -- see the CRAFT_WEIGHTS_FLAT
+    # ["Barrier"] row there for the interval and for why 0.0088 was retained
+    # rather than moved to the new point estimate.
+    #
+    # The arms are NOT released. The question changed from "is this biased?"
+    # (answered) to "how precise is it?" (not answered), and the two Driver
+    # levers are the instrument for the second question too -- see
+    # RESERVED_PROBES.
     #
     # ARMORPEN ROW CLOSED 9 Aug 2026: the 12-run Analyzer pair par.21 asked
     # for read -11.22 +- 1.76 streaks, and pooling it with the 8 Aug craft
@@ -3174,8 +3169,33 @@ def assumptions():
          "Barrier = +1.0 HP/fight against Regen's ~13.8 marginal -> 0.6/13.8 = "
          "0.043, and the ORIGINAL 0.02 was nearer the truth than my correction. "
          "Confirmed live: +1,742 Barrier gave +29/round absorbed over ~60-round "
-         "fights, exactly as 1.00x predicts",
-         "29 Jul 2026", None),
+         "fights, exactly as 1.00x predicts. "
+         "DEPTH CONVERSION, which is what the weight actually is: absorption "
+         "does not convert into death-streak depth at Regen's rate, so 0.043 "
+         "is scaled by beta/0.200. THREE readings now. (1) 8 Aug, 12-run "
+         "Daemon pair: beta 0.041 +- 0.024 -> weight 0.0088, applied. "
+         "(2) 10 Aug: that pair found CENSORED -- 6/6 runs of its low-Barrier "
+         "arm at or above the zone cap -- so it was withdrawn as a ceiling and "
+         "PENDING_REFITS re-opened. (3) 12 Aug, 14-run Driver pair, 7/arm, "
+         "Data Center, cap 8,904, ZERO censored runs and the two near-cap "
+         "flags split one per arm so not directional: Barrier 2,794 -> 896 at "
+         "IDENTICAL Regen (2,827 in both arms) cost 0.73 +- 1.19 streaks, "
+         "i.e. beta = 0.070 +- 0.114. "
+         "READ (3) BOTH WAYS. It is the only UNBIASED reading and it lands "
+         "ABOVE the ceiling (2) claimed, so the feared bias did not appear in "
+         "the feared direction and PENDING_REFITS closed. It is also 5x LESS "
+         "PRECISE than (1), because its lever moves -10.4 score where the "
+         "original moved -49: the 2-sigma interval is beta [-0.158, +0.298], "
+         "i.e. weight [0, 0.064] -- a 7x range containing BOTH zero and "
+         "Regen-parity-scaled values. 0.61 sigma from zero, 1.14 sigma from "
+         "Regen parity: it distinguishes NEITHER. "
+         "0.0088 IS RETAINED DELIBERATELY. The new point estimate is 0.0151, "
+         "but moving to it trades one point estimate for another carrying 5x "
+         "the uncertainty, off a 0.6-sigma result -- churn, not a fix -- and "
+         "the applied value sits inside 1 sigma of the unbiased reading. TO "
+         "SETTLE IT a lever nearer the original -49 score is needed; the two "
+         "Driver arms stay reserved for exactly that",
+         "12 Aug 2026 (uncensored re-read)", None),
 
         # --- verdict bands ---
         ("UPGRADE_BAND", UPGRADE_BAND, "measured",
@@ -3291,13 +3311,19 @@ def assumptions():
          "(headroom <= 0) is exercised and it bit immediately: on its first "
          "run this check found 7 already-banked runs censored, six of them "
          "the low-Barrier arm of the par.22 pair that set "
-         "CRAFT_WEIGHTS_FLAT[Barrier] (see PENDING_REFITS). The 5% WARNING "
-         "band is the part still untested -- no run yet sits between 0 and "
-         "5% headroom, so whether that margin catches anything is unknown. "
-         "TO MEASURE: bank a deliberately-censored run (re-run a current "
-         "Data Center arm in Corporate Network, cap 7,368 against a loss "
-         "max of 7,728) and read how far the arm mean falls against its "
-         "uncensored twin",
+         "CRAFT_WEIGHTS_FLAT[Barrier] (that PENDING_REFITS row closed 12 Aug "
+         "on an uncensored re-read). THE 5% WARNING BAND WAS EXERCISED "
+         "12 Aug 2026 and behaved as intended: the 14-run Barrier pair put "
+         "three runs inside it (headroom 3.2%, 3.6%, 4.6%) and NONE of the "
+         "three was actually censored -- so the band fires BEFORE truncation "
+         "rather than after, which is the conservative direction and the "
+         "useful one for a check deciding whether a number is a measurement "
+         "or a lower bound. It also fired symmetrically, one flag per arm, so "
+         "it did not bias that pair. STILL UNMEASURED: how far inside the "
+         "band real censoring starts, i.e. whether 0.05 is the right width "
+         "or merely a safe one. TO MEASURE: bank a deliberately-censored run "
+         "(re-run a current Data Center arm in a shallower zone) and read how "
+         "far the arm mean falls against its uncensored twin",
          "10 Aug 2026 (asserted at introduction)", None),
         ("PROBE_MIN_PURITY", PROBE_MIN_PURITY, "asserted",
          "admission floor for a reserved CI/CD probe arm: |target family "
