@@ -304,13 +304,36 @@ def affix_lines(item):
 # Pricing them means inventing weights, which is the thing not to do. What the
 # code does instead is refuse to let an UNPRICED signature be destroyed by a
 # verdict that never saw it -- see `lock_actions`.
-PRICED_SIGNATURE_IDS = frozenset({
-    # `sig_stable_construction` is NOT listed here even though its effect is
-    # captured. It is priced as a side effect of reading the affix caps, not
-    # because anything modelled the signature; if the game ever grants the slot
-    # without moving those fields the credit silently vanishes. Listing it would
-    # claim a guarantee this module does not have.
-})
+def _signature_priced(sig_id, item):
+    """Is THIS item's signature already inside its score? (reason, bool).
+
+    Per signature and per item, not a flat allow-list -- because for the one
+    signature that is priced, whether it is priced depends on the item's own
+    state.
+
+    `sig_stable_construction` grants one extra prefix/suffix slot, and
+    `augment_state` reads `max_prefixes`/`max_suffixes`/`max_normal_affixes`
+    off the item instead of assuming 3/3/6. So:
+
+      - slot FULL   -> the extra affix is a normal affix and scores normally.
+        The signature is EXACTLY priced; there is nothing left to fit.
+      - slot OPEN   -> `plan_craft` credits an open augment NO projected value
+        (pure upside, deliberately). The extra slot is then worth 0 in the
+        score, i.e. the item is UNDER-priced -- which is the dangerous
+        direction for an irreversible decompile, so it stays unpriced here.
+
+    That asymmetry is the whole reason this is a function. A flat
+    PRICED_SIGNATURE_IDS set would have called the open-slot case priced too
+    and quietly re-armed the decompile it exists to prevent.
+    """
+    if sig_id != "sig_stable_construction":
+        return None, False
+    if augment_state(item)[0]:
+        return ("+1 affix slot, and it is OPEN — an open augment scores 0 "
+                "projected value by design, so the slot is not yet in the "
+                "number"), False
+    return ("+1 affix slot, and it is FULL — the extra affix scores like any "
+            "other, so this signature is already inside the score"), True
 
 
 def signature_effect(item):
@@ -318,12 +341,14 @@ def signature_effect(item):
     sig_id = (item or {}).get("signature_id")
     if not sig_id:
         return None
+    why, priced = _signature_priced(sig_id, item or {})
     return {
         "id": sig_id,
         "name": (item or {}).get("signature_name") or sig_id,
         "tag": (item or {}).get("signature_tag"),
         "description": (item or {}).get("signature_description") or "",
-        "priced": sig_id in PRICED_SIGNATURE_IDS,
+        "priced": priced,
+        "priced_because": why,
     }
 
 

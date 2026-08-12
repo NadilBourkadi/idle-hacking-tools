@@ -881,6 +881,37 @@ at the point of healing rather than to the stat, leave the base alone and cut
 the item equipped**, and they differ in whether in-fight Regen is hit too. Do
 that before pricing anything.
 
+### Resolved same day: `sig_stable_construction` is priced, conditionally
+
+Not by fitting anything — by noticing the pricing is **per item, not per
+signature**. `augment_state` reads the item's own affix caps, so:
+
+- **slot FULL** — the extra affix is a normal affix and scores normally. The
+  signature is *exactly* priced; nothing is left to fit.
+- **slot OPEN** — `plan_craft` credits an open augment **no projected value**
+  (pure upside, deliberately). The slot is then worth 0 in the score, so the
+  item is **under**-priced — the dangerous direction for an irreversible
+  decompile — and it stays held.
+
+That asymmetry is why this is a function (`_signature_priced`) and not an
+allow-list. A flat `PRICED_SIGNATURE_IDS` set would have called the open-slot
+case priced too and quietly re-armed the decompile the review list exists to
+prevent.
+
+**Measurability, checked before declaring anything unmeasurable.** Across 176
+captures: signatures appear on **1.0%** of epic item-observations (60 of
+6,144), four distinct effects, and **not one has ever been equipped**. So there
+is no natural experiment in the archive and none can be constructed from
+history — the sole reading has to be made live.
+
+That absence is self-reinforcing, and worth naming as a mechanism rather than a
+statistic: the model cannot score a signature → a signature item never wins a
+slot comparison → it is never equipped → no data is ever generated → the
+signature stays unpriced. Meanwhile it is ranked for decompile on affixes
+alone. **`sig_reserve_battery` was already lost this way** — last seen 10 Aug on
+`Slippery Payload of Breaching` (ilvl 2,976, `decompile_locked: true`), gone by
+12 Aug. One of only four signature effects ever seen.
+
 `sig_stable_construction` needs no fit — the extra slot is worth exactly what
 the affix in it is worth, which `plan_craft` already computes. The open
 question there is only whether the credit is robust: it is a side effect of
